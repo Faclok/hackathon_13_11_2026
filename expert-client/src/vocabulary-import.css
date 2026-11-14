@@ -1,0 +1,16 @@
+.vocabularyImport,
+.vocabularyImport > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.vocabularyImport input[type=file] {
+  width: 100%;
+  min-width: 0;
+}
+.vocabularyImport .importPreview table {
+  table-layout: fixed;
+}
+.vocabularyImport .importPreview th,
+.vocabularyImport .importPreview td {
+  overflow-wrap: anywhere;
+}

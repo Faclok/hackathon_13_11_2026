@@ -1,5 +1,5 @@
 // CSV records can contain quoted commas, quotes and line breaks.
-function records(text) {
+export function parseCsvRecords(text, delimiter = ',') {
   const result = [];
   let cells = [], cell = '', quoted = false, closed = false, line = 1, start = 1;
   const endCell = () => { cells.push(cell); cell = ''; closed = false; };
@@ -16,7 +16,7 @@ function records(text) {
         if (text[i + 1] === '"') { cell += '"'; i++; }
         else { quoted = false; closed = true; }
       } else { cell += c; if (c === '\n') line++; }
-    } else if (c === ',') endCell();
+    } else if (c === delimiter) endCell();
     else if (c === '\r' || c === '\n') {
       endRecord();
       if (c === '\r' && text[i + 1] === '\n') i++;
@@ -33,7 +33,7 @@ function records(text) {
 }
 
 export function prepareCsv(text) {
-  const [header, ...rows] = records(text);
+  const [header, ...rows] = parseCsvRecords(text);
   if (!header) throw new Error('Файл пуст.');
   const names = header.cells.map(value => value.trim());
   if (new Set(names).size !== names.length) throw new Error('В заголовке повторяются названия колонок.');
