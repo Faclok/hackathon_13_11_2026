@@ -3,6 +3,7 @@
 **/obj/
 **/node_modules/
 client/dist/
+expert-client/dist/
 .DS_Store
 .vs/
 .dotnet/

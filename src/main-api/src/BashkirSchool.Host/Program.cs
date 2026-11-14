@@ -115,6 +115,11 @@ api.MapPut("/accounts/{accountId:guid}/access", async (ClaimsPrincipal user, Gui
 api.MapDelete("/access/{assignmentId:guid}", async (ClaimsPrincipal user, Guid assignmentId, SchoolDirectory directory, CancellationToken ct) =>
 { await directory.RevokeAsync(Subject(user), assignmentId, ct); return TypedResults.NoContent(); });
 api.MapGet("/expert/cases", (ClaimsPrincipal user, int? offset, int? limit, ExpertReviews expert, CancellationToken ct) => expert.QueueAsync(Subject(user), offset ?? 0, limit ?? 50, ct));
+api.MapGet("/expert/dashboard", (ClaimsPrincipal user, ExpertReviews expert, CancellationToken ct) => expert.DashboardAsync(Subject(user), ct));
+api.MapGet("/expert/work", (ClaimsPrincipal user, ExpertReviews expert, CancellationToken ct) => expert.WorkAsync(Subject(user), ct));
+api.MapPost("/expert/cases/{caseId:guid}/claim", (ClaimsPrincipal user, Guid caseId, ExpertReviews expert, CancellationToken ct) => expert.ClaimAsync(Subject(user), caseId, ct));
+api.MapDelete("/expert/cases/{caseId:guid}/claim", async (ClaimsPrincipal user, Guid caseId, ExpertReviews expert, CancellationToken ct) =>
+{ await expert.ReleaseAsync(Subject(user), caseId, ct); return TypedResults.NoContent(); });
 api.MapGet("/expert/cases/{caseId:guid}", (ClaimsPrincipal user, Guid caseId, ExpertReviews expert, CancellationToken ct) => expert.ReadAsync(Subject(user), caseId, ct));
 api.MapGet("/expert/cases/{caseId:guid}/history", (ClaimsPrincipal user, Guid caseId, ExpertReviews expert, CancellationToken ct) => expert.HistoryAsync(Subject(user), caseId, ct));
 api.MapPost("/expert/cases/{caseId:guid}/variants", async (ClaimsPrincipal user, Guid caseId, ProposeTranslationRequest request, ExpertReviews expert, CancellationToken ct) =>
