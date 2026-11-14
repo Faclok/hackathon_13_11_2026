@@ -1,36 +1,47 @@
-using System.Net.Http.Headers;
 using System.Text.Json;
-using Npgsql;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddSingleton(NpgsqlDataSource.Create(builder.Configuration.GetConnectionString("Default") ?? throw new InvalidOperationException("Database is required")));
+var connection = builder.Configuration.GetConnectionString("Default") ?? throw new InvalidOperationException("Database is required");
+builder.Services.AddDbContext<LmsDbContext>(options => options.UseNpgsql(connection,
+    postgres => postgres.MigrationsHistoryTable("__EFMigrationsHistory_Lms")));
 builder.Services.AddHttpClient("main", client => client.BaseAddress = new Uri(builder.Configuration["MAIN_API_URL"] ?? "http://main-api:8080"));
 var internalKey = builder.Configuration["INTERNAL_API_KEY"] ?? throw new InvalidOperationException("INTERNAL_API_KEY is required");
 var app = builder.Build();
+await using (var scope = app.Services.CreateAsyncScope())
+    await scope.ServiceProvider.GetRequiredService<LmsDbContext>().Database.MigrateAsync();
 
-app.MapGet("/api/lms/health", async (NpgsqlDataSource db) =>
+app.MapGet("/api/lms/health", async (LmsDbContext db) =>
+    await db.Database.CanConnectAsync() ? Results.Ok(new { status = "ok" }) : Results.StatusCode(503));
+app.MapGet("/api/lms/courses", async (LmsDbContext db) =>
 {
-    try { await LmsDb.Query(db, "SELECT 1"); return Results.Ok(new { status = "ok" }); }
-    catch { return Results.StatusCode(503); }
+    var courses = await db.Courses.AsNoTracking().OrderBy(c => c.Id).ToListAsync();
+    var counts = await db.Lessons.AsNoTracking().GroupBy(l => l.CourseId)
+        .Select(g => new { CourseId = g.Key, Count = g.Count() }).ToDictionaryAsync(g => g.CourseId, g => g.Count);
+    return Results.Ok(courses.Select(c => new { id = c.Id, title = c.Title, description = c.Description,
+        lesson_count = counts.GetValueOrDefault(c.Id) }));
 });
-app.MapGet("/api/lms/courses", async (NpgsqlDataSource db) => Results.Ok(await LmsDb.Query(db,
-    "SELECT c.id,c.title,c.description,COUNT(l.id)::int AS lesson_count FROM lms_courses c LEFT JOIN lms_lessons l ON l.course_id=c.id GROUP BY c.id ORDER BY c.id")));
-app.MapGet("/api/lms/courses/{id:int}/lessons", async (int id, NpgsqlDataSource db) => Results.Ok(await LmsDb.Query(db,
-    "SELECT id,course_id,position,title,body FROM lms_lessons WHERE course_id=@id ORDER BY position", ("id", id))));
+app.MapGet("/api/lms/courses/{id:int}/lessons", async (int id, LmsDbContext db) => Results.Ok(
+    await db.Lessons.AsNoTracking().Where(l => l.CourseId == id).OrderBy(l => l.Position)
+        .Select(l => new { id = l.Id, course_id = l.CourseId, position = l.Position, title = l.Title, body = l.Body }).ToListAsync()));
 
-app.MapGet("/api/lms/me/progress", async (HttpRequest request, IHttpClientFactory http, NpgsqlDataSource db) =>
+app.MapGet("/api/lms/me/progress", async (HttpRequest request, IHttpClientFactory http, LmsDbContext db) =>
 {
     var user = await Resolve(request, http, internalKey);
-    return user is null ? Results.Unauthorized() : Results.Ok(await LmsDb.Query(db,
-        "SELECT lesson_id,completed_at FROM lms_progress WHERE user_id=@user ORDER BY lesson_id", ("user", user)));
+    return user is null ? Results.Unauthorized() : Results.Ok(await db.Progress.AsNoTracking()
+        .Where(p => p.UserId == user).OrderBy(p => p.LessonId)
+        .Select(p => new { lesson_id = p.LessonId, completed_at = p.CompletedAt }).ToListAsync());
 });
-app.MapPost("/api/lms/lessons/{id:int}/complete", async (int id, HttpRequest request, IHttpClientFactory http, NpgsqlDataSource db) =>
+app.MapPost("/api/lms/lessons/{id:int}/complete", async (int id, HttpRequest request, IHttpClientFactory http, LmsDbContext db) =>
 {
     var user = await Resolve(request, http, internalKey);
     if (user is null) return Results.Unauthorized();
-    var lesson = await LmsDb.Query(db, "SELECT id FROM lms_lessons WHERE id=@id", ("id", id));
-    if (lesson.Count == 0) return Results.NotFound();
-    await LmsDb.Query(db, "INSERT INTO lms_progress(user_id,lesson_id) VALUES (@user,@lesson) ON CONFLICT(user_id,lesson_id) DO UPDATE SET completed_at=lms_progress.completed_at RETURNING lesson_id,completed_at", ("user", user), ("lesson", id));
+    if (!await db.Lessons.AnyAsync(l => l.Id == id)) return Results.NotFound();
+    if (!await db.Progress.AnyAsync(p => p.UserId == user && p.LessonId == id))
+    {
+        db.Progress.Add(new LmsProgress { UserId = user.Value, LessonId = id });
+        await db.SaveChangesAsync();
+    }
     return Results.Ok(new { completed = true, lessonId = id });
 });
 
@@ -47,22 +58,4 @@ static async Task<Guid?> Resolve(HttpRequest request, IHttpClientFactory factory
     if (!response.IsSuccessStatusCode) return null;
     using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
     return doc.RootElement.GetProperty("userId").GetGuid();
-}
-
-static class LmsDb
-{
-    public static async Task<List<Dictionary<string, object?>>> Query(NpgsqlDataSource db, string sql, params (string key, object value)[] args)
-    {
-        await using var command = db.CreateCommand(sql);
-        foreach (var (key, value) in args) command.Parameters.AddWithValue(key, value);
-        await using var reader = await command.ExecuteReaderAsync();
-        var result = new List<Dictionary<string, object?>>();
-        while (await reader.ReadAsync())
-        {
-            var row = new Dictionary<string, object?>();
-            for (var i = 0; i < reader.FieldCount; i++) row[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
-            result.Add(row);
-        }
-        return result;
-    }
 }

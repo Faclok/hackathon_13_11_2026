@@ -1,126 +1,174 @@
-using System.Security.Cryptography;
 using System.Text;
+using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
 var connection = builder.Configuration.GetConnectionString("Default") ?? throw new InvalidOperationException("ConnectionStrings:Default is required");
 var internalKey = builder.Configuration["INTERNAL_API_KEY"] ?? throw new InvalidOperationException("INTERNAL_API_KEY is required");
-builder.Services.AddSingleton(NpgsqlDataSource.Create(connection));
+builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connection,
+    postgres => postgres.MigrationsHistoryTable("__EFMigrationsHistory_Main")));
 var app = builder.Build();
+await using (var scope = app.Services.CreateAsyncScope())
+    await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.MigrateAsync();
 
-app.MapGet("/api/health", async (NpgsqlDataSource db) =>
-{
-    try { await Db.One(db, "SELECT 1 AS ok"); return Results.Ok(new { status = "ok" }); }
-    catch { return Results.StatusCode(503); }
-});
+app.MapGet("/api/health", async (AppDbContext db) =>
+    await db.Database.CanConnectAsync() ? Results.Ok(new { status = "ok" }) : Results.StatusCode(503));
 
-app.MapPost("/api/auth/register", async (Credentials input, NpgsqlDataSource db) =>
+app.MapPost("/api/auth/register", async (Credentials input, AppDbContext db) =>
 {
     var username = input.Username?.Trim().ToLowerInvariant() ?? "";
     if (username.Length is < 3 or > 32 || input.Password is null || input.Password.Length < 8 || string.IsNullOrWhiteSpace(input.DisplayName) || input.DisplayName.Trim().Length > 80)
         return Results.BadRequest(new { error = "Укажите логин (3–32), имя и пароль (не менее 8 символов)." });
-    var passwordHash = Passwords.Hash(input.Password);
-    try
-    {
-        var user = await Db.One(db, "INSERT INTO app_users(username,password_hash,display_name) VALUES (@username,@password,@name) RETURNING id,display_name,lang_pair", ("username", username), ("password", passwordHash), ("name", input.DisplayName.Trim()));
-        return Results.Ok(await Sessions.Create(db, user!));
-    }
-    catch (PostgresException e) when (e.SqlState == PostgresErrorCodes.UniqueViolation)
+    var user = new AppUser { Username = username, PasswordHash = Passwords.Hash(input.Password), DisplayName = input.DisplayName.Trim() };
+    db.Users.Add(user);
+    try { await db.SaveChangesAsync(); return Results.Ok(await Sessions.Create(db, user)); }
+    catch (DbUpdateException e) when (e.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
     { return Results.Conflict(new { error = "Этот логин уже занят." }); }
 });
 
-app.MapPost("/api/auth/login", async (Login input, NpgsqlDataSource db) =>
+app.MapPost("/api/auth/login", async (Login input, AppDbContext db) =>
 {
-    var user = await Db.One(db, "SELECT id,display_name,lang_pair,password_hash FROM app_users WHERE username=@username", ("username", input.Username?.Trim().ToLowerInvariant() ?? ""));
-    if (user is null || user["password_hash"] is not string hash || !Passwords.Verify(input.Password ?? "", hash)) return Results.Unauthorized();
-    user.Remove("password_hash");
+    var user = await db.Users.FirstOrDefaultAsync(u => u.Username == (input.Username ?? "").Trim().ToLower());
+    if (user?.PasswordHash is not string hash || !Passwords.Verify(input.Password ?? "", hash)) return Results.Unauthorized();
     return Results.Ok(await Sessions.Create(db, user));
 });
 
-app.MapGet("/api/me", async (HttpRequest request, NpgsqlDataSource db) =>
+app.MapGet("/api/me", async (HttpRequest request, AppDbContext db) =>
 {
-    var user = await Sessions.User(request, db);
-    if (user is null) return Results.Unauthorized();
-    var profile = await Db.One(db, "SELECT u.id,u.display_name,u.username,u.telegram_id,u.lang_pair,COALESCE(SUM(p.points),0)::int AS points FROM app_users u LEFT JOIN point_events p ON p.user_id=u.id WHERE u.id=@id GROUP BY u.id", ("id", user));
-    return Results.Ok(profile);
+    var userId = await Sessions.User(request, db);
+    if (userId is null) return Results.Unauthorized();
+    var user = await db.Users.AsNoTracking().FirstAsync(u => u.Id == userId);
+    var points = await db.PointEvents.Where(p => p.UserId == userId).SumAsync(p => (int?)p.Points) ?? 0;
+    return Results.Ok(new { id = user.Id, display_name = user.DisplayName, username = user.Username,
+        telegram_id = user.TelegramId, lang_pair = user.LangPair, points });
 });
 
-app.MapGet("/api/tasks/today", async (HttpRequest request, NpgsqlDataSource db) =>
+app.MapGet("/api/tasks/today", async (HttpRequest request, AppDbContext db) =>
 {
-    var user = await Sessions.User(request, db);
-    return user is null ? Results.Unauthorized() : Results.Ok(await Tasks.Today(db, user.Value));
+    var userId = await Sessions.User(request, db);
+    return userId is null ? Results.Unauthorized() : Results.Ok(await Tasks.Today(db, userId.Value));
 });
 
-app.MapPost("/api/tasks/{id:guid}/submission", async (Guid id, Submission input, HttpRequest request, NpgsqlDataSource db) =>
+app.MapPost("/api/tasks/{id:guid}/submission", async (Guid id, Submission input, HttpRequest request, AppDbContext db) =>
 {
-    var user = await Sessions.User(request, db);
-    return user is null ? Results.Unauthorized() : await Tasks.Submit(db, user.Value, id, input);
+    var userId = await Sessions.User(request, db);
+    return userId is null ? Results.Unauthorized() : await Tasks.Submit(db, userId.Value, id, input);
 });
 
-app.MapGet("/api/leaderboard", async (NpgsqlDataSource db) => Results.Ok(await Db.All(db,
-    "SELECT u.display_name,COALESCE(SUM(p.points),0)::int AS points,COUNT(p.id)::int AS answers FROM app_users u JOIN point_events p ON p.user_id=u.id GROUP BY u.id ORDER BY points DESC,answers DESC,u.display_name LIMIT 20")));
-
-app.MapGet("/api/translations", async (NpgsqlDataSource db) => Results.Ok(await Db.All(db,
-    "SELECT f.id AS fragment_id,f.text_ba,d.lang_pair,d.translation,d.confirmations,d.status,s.title AS source_title,s.dataset,s.original_id,s.source_url,s.attribution,s.license FROM consensus_decisions d JOIN fragments f ON f.id=d.fragment_id JOIN source_items s ON s.id=f.source_id WHERE d.status='confirmed' ORDER BY f.text_ba")));
-
-app.MapGet("/api/translations/export", async (NpgsqlDataSource db) =>
+app.MapGet("/api/leaderboard", async (AppDbContext db) =>
 {
-    var rows = await Db.All(db, "SELECT f.id AS fragment_id,f.text_ba,d.lang_pair,d.translation,d.confirmations,d.status,s.dataset,s.original_id,s.source_url FROM consensus_decisions d JOIN fragments f ON f.id=d.fragment_id JOIN source_items s ON s.id=f.source_id WHERE d.status='confirmed' ORDER BY f.text_ba");
+    var scores = await db.PointEvents.AsNoTracking().GroupBy(p => p.UserId)
+        .Select(g => new { UserId = g.Key, Points = g.Sum(p => p.Points), Answers = g.Count() }).ToListAsync();
+    var users = await db.Users.AsNoTracking().Where(u => scores.Select(s => s.UserId).Contains(u.Id))
+        .Select(u => new { u.Id, u.DisplayName }).ToListAsync();
+    return Results.Ok((from s in scores join u in users on s.UserId equals u.Id
+        orderby s.Points descending, s.Answers descending, u.DisplayName
+        select new { display_name = u.DisplayName, points = s.Points, answers = s.Answers }).Take(20));
+});
+
+app.MapGet("/api/translations", async (AppDbContext db) =>
+{
+    var rows = await (from d in db.Decisions.AsNoTracking()
+        join f in db.Fragments.AsNoTracking() on d.FragmentId equals f.Id
+        join s in db.Sources.AsNoTracking() on f.SourceId equals s.Id
+        where d.Status == "confirmed"
+        orderby f.TextBa
+        select new { fragment_id = f.Id, text_ba = f.TextBa, lang_pair = d.LangPair,
+            translation = d.Translation, confirmations = d.Confirmations, status = d.Status,
+            source_title = s.Title, dataset = s.Dataset, original_id = s.OriginalId,
+            source_url = s.SourceUrl, attribution = s.Attribution, license = s.License }).ToListAsync();
+    return Results.Ok(rows);
+});
+
+app.MapGet("/api/translations/export", async (AppDbContext db) =>
+{
+    var rows = await (from d in db.Decisions.AsNoTracking()
+        join f in db.Fragments.AsNoTracking() on d.FragmentId equals f.Id
+        join s in db.Sources.AsNoTracking() on f.SourceId equals s.Id
+        where d.Status == "confirmed"
+        orderby f.TextBa
+        select new { fragment_id = f.Id, text_ba = f.TextBa, lang_pair = d.LangPair,
+            translation = d.Translation, confirmations = d.Confirmations, status = d.Status,
+            dataset = s.Dataset, original_id = s.OriginalId, source_url = s.SourceUrl }).ToListAsync();
     var names = new[] { "fragment_id", "text_ba", "lang_pair", "translation", "confirmations", "status", "dataset", "original_id", "source_url" };
     var csv = new StringBuilder(string.Join(',', names) + "\r\n");
-    foreach (var row in rows) csv.AppendLine(string.Join(',', names.Select(n => "\"" + (row[n]?.ToString() ?? "").Replace("\"", "\"\"") + "\"")));
+    foreach (var row in rows)
+    {
+        var values = new object?[] { row.fragment_id, row.text_ba, row.lang_pair, row.translation, row.confirmations,
+            row.status, row.dataset, row.original_id, row.source_url };
+        csv.AppendLine(string.Join(',', values.Select(value => "\"" + (value?.ToString() ?? "").Replace("\"", "\"\"") + "\"")));
+    }
     return Results.File(Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(csv.ToString())).ToArray(), "text/csv", "translations.csv");
 });
 
-app.MapGet("/api/internal/resolve-token", async (HttpRequest request, NpgsqlDataSource db) =>
+app.MapGet("/api/internal/resolve-token", async (HttpRequest request, AppDbContext db) =>
 {
     if (!Internal.Valid(request, internalKey)) return Results.Unauthorized();
-    var user = await Sessions.User(request, db);
-    return user is null ? Results.Unauthorized() : Results.Ok(new { userId = user });
+    var userId = await Sessions.User(request, db);
+    return userId is null ? Results.Unauthorized() : Results.Ok(new { userId });
 });
 
-app.MapPost("/api/internal/telegram/{telegramId:long}/start", async (long telegramId, TelegramStart input, HttpRequest request, NpgsqlDataSource db) =>
+app.MapPost("/api/internal/telegram/{telegramId:long}/start", async (long telegramId, TelegramStart input, HttpRequest request, AppDbContext db) =>
 {
     if (!Internal.Valid(request, internalKey)) return Results.Unauthorized();
     var name = string.IsNullOrWhiteSpace(input.Name) ? "Участник" : input.Name.Trim()[..Math.Min(input.Name.Trim().Length, 80)];
-    var user = await Db.One(db, "INSERT INTO app_users(telegram_id,display_name) VALUES (@id,@name) ON CONFLICT(telegram_id) DO UPDATE SET display_name=EXCLUDED.display_name RETURNING id,display_name", ("id", telegramId), ("name", name));
-    await Db.One(db, "INSERT INTO bot_states(telegram_id,state) VALUES (@id,'idle') ON CONFLICT(telegram_id) DO UPDATE SET state='idle',task_id=NULL,updated_at=now() RETURNING state", ("id", telegramId));
-    return Results.Ok(user);
+    var user = await db.Users.FirstOrDefaultAsync(u => u.TelegramId == telegramId);
+    if (user is null) { user = new AppUser { TelegramId = telegramId, DisplayName = name }; db.Users.Add(user); }
+    else user.DisplayName = name;
+    var state = await db.BotStates.FirstOrDefaultAsync(s => s.TelegramId == telegramId);
+    if (state is null) db.BotStates.Add(new BotState { TelegramId = telegramId, State = "idle" });
+    else { state.State = "idle"; state.TaskId = null; state.UpdatedAt = DateTime.UtcNow; }
+    await db.SaveChangesAsync();
+    return Results.Ok(new { id = user.Id, display_name = user.DisplayName });
 });
 
-app.MapGet("/api/internal/telegram/{telegramId:long}/task", async (long telegramId, HttpRequest request, NpgsqlDataSource db) =>
+app.MapGet("/api/internal/telegram/{telegramId:long}/task", async (long telegramId, HttpRequest request, AppDbContext db) =>
 {
     if (!Internal.Valid(request, internalKey)) return Results.Unauthorized();
-    var user = await Db.One(db, "SELECT id FROM app_users WHERE telegram_id=@id", ("id", telegramId));
+    var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.TelegramId == telegramId);
     if (user is null) return Results.NotFound();
-    var task = await Tasks.Today(db, (Guid)user["id"]!);
-    await Db.One(db, "INSERT INTO bot_states(telegram_id,state,task_id) VALUES (@id,'awaiting_answer',@task) ON CONFLICT(telegram_id) DO UPDATE SET state='awaiting_answer',task_id=@task,updated_at=now() RETURNING state", ("id", telegramId), ("task", task!["id"]!));
+    var task = await Tasks.Today(db, user.Id);
+    if (task is null) return Results.NotFound();
+    var state = await db.BotStates.FirstOrDefaultAsync(s => s.TelegramId == telegramId);
+    if (state is null) { state = new BotState { TelegramId = telegramId }; db.BotStates.Add(state); }
+    state.State = "awaiting_answer"; state.TaskId = (Guid)task["id"]!; state.UpdatedAt = DateTime.UtcNow;
+    await db.SaveChangesAsync();
     return Results.Ok(task);
 });
 
-app.MapPost("/api/internal/telegram/{telegramId:long}/submit", async (long telegramId, Submission input, HttpRequest request, NpgsqlDataSource db) =>
+app.MapPost("/api/internal/telegram/{telegramId:long}/submit", async (long telegramId, Submission input, HttpRequest request, AppDbContext db) =>
 {
     if (!Internal.Valid(request, internalKey)) return Results.Unauthorized();
-    var state = await Db.One(db, "SELECT u.id AS user_id,b.task_id,b.state FROM app_users u JOIN bot_states b ON b.telegram_id=u.telegram_id WHERE u.telegram_id=@id", ("id", telegramId));
-    if (state is null || (string)state["state"]! != "awaiting_answer" || state["task_id"] is not Guid taskId) return Results.BadRequest(new { error = "Сначала запросите задание командой /task." });
-    var result = await Tasks.Submit(db, (Guid)state["user_id"]!, taskId, input);
+    var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.TelegramId == telegramId);
+    var state = await db.BotStates.FirstOrDefaultAsync(s => s.TelegramId == telegramId);
+    if (user is null || state is null || state.State != "awaiting_answer" || state.TaskId is not Guid taskId)
+        return Results.BadRequest(new { error = "Сначала запросите задание командой /task." });
+    var result = await Tasks.Submit(db, user.Id, taskId, input);
     if (result is IStatusCodeHttpResult { StatusCode: 200 })
-        await Db.One(db, "UPDATE bot_states SET state='idle',task_id=NULL,updated_at=now() WHERE telegram_id=@id RETURNING state", ("id", telegramId));
+    {
+        state.State = "idle"; state.TaskId = null; state.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+    }
     return result;
 });
 
-app.MapPost("/api/internal/telegram/{telegramId:long}/cancel", async (long telegramId, HttpRequest request, NpgsqlDataSource db) =>
+app.MapPost("/api/internal/telegram/{telegramId:long}/cancel", async (long telegramId, HttpRequest request, AppDbContext db) =>
 {
     if (!Internal.Valid(request, internalKey)) return Results.Unauthorized();
-    await Db.One(db, "INSERT INTO bot_states(telegram_id,state) VALUES (@id,'idle') ON CONFLICT(telegram_id) DO UPDATE SET state='idle',task_id=NULL,updated_at=now() RETURNING state", ("id", telegramId));
+    var state = await db.BotStates.FirstOrDefaultAsync(s => s.TelegramId == telegramId);
+    if (state is null) db.BotStates.Add(new BotState { TelegramId = telegramId, State = "idle" });
+    else { state.State = "idle"; state.TaskId = null; state.UpdatedAt = DateTime.UtcNow; }
+    await db.SaveChangesAsync();
     return Results.Ok();
 });
 
-app.MapGet("/api/internal/telegram/{telegramId:long}/me", async (long telegramId, HttpRequest request, NpgsqlDataSource db) =>
+app.MapGet("/api/internal/telegram/{telegramId:long}/me", async (long telegramId, HttpRequest request, AppDbContext db) =>
 {
     if (!Internal.Valid(request, internalKey)) return Results.Unauthorized();
-    var user = await Db.One(db, "SELECT u.display_name,COALESCE(SUM(p.points),0)::int AS points FROM app_users u LEFT JOIN point_events p ON p.user_id=u.id WHERE u.telegram_id=@id GROUP BY u.id", ("id", telegramId));
-    return user is null ? Results.NotFound() : Results.Ok(user);
+    var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.TelegramId == telegramId);
+    if (user is null) return Results.NotFound();
+    var points = await db.PointEvents.Where(p => p.UserId == user.Id).SumAsync(p => (int?)p.Points) ?? 0;
+    return Results.Ok(new { display_name = user.DisplayName, points });
 });
 
 app.Run();
