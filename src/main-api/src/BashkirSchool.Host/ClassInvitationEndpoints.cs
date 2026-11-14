@@ -13,7 +13,7 @@ public static class ClassInvitationEndpoints
         {
             var invitation = await invitations.InviteAsync(Subject(user), classId, request, ct);
             return TypedResults.Created($"/api/classes/{classId}/invitations", invitation);
-        }).WithName("InviteStudentToClass").WithSummary("Invite a self-registered participant to the teacher's own class.")
+        }).WithName("InviteStudentToClass").WithSummary("Find a self-registered participant by username and add them to the teacher's class immediately.")
             .ProducesProblem(400).ProducesProblem(403).ProducesProblem(404).ProducesProblem(409);
         api.MapGet("/classes/{classId:guid}/invitations", (ClaimsPrincipal user, Guid classId, int? offset, int? limit,
             IClassInvitations invitations, CancellationToken ct) => invitations.ForClassAsync(Subject(user), classId, offset ?? 0, limit ?? 50, ct))

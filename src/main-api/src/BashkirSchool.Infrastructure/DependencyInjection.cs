@@ -32,7 +32,9 @@ public static class DependencyInjection
         services.AddScoped<ExpertReviews>();
         services.AddScoped<TranslationExport>();
         services.AddScoped<ResolutionProcessor>();
-        services.AddScoped<LearningWorkflow>();
+        services.AddScoped<LevelWorkflow>();
+        services.AddScoped<BossAccess>();
+        services.AddScoped<PlayerEconomy>();
         services.AddScoped<LearningMaterials>();
         services.AddScoped<AudioPreparation>();
         services.AddSingleton<IExerciseHandler, TranslationTextHandler>();
@@ -49,6 +51,7 @@ public static class DependencyInjection
         services.AddIdentityCore<Account>(o =>
         {
             o.User.RequireUniqueEmail = false;
+            o.User.AllowedUserNameCharacters = null!;
             o.Password.RequiredLength = 12;
             o.Lockout.MaxFailedAccessAttempts = 5;
             o.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);

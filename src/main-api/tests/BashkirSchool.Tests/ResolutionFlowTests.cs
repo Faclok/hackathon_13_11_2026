@@ -56,9 +56,8 @@ public sealed class ResolutionFlowTests
         Assert.Equal(2, await db.TrustAssessments.CountAsync());
         Assert.Equal(1, (await db.Cases.SingleAsync()).Revision);
         Assert.True((await db.Cases.SingleAsync()).ExpertClosed);
-        var lesson = await first.Client.GetFromJsonAsync<LessonResponse>("/api/lessons/today");
-        var exercise = Assert.Single(lesson!.Exercises);
-        var attempt = await Post<AttemptResponse>(first.Client, $"/api/exercises/{exercise.Id}/attempt", new SubmitAttemptRequest("Hello"));
+        var level = await CurrentLevel(first.Client);
+        var attempt = await AnswerLevel(first.Client, level, new TextExerciseAnswer("Hello"));
         Assert.True(attempt.Recognized); // A remains accepted even though B is primary.
         Assert.Equal((1, 1), await Trust(f, first.Id));
     }
@@ -71,10 +70,11 @@ public sealed class ResolutionFlowTests
         using var producer = await f.Producer(admin); var d = await Deliver(producer);
         await Post<IdResponse>(admin, "/api/policies/distribution", new DistributionPolicyRequest(1, .8m, 1, 1, 1, 1));
         var a1 = await Post<AssignmentResponse>(first.Client, "/api/reviews/next", new { });
+        // New reviews stop after a community result; an already issued review may still arrive late.
+        var a2 = await Post<AssignmentResponse>(second.Client, "/api/reviews/next", new { });
         await Post<ReviewReceipt>(first.Client, $"/api/reviews/{a1.Id}/response", new SubmitReviewRequest(ReviewAction.Confirm));
         await Process(f, d.CaseId);
         Assert.Equal((1, 1), await Trust(f, first.Id));
-        var a2 = await Post<AssignmentResponse>(second.Client, "/api/reviews/next", new { });
         await Post<ReviewReceipt>(second.Client, $"/api/reviews/{a2.Id}/response", new SubmitReviewRequest(ReviewAction.Correct, "B"));
         await Process(f, d.CaseId);
         Assert.Equal((1, 1), await Trust(f, first.Id));
@@ -92,7 +92,7 @@ public sealed class ResolutionFlowTests
     }
 
     [Fact]
-    public async Task ExportAndLessonUseExpertRenderingWithoutLeakingKeysOrAddingTrust()
+    public async Task ExportAndLevelUseExpertRenderingWithoutLeakingKeysOrAddingTrust()
     {
         using var f = new CoreFactory(); using var admin = await f.Bootstrap(); var student = await f.Student(admin);
         using var producer = await f.Producer(admin); var d = await Deliver(producer);
@@ -105,14 +105,13 @@ public sealed class ResolutionFlowTests
         var rows = await exporter.GetFromJsonAsync<ExportRow[]>("/api/translations/export");
         Assert.Equal("Hello", Assert.Single(rows!).Translation); Assert.Equal(1, rows![0].Confirmed); Assert.Equal("confirmed", rows[0].Status);
         Assert.Equal(HttpStatusCode.Forbidden, (await student.Client.GetAsync("/api/translations/export")).StatusCode);
-        var lesson = await student.Client.GetFromJsonAsync<LessonResponse>("/api/lessons/today");
-        Assert.Equal(lesson!.Id, (await student.Client.GetFromJsonAsync<LessonResponse>("/api/lessons/today"))!.Id);
-        var exercise = Assert.Single(lesson.Exercises);
-        var json = await student.Client.GetStringAsync("/api/lessons/today");
+        var level = await CurrentLevel(student.Client);
+        Assert.Equal(level.Id, (await CurrentLevel(student.Client)).Id);
+        var json = await (await student.Client.PostAsJsonAsync("/api/learning/current", new { })).Content.ReadAsStringAsync();
         Assert.DoesNotContain("acceptedTexts", json, StringComparison.OrdinalIgnoreCase); Assert.DoesNotContain("Hello", json);
-        var attempt = await Post<AttemptResponse>(student.Client, $"/api/exercises/{exercise.Id}/attempt", new SubmitAttemptRequest("Hello"));
+        var attempt = await AnswerLevel(student.Client, level, new TextExerciseAnswer("Hello"));
         Assert.True(attempt.Recognized);
-        Assert.Equal(attempt, await Post<AttemptResponse>(student.Client, $"/api/exercises/{exercise.Id}/attempt", new SubmitAttemptRequest("Hello")));
+        Assert.Equal(attempt, await AnswerLevel(student.Client, level, new TextExerciseAnswer("Hello")));
         Assert.Equal((1, 1), await Trust(f, student.Id));
     }
 

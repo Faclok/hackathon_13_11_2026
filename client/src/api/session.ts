@@ -1,0 +1,94 @@
+const STORAGE_KEY = "bashkir-school-session-v1";
+
+interface Session {
+  accessToken: string;
+  expiresAt: string;
+  refreshToken: string;
+}
+
+export class ApiError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+  }
+}
+
+const readSession = (): Session | null => {
+  try {
+    const value = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
+    return value?.accessToken && value?.refreshToken ? value : null;
+  } catch {
+    return null;
+  }
+};
+
+export const hasSession = () => !!readSession();
+export const clearSession = () => localStorage.removeItem(STORAGE_KEY);
+
+async function decode<T>(response: Response): Promise<T> {
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new ApiError(response.status, body?.title ?? "Сервер не ответил на запрос.");
+  }
+  return response.json() as Promise<T>;
+}
+
+export async function loginUsername(username: string) {
+  const session = await decode<Session>(
+    await fetch("/auth/username", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: username.trim() }),
+    }),
+  );
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+}
+
+let refreshing: Promise<Session> | null = null;
+async function refreshSession(session: Session): Promise<Session> {
+  const current = readSession();
+  if (current && current.refreshToken !== session.refreshToken) return current;
+  refreshing ??= (async () => {
+    try {
+      const next = await decode<Session>(
+        await fetch("/auth/refresh", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refreshToken: session.refreshToken }),
+        }),
+      );
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      return next;
+    } catch (error) {
+      clearSession();
+      throw error;
+    }
+  })();
+  try {
+    return await refreshing;
+  } finally {
+    refreshing = null;
+  }
+}
+
+export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const initial = readSession();
+  if (!initial) throw new ApiError(401, "Войдите в аккаунт.");
+  const send = (token: string) =>
+    fetch(path, {
+      ...init,
+      headers: {
+        ...init.headers,
+        Authorization: `Bearer ${token}`,
+        ...(init.body ? { "Content-Type": "application/json" } : {}),
+      },
+    });
+  let session = initial;
+  if (new Date(session.expiresAt).getTime() - Date.now() < 30_000)
+    session = await refreshSession(session);
+  let response = await send(session.accessToken);
+  if (response.status === 401) {
+    session = await refreshSession(session);
+    response = await send(session.accessToken);
+  }
+  return decode<T>(response);
+}

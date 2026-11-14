@@ -13,6 +13,15 @@ public static class TeacherEndpoints
             var user = await Identity(request, factory);
             return user is null ? Results.Unauthorized() : Results.Ok(user);
         });
+        api.MapGet("/teacher/participants/lookup", async (string username, HttpRequest request, IHttpClientFactory factory) =>
+        {
+            if (await Identity(request, factory) is null) return Results.Unauthorized();
+            if (Clean(username, 100) is not { } query) return Bad("Укажите username ученика.");
+            using var response = await MainGet(request, factory, $"/api/lms-source/participants/lookup?username={Uri.EscapeDataString(query)}");
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return Results.NotFound();
+            if (!response.IsSuccessStatusCode) return Results.StatusCode(502);
+            return Results.Ok(await response.Content.ReadFromJsonAsync<LmsUser>());
+        });
         api.MapGet("/teacher/classes", async (HttpRequest request, IHttpClientFactory factory, LmsDbContext db) =>
         {
             var user = await Identity(request, factory);
@@ -65,7 +74,12 @@ public static class TeacherEndpoints
             var user = await Identity(request, factory);
             if (user is null) return Results.Unauthorized();
             if (await OwnClass(db, id, user.Id) is null) return Results.NotFound();
-            return Results.Ok(await db.ClassMembers.AsNoTracking().Where(x => x.ClassId == id).OrderBy(x => x.Username).ToListAsync());
+            var members = await db.ClassMembers.Where(x => x.ClassId == id).OrderBy(x => x.Username).ToListAsync();
+            var names = await CurrentNames(request, factory, members.Select(x => x.UserId));
+            foreach (var member in members)
+                if (names.TryGetValue(member.UserId, out var name) && member.DisplayName != name) member.DisplayName = name;
+            if (db.ChangeTracker.HasChanges()) await db.SaveChangesAsync();
+            return Results.Ok(members);
         });
         api.MapPost("/teacher/classes/{id:guid}/members", async (Guid id, HttpRequest request, IHttpClientFactory factory, LmsDbContext db, MemberInput input) =>
         {
@@ -80,7 +94,8 @@ public static class TeacherEndpoints
             if (participant is null || participant.Id == user.Id) return Bad("Нельзя добавить себя в класс.");
             if (await db.ClassMembers.AnyAsync(x => x.ClassId == id && x.UserId == participant.Id))
                 return Results.Conflict(new { title = "Участник уже в классе." });
-            var member = new ClassMember { ClassId = id, UserId = participant.Id, Username = participant.Username, DisplayName = participant.Username };
+            var member = new ClassMember { ClassId = id, UserId = participant.Id, Username = participant.Username,
+                DisplayName = participant.DisplayName ?? participant.Username };
             db.ClassMembers.Add(member);
             await db.SaveChangesAsync();
             return Results.Created($"/api/lms/teacher/classes/{id}/members", member);
@@ -91,6 +106,11 @@ public static class TeacherEndpoints
             if (user is null) return Results.Unauthorized();
             if (await OwnClass(db, id, user.Id) is null) return Results.NotFound();
             var member = await db.ClassMembers.AsNoTracking().SingleOrDefaultAsync(x => x.ClassId == id && x.UserId == memberId);
+            if (member is not null)
+            {
+                var names = await CurrentNames(request, factory, [member.UserId]);
+                if (names.TryGetValue(member.UserId, out var name)) member.DisplayName = name;
+            }
             return member is null ? Results.NotFound() : Results.Ok(member);
         });
         api.MapPut("/teacher/classes/{id:guid}/members/{memberId:guid}", async (Guid id, Guid memberId, HttpRequest request, IHttpClientFactory factory, LmsDbContext db, MemberEditInput input) =>
@@ -285,11 +305,14 @@ public static class TeacherEndpoints
             var user = await Identity(request, factory);
             if (user is null) return Results.Unauthorized();
             if (await OwnClass(db, id, user.Id) is null || !await db.ClassTasks.AnyAsync(x => x.Id == taskId && x.ClassId == id)) return Results.NotFound();
-            return Results.Ok(await (from answer in db.TaskSubmissions.AsNoTracking() where answer.TaskId == taskId
+            var answers = await (from answer in db.TaskSubmissions.AsNoTracking() where answer.TaskId == taskId
                 join member in db.ClassMembers on new { ClassId = id, answer.UserId } equals new { member.ClassId, member.UserId } into members
                 from member in members.DefaultIfEmpty()
                 orderby answer.SubmittedAt descending
-                select new { answer.UserId, Username = member == null ? "Участник удалён" : member.DisplayName, answer.Answer, answer.SubmittedAt }).ToListAsync());
+                select new { answer.UserId, Username = member == null ? "Участник удалён" : member.DisplayName, answer.Answer, answer.SubmittedAt }).ToListAsync();
+            var names = await CurrentNames(request, factory, answers.Select(x => x.UserId));
+            return Results.Ok(answers.Select(x => new { x.UserId,
+                Username = names.GetValueOrDefault(x.UserId, x.Username), x.Answer, x.SubmittedAt }));
         });
         api.MapGet("/me/tasks", async (HttpRequest request, IHttpClientFactory factory, LmsDbContext db) =>
         {
@@ -305,6 +328,27 @@ public static class TeacherEndpoints
                     task.DueAt, task.CreatedAt, Answer = submission == null ? null : submission.Answer,
                     SubmittedAt = submission == null ? (DateTimeOffset?)null : submission.SubmittedAt }).ToListAsync());
         });
+        api.MapPost("/me/next-translation", async (HttpRequest request, IHttpClientFactory factory, LmsDbContext db) =>
+        {
+            var user = await Identity(request, factory);
+            if (user is null) return Results.Unauthorized();
+            var now = DateTimeOffset.UtcNow;
+            var task = await (from member in db.ClassMembers.AsNoTracking() where member.UserId == user.Id
+                              join studyClass in db.TeacherClasses on member.ClassId equals studyClass.Id
+                              join item in db.ClassTasks on studyClass.Id equals item.ClassId
+                              where (item.DueAt == null || item.DueAt >= now) &&
+                                  !db.TaskSubmissions.Any(x => x.TaskId == item.Id && x.UserId == user.Id)
+                              orderby item.DueAt == null, item.DueAt, item.CreatedAt, item.Id
+                              select new { item.Id, item.CatalogCaseId, item.Title, item.SourceText,
+                                  item.DueAt, ClassName = studyClass.Name }).FirstOrDefaultAsync();
+            if (task is not null) return Results.Ok(new { source = "teacher", task });
+            using var response = await MainPost(request, factory, "/api/boss/next", new { });
+            if (response.StatusCode == System.Net.HttpStatusCode.NoContent) return Results.NoContent();
+            if (response.StatusCode == System.Net.HttpStatusCode.Forbidden) return Results.StatusCode(403);
+            if (!response.IsSuccessStatusCode) return Results.StatusCode(502);
+            using var assignment = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            return Results.Ok(new { source = "random", assignment = assignment.RootElement.Clone() });
+        });
         api.MapPut("/me/tasks/{taskId:guid}/submission", async (Guid taskId, HttpRequest request, IHttpClientFactory factory, LmsDbContext db, SubmissionInput input) =>
         {
             var user = await Identity(request, factory);
@@ -313,6 +357,9 @@ public static class TeacherEndpoints
             var task = await db.ClassTasks.AsNoTracking().SingleOrDefaultAsync(x => x.Id == taskId);
             if (task is null || !await db.ClassMembers.AnyAsync(x => x.ClassId == task.ClassId && x.UserId == user.Id)) return Results.NotFound();
             if (task.DueAt is not null && task.DueAt < DateTimeOffset.UtcNow) return Results.Conflict(new { title = "Срок сдачи истёк." });
+            if (task.CatalogCaseId is not Guid caseId) return Results.Conflict(new { title = "Перевод задания ещё не синхронизирован с общим каталогом." });
+            using var contribution = await MainPost(request, factory, $"/api/lms-source/translations/{caseId}/student-answer", new { taskId, text = answer });
+            if (!contribution.IsSuccessStatusCode) return Results.StatusCode(502);
             var submission = await db.TaskSubmissions.SingleOrDefaultAsync(x => x.TaskId == taskId && x.UserId == user.Id);
             if (submission is null) { submission = new TaskSubmission { TaskId = taskId, UserId = user.Id }; db.TaskSubmissions.Add(submission); }
             submission.Answer = answer; submission.SubmittedAt = DateTimeOffset.UtcNow;
@@ -371,6 +418,21 @@ public static class TeacherEndpoints
         message.Headers.TryAddWithoutValidation("Authorization", request.Headers.Authorization.ToString());
         return factory.CreateClient("main").SendAsync(message);
     }
+    internal static async Task<Dictionary<Guid, string>> CurrentNames(HttpRequest request, IHttpClientFactory factory,
+        IEnumerable<Guid> participantIds)
+    {
+        var ids = participantIds.Distinct().ToArray();
+        var result = new Dictionary<Guid, string>();
+        foreach (var chunk in ids.Chunk(100))
+        {
+            using var response = await MainGet(request, factory,
+                "/api/lms-source/participants/names?ids=" + string.Join(',', chunk));
+            if (!response.IsSuccessStatusCode) continue;
+            var names = await response.Content.ReadFromJsonAsync<LmsUser[]>();
+            foreach (var name in names ?? []) result[name.Id] = name.DisplayName ?? name.Username;
+        }
+        return result;
+    }
     private static Task<HttpResponseMessage> MainPost(HttpRequest request, IHttpClientFactory factory, string path, object body)
     {
         var message = new HttpRequestMessage(HttpMethod.Post, path) { Content = JsonContent.Create(body) };
@@ -388,7 +450,7 @@ public static class TeacherEndpoints
     }
 }
 
-public sealed record LmsUser(Guid Id, string Username);
+public sealed record LmsUser(Guid Id, string Username, string? DisplayName = null);
 public sealed record ClassInput(string Name, string? Description);
 public sealed record MemberInput(string Username);
 public sealed record MemberEditInput(string DisplayName);

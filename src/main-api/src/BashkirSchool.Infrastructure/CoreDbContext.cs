@@ -8,6 +8,8 @@ namespace BashkirSchool.Infrastructure;
 
 public sealed class Account : IdentityUser<Guid>
 {
+    public string? FirstName { get; set; }
+    public string? LastName { get; set; }
     public bool Active { get; set; } = true;
     public long SessionVersion { get; set; }
     public bool SelfRegistered { get; set; }
@@ -44,6 +46,8 @@ public sealed class CoreDbContext(DbContextOptions<CoreDbContext> options) : Ide
     public DbSet<ProfilePermission> Permissions => Set<ProfilePermission>();
     public DbSet<AuditEntry> Audit => Set<AuditEntry>();
     public DbSet<OutboxMessage> Outbox => Set<OutboxMessage>();
+    public DbSet<PlayerState> PlayerStates => Set<PlayerState>();
+    public DbSet<PlayerCaseOpening> PlayerCaseOpenings => Set<PlayerCaseOpening>();
     public DbSet<ResolutionRevision> Resolutions => Set<ResolutionRevision>();
     public DbSet<TrustAssessment> TrustAssessments => Set<TrustAssessment>();
     public DbSet<TrustContribution> TrustContributions => Set<TrustContribution>();
@@ -51,17 +55,26 @@ public sealed class CoreDbContext(DbContextOptions<CoreDbContext> options) : Ide
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
+        b.Entity<Account>().Property(x => x.FirstName).HasMaxLength(100);
+        b.Entity<Account>().Property(x => x.LastName).HasMaxLength(100);
+        b.Entity<LearningLevel>().HasIndex(x => new { x.ParticipantId, x.Number }).IsUnique();
+        b.Entity<LearningLevel>().HasIndex(x => x.ParticipantId).IsUnique().HasFilter("\"CompletedAt\" IS NULL");
+        b.Entity<LearningLevel>().HasOne<Participant>().WithMany().HasForeignKey(x => x.ParticipantId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<LevelQuestion>().HasIndex(x => new { x.LevelId, x.Position }).IsUnique();
+        b.Entity<LevelQuestion>().HasOne<LearningLevel>().WithMany().HasForeignKey(x => x.LevelId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<LevelQuestion>().HasOne<TranslationCase>().WithMany().HasForeignKey(x => x.CaseId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<LevelQuestion>().HasOne<ResolutionRevision>().WithMany().HasForeignKey(x => x.ResolutionId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<LevelQuestion>().Property(x => x.Kind).HasMaxLength(100);
+        b.Entity<LevelAnswer>().HasOne<LevelQuestion>().WithMany().HasForeignKey(x => x.QuestionId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<LevelBoss>().HasIndex(x => new { x.ParticipantId, x.Checkpoint }).IsUnique();
+        b.Entity<LevelBoss>().HasIndex(x => x.ParticipantId).IsUnique().HasFilter("\"CompletedAt\" IS NULL");
+        b.Entity<LevelBoss>().HasOne<Participant>().WithMany().HasForeignKey(x => x.ParticipantId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<LevelBossQuestion>().HasIndex(x => new { x.BossId, x.Position }).IsUnique();
+        b.Entity<LevelBossQuestion>().HasIndex(x => x.AssignmentId).IsUnique();
+        b.Entity<LevelBossQuestion>().HasOne<LevelBoss>().WithMany().HasForeignKey(x => x.BossId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<LevelBossQuestion>().HasOne<ReviewAssignment>().WithMany().HasForeignKey(x => x.AssignmentId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<LevelBossQuestion>().HasOne<ReviewResponse>().WithMany().HasForeignKey(x => x.ResponseId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<AccountSession>().HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
-        b.Entity<DailyLesson>().HasIndex(x => new { x.ParticipantId, x.Date }).IsUnique();
-        b.Entity<DailyLesson>().HasOne<Participant>().WithMany().HasForeignKey(x => x.ParticipantId).OnDelete(DeleteBehavior.Restrict);
-        b.Entity<Exercise>().HasOne<DailyLesson>().WithMany().HasForeignKey(x => x.LessonId).OnDelete(DeleteBehavior.Restrict);
-        b.Entity<Exercise>().HasOne<ResolutionRevision>().WithMany().HasForeignKey(x => x.ResolutionId).OnDelete(DeleteBehavior.Restrict);
-        b.Entity<Exercise>().Property(x => x.Kind).HasMaxLength(100).HasDefaultValue("translation-text");
-        b.Entity<Exercise>().Property(x => x.LanguagePair).HasMaxLength(7).HasDefaultValue("ba-ru");
-        b.Entity<Exercise>().Property(x => x.PromptJson).HasDefaultValue("{}");
-        b.Entity<Exercise>().Property(x => x.AnswerKeyJson).HasDefaultValue("{}");
-        b.Entity<Exercise>().Property(x => x.SchemaVersion).HasDefaultValue(1);
-        b.Entity<Exercise>().HasIndex(x => new { x.LessonId, x.Kind, x.CaseId });
         b.Entity<VocabularyEntry>().Property(x => x.LanguagePair).HasMaxLength(7);
         b.Entity<VocabularyEntry>().Property(x => x.Word).HasMaxLength(200);
         b.Entity<VocabularyEntry>().Property(x => x.Translation).HasMaxLength(200);
@@ -70,8 +83,6 @@ public sealed class CoreDbContext(DbContextOptions<CoreDbContext> options) : Ide
         b.Entity<SentenceAudio>().Property(x => x.ObjectKey).HasMaxLength(200);
         b.Entity<SentenceAudio>().HasIndex(x => new { x.FragmentId, x.ObjectKey }).IsUnique();
         b.Entity<SentenceAudio>().HasIndex(x => x.ObjectKey);
-        b.Entity<ExerciseAttempt>().HasIndex(x => x.ExerciseId).IsUnique();
-        b.Entity<ExerciseAttempt>().HasOne<Exercise>().WithOne().HasForeignKey<ExerciseAttempt>(x => x.ExerciseId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<RefreshCredential>().HasKey(x => x.Hash);
         b.Entity<RefreshCredential>().Property(x => x.Hash).HasMaxLength(64);
         b.Entity<RefreshCredential>().HasOne<AccountSession>().WithMany().HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Restrict);
@@ -132,6 +143,19 @@ public sealed class CoreDbContext(DbContextOptions<CoreDbContext> options) : Ide
         b.Entity<DistributionPolicy>().HasIndex(x => x.Version).IsUnique();
         b.Entity<OutboxMessage>().HasIndex(x => x.ResponseId).IsUnique();
         b.Entity<OutboxMessage>().HasIndex(x => x.ProcessedAt);
+        b.Entity<PlayerState>().HasKey(x => x.ParticipantId);
+        b.Entity<PlayerState>().HasOne<Participant>().WithOne().HasForeignKey<PlayerState>(x => x.ParticipantId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<PlayerState>().Property(x => x.ProfileCompletionRewarded).HasDefaultValue(false);
+        b.Entity<PlayerState>().Property(x => x.OwnedJson).HasDefaultValue("[]");
+        b.Entity<PlayerState>().Property(x => x.EquippedItemsJson).HasDefaultValue("[]");
+        b.Entity<PlayerState>().Property(x => x.BackgroundId).HasMaxLength(100);
+        b.Entity<PlayerState>().Property(x => x.FrameId).HasMaxLength(100);
+        b.Entity<PlayerState>().Property(x => x.HatId).HasMaxLength(100);
+        b.Entity<PlayerState>().Property(x => x.PetId).HasMaxLength(100);
+        b.Entity<PlayerCaseOpening>().HasOne<Participant>().WithMany().HasForeignKey(x => x.ParticipantId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<PlayerCaseOpening>().Property(x => x.CaseId).HasMaxLength(100);
+        b.Entity<PlayerCaseOpening>().Property(x => x.DecorationId).HasMaxLength(100);
+        b.Entity<PlayerCaseOpening>().HasIndex(x => new { x.ParticipantId, x.OpenedAt });
         foreach (var entity in b.Model.GetEntityTypes())
             foreach (var property in entity.GetProperties().Where(p => p.ClrType == typeof(decimal)))
             {

@@ -6,7 +6,7 @@
 
 ```bash
 cd scorm
-zip -q ../bashperevod-scorm-1.2.zip imsmanifest.xml index.html *.xsd
+zip -q bashperevod-scorm-1.2.zip imsmanifest.xml index.html *.xsd
 ```
 
 `imsmanifest.xml` и все XSD должны лежать в **корне** ZIP. XSD взяты из [набора схем SCORM 1.2](https://scorm.com/scorm-explained/technical-scorm/content-packaging/xml-schema-definition-files/) Rustici Software.

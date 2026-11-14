@@ -1,5 +1,22 @@
 # Telegram-бот ученика
 
+## Диагностика запуска и команд
+
+Консоль показывает путь загруженной конфигурации, включён ли прокси, начало и завершение миграций БД,
+настоящее имя бота из `getMe`, наличие webhook и запуск polling. Для каждого запроса Telegram
+выводятся имя метода, HTTP-код и время выполнения. Токен, адрес запроса целиком и тела сообщений
+в диагностические записи приложения не включаются.
+
+После запуска отправьте `/start` в личный чат с ботом, указанным в строке `actual bot`.
+Последовательность `Update ... received`, `loading conversation state`, `conversation state loaded`,
+`/start handler entered`, `Telegram API sendMessage` показывает прохождение команды.
+Если последняя строка — начало миграций, проверяйте PostgreSQL; если начало запроса Telegram —
+сеть и прокси. HTTP 401 означает неверный токен, HTTP 409 при `getUpdates` — конфликт получения
+обновлений (другой экземпляр бота или webhook). Наличие webhook проверяется без его удаления.
+
+Уровни логирования задаются в `Logging:LogLevel` файла `appsettings.json`.
+Настройки прокси находятся в `TelegramProxy`; после изменения настроек перезапустите процесс.
+
 Бот использует установленные **TelegramBotKit и TelegramBotKit.Hosting 0.4.0-preview.1**. Запуск построен по [Quick Start](https://github.com/NickFeD/TelegramBotKit/blob/master/docs/quickstart.md) и [примеру ConsolePolling](https://github.com/NickFeD/TelegramBotKit/blob/master/samples/TelegramBotKit.Sample.ConsolePolling/Program.cs): `Host.CreateApplicationBuilder`, `AddTelegramBotKit`, `AddTelegramBotKitPolling`, `RunAsync`.
 
 Команды регистрируются штатными `AddMessageCommand`, `AddTextCommand`, `AddCallbackCommand` и реализуют `IMessageCommand`, `ITextCommand`, `ICallbackCommand`; схема взята из [Commands and routing](https://github.com/NickFeD/TelegramBotKit/blob/master/docs/commands-and-routing.md). `IDefaultMessageHandler` обрабатывает свободные текстовые ответы. Неизвестные callback-запросы получают ответ через `IDefaultCallbackHandler`.
@@ -41,6 +58,19 @@ TELEGRAM_BOT_USERNAME=имя_бота_без_собачки
 INTERNAL_API_KEY=отдельный-длинный-случайный-секрет
 STUDENT_PORTAL_URL=https://bashperevod.ru/telegram.html
 ```
+
+Если сервер не может подключиться к Telegram, задайте в `.env` доступный извне прокси:
+
+```dotenv
+TELEGRAM_HTTPS_PROXY=http://user:password@proxy.example:3128
+```
+
+Поддерживается также `socks5://user:password@host:port`. Прокси получает только контейнер
+`telegram-bot`; внутренний `http://main-api:8080` остаётся прямым. После изменения `.env`
+достаточно `docker compose up -d --no-deps --force-recreate telegram-bot`. Проверяйте
+`docker compose logs --tail=50 telegram-bot`. Если лог сообщает `Telegram bot is disabled`,
+проверьте, что `TELEGRAM_BOT_TOKEN` в `.env` сервера непустой. Не вставляйте токен в логи
+или публичные сообщения.
 
 Также нужны обычные настройки приложения: `POSTGRES_PASSWORD`, `JWT_SIGNING_KEY` и данные администратора первого запуска. Один `INTERNAL_API_KEY` Compose передаёт боту и ядру (`Telegram:InternalKey`). Вне Compose задайте эти настройки обоим процессам самостоятельно, а боту — `MAIN_API_URL` и `ConnectionStrings__Default`.
 

@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { useUserStore } from "../store";
 import { canAccessBoss, BOSS_MIN_RANK } from "../utils/ranks";
 import { Ornament, SchoolLogo } from "./Illustrations";
+import { displayName } from "../utils/displayName";
 import { Avatar } from "./Personalization";
 import { Icon } from "./ui";
 const navigation = [
@@ -35,7 +36,7 @@ export default function Layout() {
         </Link>
         <Link to="/profile" className="user-link" aria-label="Открыть профиль">
           {user && <Avatar user={user} framed={false} />}
-          <span className="user-name">{user?.nick}</span>
+          <span className="user-name">{user ? displayName(user) : ""}</span>
         </Link>
       </header>
       <main className="page-content">

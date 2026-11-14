@@ -4,11 +4,39 @@ using BashkirSchool.Domain;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace BashkirSchool.Infrastructure;
 
-public sealed class IndependentAccounts(CoreDbContext db, UserManager<Account> users, IPermissionChecker permissions, TimeProvider clock)
+public sealed class IndependentAccounts(CoreDbContext db, UserManager<Account> users, IPermissionChecker permissions,
+    TimeProvider clock, Sessions sessions, IConfiguration configuration)
 {
+    public async Task<AccessTokenResponse> UsernameLoginAsync(string username, CancellationToken ct)
+    {
+        if (!configuration.GetValue("Demo:UsernameLoginEnabled", false)) throw new AccessDeniedException();
+        username = Guard.Text(username, "username", 20);
+        if (username.Length < 3) throw new DomainException("Username must contain at least three characters.");
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+        await CaseWriteLock.Acquire(db, ct);
+        var account = await users.FindByNameAsync(username);
+        if (account is null)
+        {
+            account = new Account { Id = Guid.NewGuid(), UserName = username, SelfRegistered = true };
+            Check(await users.CreateAsync(account));
+            db.Participants.Add(new() { Id = account.Id });
+            db.PlayerStates.Add(PlayerState.ForNewRegistration(account.Id));
+            db.Access.AddRange(new AccessAssignment { SubjectId = account.Id, ProfileId = "account", Scope = AccessScope.Own },
+                new AccessAssignment { SubjectId = account.Id, ProfileId = "participant", Scope = AccessScope.Own });
+            db.Audit.Add(new() { ActorId = account.Id, TargetId = account.Id,
+                Action = "account.demo.registered", At = clock.GetUtcNow() });
+            await db.SaveChangesAsync(ct);
+        }
+        if (!account.Active || !await db.Participants.AnyAsync(x => x.Id == account.Id, ct))
+            throw new AccessDeniedException();
+        var token = await sessions.OpenAsync(account, ct);
+        await transaction.CommitAsync(ct);
+        return token;
+    }
     public async Task<AccountResponse> RegisterAsync(RegisterAccountRequest request, CancellationToken ct)
     {
         Guard.Text(request.Username, "username", 100); Guard.Text(request.Password, "password", 1000);
@@ -17,6 +45,7 @@ public sealed class IndependentAccounts(CoreDbContext db, UserManager<Account> u
         var account = new Account { Id = Guid.NewGuid(), UserName = request.Username, SelfRegistered = true };
         Check(await users.CreateAsync(account, request.Password));
         db.Participants.Add(new() { Id = account.Id });
+        db.PlayerStates.Add(PlayerState.ForNewRegistration(account.Id));
         db.Access.AddRange(new AccessAssignment { SubjectId = account.Id, ProfileId = "account", Scope = AccessScope.Own },
             new AccessAssignment { SubjectId = account.Id, ProfileId = "participant", Scope = AccessScope.Own });
         db.Audit.Add(new() { ActorId = account.Id, TargetId = account.Id, Action = "account.self.registered", At = clock.GetUtcNow() });
@@ -30,7 +59,52 @@ public sealed class IndependentAccounts(CoreDbContext db, UserManager<Account> u
         var account = await db.Users.AsNoTracking().SingleAsync(x => x.Id == actor, ct);
         var group = await (from e in db.Enrollments where e.ParticipantId == actor
                            join c in db.Classes on e.ClassId equals c.Id select new { ClassId = c.Id, c.SchoolId }).SingleOrDefaultAsync(ct);
-        return new(account.Id, account.UserName!, group?.SchoolId, group?.ClassId);
+        return new(account.Id, account.UserName!, group?.SchoolId, group?.ClassId)
+        { FirstName = account.FirstName, LastName = account.LastName };
+    }
+
+    public async Task<MyProfileResponse> UpdateProfileAsync(Guid actor, UpdateMyProfileRequest request, CancellationToken ct)
+    {
+        if (!await permissions.HasAsync(actor, "profile.read", AccessScope.Own, actor, ct)) throw new AccessDeniedException();
+        var firstName = CleanName(request.FirstName);
+        var lastName = CleanName(request.LastName);
+        if ((firstName is null) != (lastName is null))
+            throw new DomainException("Provide both first name and last name, or leave both empty.");
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+        await CaseWriteLock.Acquire(db, ct);
+        var account = await users.FindByIdAsync(actor.ToString()) ?? throw new MissingResourceException();
+        account.FirstName = firstName;
+        account.LastName = lastName;
+        var bonus = 0;
+        if (firstName is not null && lastName is not null &&
+            await db.Participants.AnyAsync(x => x.Id == actor, ct))
+        {
+            var state = await db.PlayerStates.SingleOrDefaultAsync(x => x.ParticipantId == actor, ct);
+            if (state is null)
+            {
+                state = PlayerState.ForExistingParticipant(actor);
+                db.PlayerStates.Add(state);
+            }
+            if (!state.ProfileCompletionRewarded)
+            {
+                state.Coins += PlayerState.ProfileCompletionBonusCoins;
+                state.ProfileCompletionRewarded = true;
+                bonus = PlayerState.ProfileCompletionBonusCoins;
+            }
+        }
+        Check(await users.UpdateAsync(account));
+        db.Audit.Add(new() { ActorId = actor, TargetId = actor, Action = "profile.updated", At = clock.GetUtcNow() });
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+        return (await ProfileAsync(actor, ct)) with { BonusCoinsAwarded = bonus };
+    }
+
+    private static string? CleanName(string? value)
+    {
+        var name = value?.Trim();
+        if (string.IsNullOrEmpty(name)) return null;
+        if (name.Length > 100) throw new DomainException("Name must contain at most 100 characters.");
+        return name;
     }
 
     public async Task<PasswordSetupResponse> IssueRecoveryAsync(Guid actor, Guid accountId, RecoverIndependentAccountRequest request, CancellationToken ct)

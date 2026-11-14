@@ -2,6 +2,7 @@ export type Session = {
   accessToken: string;
   refreshToken?: string;
   username: string;
+  displayName?: string;
 };
 const key = "bashperevod.lms.session.v1";
 let current: Session | null = null;

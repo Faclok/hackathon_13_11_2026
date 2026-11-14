@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using TelegramBotKit;
@@ -60,13 +61,14 @@ public sealed class UnknownCallback : IDefaultCallbackHandler
         new AnswerCallback { Text = "Кнопка устарела. Откройте /tasks." }, ctx.CancellationToken);
 }
 
-public sealed class PrivateStudentChat : IUpdateMiddleware
+public sealed class PrivateStudentChat(ILogger<PrivateStudentChat>? logger = null) : IUpdateMiddleware
 {
     public Task InvokeAsync(BotContext ctx, BotContextDelegate next)
     {
         var update = ctx.Update;
         var allowed = update.Message is { Chat.Type: ChatType.Private, From.IsBot: false } ||
             update.CallbackQuery is { Message.Chat.Type: ChatType.Private, From.IsBot: false } callback && callback.From.Id == callback.Message.Chat.Id;
+        if (!allowed) logger?.LogInformation("Update {UpdateId} ignored: a private student chat is required", update.Id);
         return allowed ? next(ctx) : Task.CompletedTask;
     }
 }

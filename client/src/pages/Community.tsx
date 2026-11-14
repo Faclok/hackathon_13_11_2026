@@ -2,7 +2,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { getLeaderboard } from "../api";
 import { trophies } from "../mocks/data";
-import { useProgressStore, useUserStore } from "../store";
+import { useUserStore } from "../store";
 import {
   ranks,
   BOSS_MIN_RANK,
@@ -17,11 +17,18 @@ import {
   FloatingItems,
   ProfileBackground,
 } from "../components/Personalization";
-import { Icon, Modal, PageTitle, ProgressBar } from "../components/ui";
+import { Icon, Modal, PageTitle, ProgressBar, useToast } from "../components/ui";
+import { displayName } from "../utils/displayName";
 
 export function Login() {
   const [nick, setNick] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const user = useUserStore((state) => state.user);
   const navigate = useNavigate();
+  useEffect(() => {
+    if (user) navigate("/", { replace: true });
+  }, [user, navigate]);
   return (
     <div className="school-app login-app">
       <Link to="/" className="login-logo">
@@ -32,16 +39,22 @@ export function Login() {
         <h1>Һаумы! Привет!</h1>
         <p>Давай знакомиться и открывать башкирский язык вместе.</p>
         <form
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
-            useProgressStore.getState().reset();
-            useUserStore.setState({ lastActiveDay: null, reports: [] });
-            useUserStore.getState().login(nick);
-            navigate("/", { replace: true });
+            setBusy(true);
+            setError("");
+            try {
+              await useUserStore.getState().login(nick);
+              navigate("/", { replace: true });
+            } catch (cause) {
+              setError(cause instanceof Error ? cause.message : "Не удалось войти.");
+            } finally {
+              setBusy(false);
+            }
           }}
         >
           <label htmlFor="nick" className="field-label">
-            Как тебя зовут?
+            Твой username
           </label>
           <input
             id="nick"
@@ -51,17 +64,18 @@ export function Login() {
             minLength={3}
             maxLength={20}
             required
-            placeholder="Твой ник"
+            placeholder="Придумай username"
             autoFocus
           />
           <button
             className="button button-primary full-width"
-            disabled={nick.trim().length < 3}
+            disabled={busy || nick.trim().length < 3}
           >
             Войти <Icon name="arrow" size={18} />
           </button>
         </form>
-        <p className="demo-note">Демо-режим. Данные хранятся локально.</p>
+        {error && <p className="form-error" role="alert">{error}</p>}
+        <p className="demo-note">При регистрации — 50 бонусных монет. После входа заполни имя и фамилию в профиле, чтобы тебя узнали в классе и рейтинге.</p>
       </section>
     </div>
   );
@@ -74,8 +88,12 @@ export function Leaderboard() {
   const [entries, setEntries] = useState<
     Awaited<ReturnType<typeof getLeaderboard>>
   >([]);
+  const [error, setError] = useState("");
   useEffect(() => {
-    getLeaderboard(user, period, metric).then(setEntries);
+    getLeaderboard(user, period, metric).then((result) => {
+      setEntries(result);
+      setError("");
+    }).catch((cause) => setError(cause instanceof Error ? cause.message : "Не удалось загрузить рейтинг."));
   }, [user, period, metric]);
   const own = entries.find((e) => e.user.id === user.id);
   return (
@@ -83,6 +101,7 @@ export function Leaderboard() {
       <PageTitle subtitle="Вдохновляем друг друга учиться">
         Турнирная таблица
       </PageTitle>
+      {error && <p role="alert">{error}</p>}
       <div className="tabs" aria-label="Период">
         {(["global", "monthly"] as const).map((value) => (
           <button
@@ -123,7 +142,7 @@ export function Leaderboard() {
               </span>
               <Avatar user={entry.user} className="podium-avatar" />
               <h2>
-                {entry.user.nick}
+                {displayName(entry.user)}
                 {entry.user.id === user.id && (
                   <small className="you-label">Вы</small>
                 )}
@@ -157,7 +176,7 @@ export function Leaderboard() {
             <Avatar user={entry.user} framed={false} />
             <div>
               <strong>
-                {entry.user.nick}
+                {displayName(entry.user)}
                 {entry.user.id === user.id ? " · Вы" : ""}
               </strong>
               <span>
@@ -175,7 +194,7 @@ export function Leaderboard() {
       {own && (
         <div className="your-rank">
           <span>#{own.rank}</span>
-          <strong>{user.nick} · Вы</strong>
+          <strong>{displayName(user)} · Вы</strong>
           <b>
             {own.value} {metric === "tasks" ? "заданий" : "дней"}
           </b>
@@ -188,11 +207,55 @@ export function Leaderboard() {
 export function Profile() {
   const user = useUserStore((s) => s.user)!;
   const navigate = useNavigate();
+  const [firstName, setFirstName] = useState(user.firstName ?? "");
+  const [lastName, setLastName] = useState(user.lastName ?? "");
+  const [saving, setSaving] = useState(false);
+  const [profileMessage, setProfileMessage] = useState("");
+  const toast = useToast();
   const currentRank = getCurrentRank(user);
   const [itemInfo, setItemInfo] = useState<Decoration | null>(null);
+  useEffect(() => {
+    void useUserStore.getState().refreshProfile().catch(() => {});
+  }, []);
+  useEffect(() => {
+    setFirstName(user.firstName ?? "");
+    setLastName(user.lastName ?? "");
+  }, [user.firstName, user.lastName]);
   return (
     <>
       <PageTitle>Профиль</PageTitle>
+      {(!user.firstName || !user.lastName) && <section className="surface profile-completion">
+        <div className="profile-completion-heading">
+          <div>
+            <span className="profile-completion-eyebrow">ТВОЙ ПРОФИЛЬ</span>
+            <h2>Давай познакомимся</h2>
+          </div>
+          <span className="profile-completion-reward">+50 монет</span>
+        </div>
+        <p>Укажи имя и фамилию. Преподаватель найдёт тебя в классе, а мы подарим 50 монет.</p>
+        <form onSubmit={async (event) => {
+          event.preventDefault();
+          setSaving(true);
+          setProfileMessage("");
+          try {
+            const bonus = await useUserStore.getState().updateProfile(firstName, lastName);
+            toast(bonus > 0 ? "Профиль заполнен · +50 монет" : "Профиль сохранён");
+          } catch (error) {
+            setProfileMessage(error instanceof Error ? error.message : "Не удалось сохранить профиль.");
+          } finally { setSaving(false); }
+        }}>
+          <label className="field-label" htmlFor="profile-first-name">Имя</label>
+          <input id="profile-first-name" value={firstName} maxLength={100} autoComplete="given-name"
+            onChange={(event) => setFirstName(event.target.value)} placeholder="Имя" required />
+          <label className="field-label" htmlFor="profile-last-name">Фамилия</label>
+          <input id="profile-last-name" value={lastName} maxLength={100} autoComplete="family-name"
+            onChange={(event) => setLastName(event.target.value)} placeholder="Фамилия" required />
+          <button className="button button-primary full-width" disabled={saving || !firstName.trim() || !lastName.trim()}>
+            {saving ? "Сохраняем…" : "Сохранить и получить 50 монет"} <Icon name="arrow" size={17} />
+          </button>
+        </form>
+        {profileMessage && <p className="form-error" role="alert">{profileMessage}</p>}
+      </section>}
       <section
         className="surface profile-header personal-card"
         data-background={user.backgroundId}
@@ -201,7 +264,7 @@ export function Profile() {
         <FloatingItems user={user} onSelect={setItemInfo} />
         <div className="personal-content">
           <Avatar user={user} className="profile-avatar" />
-          <h2>{user.nick}</h2>
+          <h2>{displayName(user)}</h2>
           <span className="rank-badge" lang="ba">
             {currentRank[0]}
           </span>

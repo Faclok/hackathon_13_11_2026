@@ -21,7 +21,8 @@ builder.Services.AddOpenApi(options => options.AddDocumentTransformer((document,
     document.Components ??= new();
     document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
     document.Components.SecuritySchemes["Bearer"] = new OpenApiSecurityScheme { Type = SecuritySchemeType.Http, Scheme = "bearer", BearerFormat = "JWT" };
-    foreach (var path in document.Paths.Where(x => x.Key.StartsWith("/api/", StringComparison.Ordinal)))
+    foreach (var path in document.Paths.Where(x => x.Key.StartsWith("/api/", StringComparison.Ordinal) &&
+        !x.Key.StartsWith("/api/public/", StringComparison.Ordinal)))
         foreach (var operation in path.Value.Operations!.Values)
         {
             operation.Security ??= [];
@@ -42,6 +43,9 @@ builder.Services.AddRateLimiter(options =>
     options.AddPolicy("registration", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = registrationLimit, Window = TimeSpan.FromSeconds(registrationWindow), QueueLimit = 0, AutoReplenishment = true }));
+    options.AddPolicy("public-tts", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true }));
 });
 builder.Services.ConfigureHttpJsonOptions(o =>
 {
@@ -87,12 +91,16 @@ app.UseExceptionHandler(error => error.Run(async context =>
 app.UseAuthentication();
 app.UseRateLimiter();
 app.UseAuthorization();
+app.MapLevelEndpoints();
 if (app.Environment.IsDevelopment()) app.MapOpenApi();
 app.MapGet("/health/live", () => Results.Ok(new { status = "alive" }));
 app.MapGet("/health/ready", async (CoreDbContext db, CancellationToken ct) =>
     await db.Database.CanConnectAsync(ct) ? Results.Ok(new { status = "ready" }) : Results.StatusCode(503));
 
 app.MapPost("/auth/sign-in", (SignInRequest request, SchoolAccounts accounts, CancellationToken ct) => accounts.SignInAsync(request, ct));
+app.MapPost("/auth/username", (UsernameLoginRequest request, IndependentAccounts accounts, CancellationToken ct) =>
+    accounts.UsernameLoginAsync(request.Username, ct)).RequireRateLimiting("registration")
+    .ProducesProblem(StatusCodes.Status429TooManyRequests);
 app.MapPost("/auth/register", async (RegisterAccountRequest request, IndependentAccounts accounts, CancellationToken ct) =>
     TypedResults.Created("/api/me", await accounts.RegisterAsync(request, ct))).RequireRateLimiting("registration").ProducesProblem(StatusCodes.Status429TooManyRequests);
 app.MapPost("/auth/refresh", (RefreshSessionRequest request, Sessions sessions, CancellationToken ct) => sessions.RefreshAsync(request.RefreshToken, ct));
@@ -101,6 +109,22 @@ app.MapPost("/auth/password", async (CompletePasswordRequest request, SchoolAcco
 
 var api = app.MapGroup("/api").RequireAuthorization();
 api.MapGet("/me", (ClaimsPrincipal user, IndependentAccounts accounts, CancellationToken ct) => accounts.ProfileAsync(Subject(user), ct));
+api.MapPut("/me", (ClaimsPrincipal user, UpdateMyProfileRequest request, IndependentAccounts accounts, CancellationToken ct) =>
+    accounts.UpdateProfileAsync(Subject(user), request, ct));
+api.MapGet("/player/profile", (ClaimsPrincipal user, PlayerEconomy economy, CancellationToken ct) =>
+    economy.ProfileAsync(Subject(user), ct));
+api.MapGet("/player/decorations", () => Results.Ok(RewardCatalog.Items));
+api.MapGet("/player/cases", () => Results.Ok(RewardCatalog.Cases.Select(RewardCatalog.Describe)));
+api.MapGet("/player/cases/history", (ClaimsPrincipal user, PlayerEconomy economy, CancellationToken ct) =>
+    economy.HistoryAsync(Subject(user), ct));
+api.MapPost("/player/keys", (ClaimsPrincipal user, BuyCaseKeysRequest request, PlayerEconomy economy, CancellationToken ct) =>
+    economy.BuyKeysAsync(Subject(user), request.Quantity, ct));
+api.MapPost("/player/cases/{caseId}/open", (ClaimsPrincipal user, string caseId, PlayerEconomy economy, CancellationToken ct) =>
+    economy.OpenCaseAsync(Subject(user), caseId, ct));
+api.MapPut("/player/equipment/{itemId}", (ClaimsPrincipal user, string itemId, EquipDecorationRequest request, PlayerEconomy economy, CancellationToken ct) =>
+    economy.EquipAsync(Subject(user), itemId, request.Equipped, ct));
+api.MapGet("/leaderboard", (ClaimsPrincipal user, string? period, string? metric, PlayerEconomy economy, CancellationToken ct) =>
+    economy.LeaderboardAsync(Subject(user), period ?? "global", metric ?? "tasks", ct));
 api.MapPost("/accounts/{accountId:guid}/recovery-link", (ClaimsPrincipal user, Guid accountId, RecoverIndependentAccountRequest request,
     IndependentAccounts accounts, CancellationToken ct) => accounts.IssueRecoveryAsync(Subject(user), accountId, request, ct));
 api.MapPost("/credentials/change", async (ClaimsPrincipal user, ChangePasswordRequest request, SchoolAccounts accounts, CancellationToken ct) =>
@@ -131,26 +155,9 @@ api.MapPost("/expert/cases/{caseId:guid}/variants", async (ClaimsPrincipal user,
 api.MapGet("/accounts/{accountId:guid}/access", (ClaimsPrincipal user, Guid accountId, SchoolDirectory directory, CancellationToken ct) => directory.AccessAsync(Subject(user), accountId, ct));
 api.MapPost("/expert/cases/{caseId:guid}/resolution", (ClaimsPrincipal user, Guid caseId, ResolveCaseRequest request, ExpertReviews expert, CancellationToken ct) => expert.ResolveAsync(Subject(user), caseId, request, ct));
 api.MapGet("/translations/export", (ClaimsPrincipal user, int? offset, int? limit, bool? includeDisputed, TranslationExport export, CancellationToken ct) => export.ReadAsync(Subject(user), offset ?? 0, limit ?? 100, includeDisputed ?? false, ct));
-api.MapGet("/lessons/today", (ClaimsPrincipal user, LearningWorkflow learning, CancellationToken ct) => learning.TodayAsync(Subject(user), ct));
-api.MapPost("/lessons/today/boss", async (ClaimsPrincipal user, LearningWorkflow learning, IReviewWorkflow reviews, CancellationToken ct) =>
-{
-    var boss = await learning.StartBossAsync(Subject(user), reviews, ct);
-    return boss is null ? Results.NoContent() : Results.Ok(boss);
-}).Produces<AssignmentResponse>().Produces(StatusCodes.Status204NoContent);
-api.MapPost("/exercises/{exerciseId:guid}/attempt", (ClaimsPrincipal user, Guid exerciseId, SubmitAttemptRequest request, LearningWorkflow learning, CancellationToken ct) => learning.SubmitAsync(Subject(user), exerciseId, request, ct));
 api.MapGet("/exercises/kinds", (ExerciseRegistry registry) => registry.Kinds)
     .WithName("ListExerciseKinds").WithSummary("Supported learning exercise kinds and answer schema versions.")
     .Produces<IReadOnlyList<ExerciseKindResponse>>();
-api.MapPost("/lessons/today/exercises", async (ClaimsPrincipal user, IssueExerciseRequest request, LearningWorkflow learning, CancellationToken ct) =>
-{
-    var exercise = await learning.IssueAsync(Subject(user), request, ct);
-    return exercise is null ? Results.NoContent() : Results.Ok(exercise);
-}).WithName("IssueExercise").WithSummary("Issue or resume today's exercise of a requested kind; audio is prepared lazily.")
-    .Produces<ExerciseResponse>().Produces(StatusCodes.Status204NoContent).ProducesProblem(400).ProducesProblem(409);
-api.MapPost("/exercises/{exerciseId:guid}/answer", (ClaimsPrincipal user, Guid exerciseId, SubmitExerciseAnswerRequest request, LearningWorkflow learning, CancellationToken ct) =>
-    learning.AnswerAsync(Subject(user), exerciseId, request, ct))
-    .WithName("SubmitExerciseAnswer").WithSummary("Submit a kind-specific answer without exposing the private answer key.")
-    .Produces<AttemptResponse>().ProducesProblem(400).ProducesProblem(404).ProducesProblem(409);
 api.MapPost("/vocabulary", (ClaimsPrincipal user, DeliverVocabularyRequest request, LearningMaterials materials, CancellationToken ct) =>
     materials.DeliverAsync(Subject(user), request, ct))
     .WithName("DeliverVocabulary").WithSummary("Idempotently import prepared word pairs as an authorized content producer.")
@@ -196,6 +203,14 @@ api.MapPost("/reviews/next", async (ClaimsPrincipal user, string? kind, IReviewW
     var assignment = await reviews.ReceiveAsync(Subject(user), kind ?? "translation-confirm", ct);
     return assignment is null ? Results.NoContent() : Results.Ok(assignment);
 }).Produces<AssignmentResponse>().Produces(StatusCodes.Status204NoContent);
+api.MapGet("/boss/access", (ClaimsPrincipal user, BossAccess access, CancellationToken ct) =>
+    access.ReadAsync(Subject(user), ct));
+api.MapPost("/boss/next", async (ClaimsPrincipal user, BossAccess access, LevelWorkflow levels, CancellationToken ct) =>
+{
+    if (!(await access.ReadAsync(Subject(user), ct)).CanAccess) return Results.Forbid();
+    var assignment = (await levels.BossAsync(Subject(user), ct))?.Question;
+    return assignment is null ? Results.NoContent() : Results.Ok(assignment);
+}).Produces<AssignmentResponse>().Produces(StatusCodes.Status204NoContent);
 api.MapPost("/reviews/{assignmentId:guid}/response", (ClaimsPrincipal user, Guid assignmentId, SubmitReviewRequest request, IReviewWorkflow reviews, CancellationToken ct) =>
     reviews.SubmitAsync(Subject(user), assignmentId, request, ct));
 api.MapGet("/cases/{caseId:guid}/statistics", (ClaimsPrincipal user, Guid caseId, IReviewWorkflow reviews, CancellationToken ct) =>
@@ -204,6 +219,7 @@ api.MapGet("/cases/{caseId:guid}/statistics", (ClaimsPrincipal user, Guid caseId
 app.MapTelegramEndpoints();
 app.MapClassInvitationEndpoints();
 app.MapLmsCatalogEndpoints();
+app.MapVerifiedTaskEndpoints();
 app.Run();
 static Guid Subject(ClaimsPrincipal user) => Guid.Parse(user.FindFirstValue("sub")!);
 public partial class Program;
@@ -212,6 +228,9 @@ public partial class Program;
 public sealed record AccountStatusRequest(bool Active);
 /// <summary>The identifier of a newly created resource.</summary>
 public sealed record ResourceCreatedResponse(Guid Id);
+public sealed record UsernameLoginRequest(string Username);
+public sealed record BuyCaseKeysRequest(int Quantity);
+public sealed record EquipDecorationRequest(bool Equipped);
 /// <summary>The currently active version of administrator settings.</summary>
 public sealed record DistributionPolicyResponse(Guid Id, int Version, DistributionPolicyRequest Settings);
 /// <summary>Creates a new immutable version of the distribution and consensus settings.</summary>
