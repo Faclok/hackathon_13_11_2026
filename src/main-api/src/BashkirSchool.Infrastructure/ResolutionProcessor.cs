@@ -18,10 +18,12 @@ public sealed class ResolutionProcessor(CoreDbContext db, TimeProvider clock)
         if (!c.ExpertClosed)
         {
             var variants = await db.Variants.Where(x => x.CaseId == caseId).ToArrayAsync(ct);
-            var observations = await (from r in db.Responses where r.CaseId == caseId && !r.Archived
+            var observationRows = await (from r in db.Responses where r.CaseId == caseId && !r.Archived
                                       join a in db.Assignments on r.AssignmentId equals a.Id
                                       join j in db.Judgments on r.Id equals j.ResponseId where j.Kind == JudgmentKind.Support
-                                      select new ReviewObservation(r.ParticipantId, j.VariantId, a.SchoolId, a.ClassId, r.SubmittedAt, r.Id, a.ShownVariantId)).ToArrayAsync(ct);
+                                      select new { r.ParticipantId, j.VariantId, a.SchoolId, a.ClassId, r.SubmittedAt, r.Id, a.ShownVariantId, a.ShownVariantsJson }).ToArrayAsync(ct);
+            var observations = observationRows.Select(r => new ReviewObservation(r.ParticipantId, r.VariantId, r.SchoolId, r.ClassId, r.SubmittedAt, r.Id, r.ShownVariantId)
+            { ShownVariantIds = r.ShownVariantsJson == "[]" ? [r.ShownVariantId] : JsonSerializer.Deserialize<Guid[]>(r.ShownVariantsJson) }).ToArray();
             var policy = await db.Policies.OrderByDescending(x => x.Version).FirstAsync(ct);
             var support = ConsensusCalculator.Calculate(observations, variants, policy);
             var eligible = support.Where(x => x.Qualified).OrderByDescending(x => x.Ratio).ToArray();

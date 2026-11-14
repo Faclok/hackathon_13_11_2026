@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using BashkirSchool.Application;
 using BashkirSchool.Domain;
 using BashkirSchool.Infrastructure;
+using BashkirSchool.Host;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -129,6 +130,27 @@ api.MapPost("/expert/cases/{caseId:guid}/resolution", (ClaimsPrincipal user, Gui
 api.MapGet("/translations/export", (ClaimsPrincipal user, int? offset, int? limit, bool? includeDisputed, TranslationExport export, CancellationToken ct) => export.ReadAsync(Subject(user), offset ?? 0, limit ?? 100, includeDisputed ?? false, ct));
 api.MapGet("/lessons/today", (ClaimsPrincipal user, LearningWorkflow learning, CancellationToken ct) => learning.TodayAsync(Subject(user), ct));
 api.MapPost("/exercises/{exerciseId:guid}/attempt", (ClaimsPrincipal user, Guid exerciseId, SubmitAttemptRequest request, LearningWorkflow learning, CancellationToken ct) => learning.SubmitAsync(Subject(user), exerciseId, request, ct));
+api.MapGet("/exercises/kinds", (ExerciseRegistry registry) => registry.Kinds)
+    .WithName("ListExerciseKinds").WithSummary("Supported learning exercise kinds and answer schema versions.")
+    .Produces<IReadOnlyList<ExerciseKindResponse>>();
+api.MapPost("/lessons/today/exercises", async (ClaimsPrincipal user, IssueExerciseRequest request, LearningWorkflow learning, CancellationToken ct) =>
+{
+    var exercise = await learning.IssueAsync(Subject(user), request, ct);
+    return exercise is null ? Results.NoContent() : Results.Ok(exercise);
+}).WithName("IssueExercise").WithSummary("Issue or resume today's exercise of a requested kind; audio is prepared lazily.")
+    .Produces<ExerciseResponse>().Produces(StatusCodes.Status204NoContent).ProducesProblem(400).ProducesProblem(409);
+api.MapPost("/exercises/{exerciseId:guid}/answer", (ClaimsPrincipal user, Guid exerciseId, SubmitExerciseAnswerRequest request, LearningWorkflow learning, CancellationToken ct) =>
+    learning.AnswerAsync(Subject(user), exerciseId, request, ct))
+    .WithName("SubmitExerciseAnswer").WithSummary("Submit a kind-specific answer without exposing the private answer key.")
+    .Produces<AttemptResponse>().ProducesProblem(400).ProducesProblem(404).ProducesProblem(409);
+api.MapPost("/vocabulary", (ClaimsPrincipal user, DeliverVocabularyRequest request, LearningMaterials materials, CancellationToken ct) =>
+    materials.DeliverAsync(Subject(user), request, ct))
+    .WithName("DeliverVocabulary").WithSummary("Idempotently import prepared word pairs as an authorized content producer.")
+    .Produces<VocabularyDeliveryResponse>().ProducesProblem(400);
+api.MapPost("/cases/{caseId:guid}/audio", (ClaimsPrincipal user, Guid caseId, AudioPreparation audio, CancellationToken ct) =>
+    audio.PrepareAsync(Subject(user), caseId, ct))
+    .WithName("PrepareSentenceAudio").WithSummary("Create and cache Silero audio in object storage, reusing existing recordings.")
+    .Produces<AudioAssetResponse>().ProducesProblem(404);
 api.MapPost("/schools", async (ClaimsPrincipal user, CreateSchoolRequest request, SchoolAccounts accounts, CancellationToken ct) =>
     TypedResults.Created("/api/schools", new ResourceCreatedResponse(await accounts.CreateSchoolAsync(Subject(user), request, ct))));
 api.MapPost("/staff", async (ClaimsPrincipal user, CreateStaffRequest request, SchoolAccounts accounts, CancellationToken ct) =>
@@ -154,9 +176,9 @@ api.MapGet("/policies/distribution", async (ClaimsPrincipal user, IPermissionChe
 api.MapPost("/deliveries", async (ClaimsPrincipal user, [FromHeader(Name = "Idempotency-Key")] string key,
     DeliverContentRequest request, IContentIntake intake, CancellationToken ct) =>
     TypedResults.Ok(await intake.DeliverAsync(Subject(user), key, request, ct)));
-api.MapPost("/reviews/next", async (ClaimsPrincipal user, IReviewWorkflow reviews, CancellationToken ct) =>
+api.MapPost("/reviews/next", async (ClaimsPrincipal user, string? kind, IReviewWorkflow reviews, CancellationToken ct) =>
 {
-    var assignment = await reviews.ReceiveAsync(Subject(user), ct);
+    var assignment = await reviews.ReceiveAsync(Subject(user), kind ?? "translation-confirm", ct);
     return assignment is null ? Results.NoContent() : Results.Ok(assignment);
 }).Produces<AssignmentResponse>().Produces(StatusCodes.Status204NoContent);
 api.MapPost("/reviews/{assignmentId:guid}/response", (ClaimsPrincipal user, Guid assignmentId, SubmitReviewRequest request, IReviewWorkflow reviews, CancellationToken ct) =>
@@ -164,6 +186,8 @@ api.MapPost("/reviews/{assignmentId:guid}/response", (ClaimsPrincipal user, Guid
 api.MapGet("/cases/{caseId:guid}/statistics", (ClaimsPrincipal user, Guid caseId, IReviewWorkflow reviews, CancellationToken ct) =>
     reviews.StatisticsAsync(Subject(user), caseId, ct));
 
+app.MapTelegramEndpoints();
+app.MapClassInvitationEndpoints();
 app.Run();
 static Guid Subject(ClaimsPrincipal user) => Guid.Parse(user.FindFirstValue("sub")!);
 public partial class Program;

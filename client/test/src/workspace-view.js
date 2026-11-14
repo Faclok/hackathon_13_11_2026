@@ -3,20 +3,20 @@ import { roles } from './workspace-layout.js';
 const $ = selector => document.querySelector(selector);
 const node = (tag, text, props = {}) => Object.assign(document.createElement(tag), { textContent: text, ...props });
 const pages = {
-  home: 'Главная', accounts: 'Вход и регистрация', reviews: 'Проверка переводов', learning: 'Практика перевода',
+  home: 'Главная', accounts: 'Вход и регистрация', reviews: 'Проверка переводов', learning: 'Учебные задания',
   lms: 'Вводный курс', prepare: 'Быстрый старт', schools: 'Школа и пользователи', expert: 'Проверка эксперта',
   materials: 'Добавить материал', profile: 'Мой аккаунт', access: 'Доступ пользователей', policy: 'Правила распределения',
-  export: 'Выгрузка переводов', health: 'Проверка подключения', help: 'Как пользоваться'
+  export: 'Выгрузка переводов', health: 'Проверка подключения', help: 'Как пользоваться', 'my-class': 'Мой класс'
 };
 const menus = {
-  participant: ['home', 'reviews', 'learning', 'lms', 'profile'],
+  participant: ['home', 'reviews', 'learning', 'lms', 'my-class', 'profile'],
   teacher: ['home', 'schools', 'access', 'lms', 'profile'],
   administrator: ['home', 'prepare', 'schools', 'access', 'policy', 'profile'],
   producer: ['home', 'materials', 'profile'], expert: ['home', 'expert', 'profile'], exporter: ['home', 'export', 'profile']
 };
 const nextTasks = {
   participant: ['reviews', 'Помогите проверить перевод', 'Получите одну фразу и подтвердите перевод или предложите свой вариант.', 'Получить задание'],
-  teacher: ['schools', 'Подготовьте свой класс', 'Выберите школу, создайте класс и добавьте учеников.', 'Перейти к классам'],
+  teacher: ['schools', 'Подготовьте свой класс', 'Создайте класс и пригласите зарегистрированных учеников по логину или создайте им аккаунты.', 'Перейти к классам'],
   administrator: ['prepare', 'Пройдите полный сценарий', 'Создайте начальные данные, затем проверьте перевод от лица участника и эксперта.', 'Начать подготовку'],
   producer: ['materials', 'Добавьте фразу для проверки', 'Укажите оригинал, предложенный перевод и источник.', 'Добавить материал'],
   expert: ['expert', 'Проверьте предложенные переводы', 'Откройте очередь, выберите фразу и сохраните окончательное решение.', 'Открыть экспертизу'],
@@ -28,7 +28,7 @@ export function mountWorkspace({ getActor, getState, save, onContext }) {
   const catalogs = () => (getState().catalogs ||= { schools: {}, classes: {} });
   const mode = () => { const preferred = getActor()?.workspaceRole || getState().workspaceRole; return roles[preferred] ? preferred : 'participant'; };
   function navigate(page, focus = false) {
-    const allowed = getActor() ? [...menus[mode()], 'accounts', 'health', 'help'] : ['accounts', 'home', 'lms', 'health', 'help'];
+    const allowed = getActor() ? [...menus[mode()], 'accounts', 'health', 'help'] : ['accounts', 'home', 'learning', 'reviews', 'lms', 'health', 'help'];
     if (!allowed.includes(page)) page = getActor() ? 'home' : 'accounts';
     activePage = page;
     document.querySelectorAll('[data-page]').forEach(item => { item.hidden = item.dataset.page !== page; });
@@ -60,6 +60,8 @@ export function mountWorkspace({ getActor, getState, save, onContext }) {
         .forEach(([title, description]) => { const item = node('li', ''); item.append(node('strong', title), node('span', description)); list.append(item); });
       guide.append(list); target.append(guide);
     } else if (mode() === 'participant') {
+      const classroom = node('div', '', { className: 'home-guide' });
+      classroom.append(node('h2', 'Учитесь с учителем?'), node('p', `Передайте учителю свой логин: ${current.username}. Приглашение появится в разделе «Мой класс».`), node('a', 'Посмотреть приглашения в класс', { href: '#my-class' })); target.append(classroom);
       const more = node('div', '', { className: 'home-guide' }); more.append(node('h2', 'Или начните с обучения'), node('p', 'Короткий вводный курс знакомит с первыми словами. Практика перевода появится из принятых материалов.'), node('a', 'Открыть вводный курс', { href: '#lms' })); target.append(more);
     }
   }
@@ -67,7 +69,7 @@ export function mountWorkspace({ getActor, getState, save, onContext }) {
     const currentMode = mode(); $('#workspace-mode').value = currentMode;
     document.querySelector('form[data-action="login"] [name="workspaceRole"]').value = currentMode;
     const nav = $('#workspace-nav'); nav.replaceChildren();
-    (getActor() ? menus[currentMode] : ['accounts', 'lms']).forEach(page => nav.append(node('a', pages[page], { href: '#' + page })));
+    (getActor() ? menus[currentMode] : ['accounts', 'learning', 'reviews', 'lms']).forEach(page => nav.append(node('a', pages[page], { href: '#' + page })));
     document.querySelectorAll('[data-workspaces]').forEach(item => { item.hidden = !item.dataset.workspaces.split(' ').includes(currentMode); });
     $('button[data-action="logout"]').hidden = !getActor();
     $('.account-add').hidden = !getActor();
@@ -105,6 +107,10 @@ export function mountWorkspace({ getActor, getState, save, onContext }) {
       data.forEach(item => { const ok = ['alive', 'ready', 'ok'].includes(item.result?.status); const row = node('p', '', { className: 'service-row' }); row.append(node('strong', item.service), node('span', ok ? 'Работает' : 'Нет подключения', { className: ok ? 'healthy' : 'unhealthy' })); target.append(row); });
     } else if (id === 'profile-result' && data?.username) {
       target.append(node('h2', data.username), node('p', data.schoolId ? 'Участник школьного класса.' : 'Школа к аккаунту не привязана.'));
+    } else if (id === 'class-invitation-result' && data?.id) {
+      target.append(node('p', `Приглашение для ${data.participantUsername} в класс «${data.className}» отправлено. Членство появится после согласия ученика.`));
+    } else if (id === 'my-class-result' && data?.status) {
+      target.append(node('p', data.status === 'Accepted' ? `Вы вступили в класс «${data.className}», ${data.schoolName}.` : 'Приглашение отклонено. Вы можете продолжать заниматься самостоятельно.'));
     } else if (id === 'directory-result') {
       if (Array.isArray(data)) {
         if (!data.length) target.append(node('p', 'Список пока пуст. Создайте запись с помощью формы выше.'));
@@ -130,7 +136,7 @@ export function mountWorkspace({ getActor, getState, save, onContext }) {
       target.append(node('p', `Участников: ${data.uniqueParticipants}. Нужно для выборки: ${data.requiredParticipants}.`));
       table(target, ['Вариант', 'Поддержали', 'Доля'], data.variants.map((item, i) => [String(i + 1), String(item.supports), percent(item.supportRatio)]));
     } else if (id === 'learning-result' && data?.exercises) {
-      target.append(node('p', data.exercises.length ? `Упражнений на сегодня: ${data.exercises.length}.` : 'Сегодняшний урок пуст. Сначала нужны принятые переводы. Уже созданный урок не пополняется: вернитесь завтра или используйте участника, который ещё не открывал урок.'));
+      target.append(node('p', data.exercises.length ? `Упражнений на сегодня: ${data.exercises.length}.` : 'В уроке пока нет заданий. После загрузки материалов запросите нужный вид через «Получить задание определённого вида». Для переводов нужно решение сообщества или эксперта; для словарных пар — пять слов с переводами.'));
     } else if (data?.explanation) {
       target.append(node('p', data.explanation, { className: data.recognized ? 'success-message' : 'notice' }));
     } else if (id === 'lms-result' && data?.lessons) {

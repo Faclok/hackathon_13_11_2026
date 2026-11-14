@@ -15,4 +15,7 @@
     <ProjectReference Include="..\BashkirSchool.Infrastructure\BashkirSchool.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="Speech/silero_worker.py" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

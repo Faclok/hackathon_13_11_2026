@@ -23,6 +23,8 @@ public static class DependencyInjection
         services.AddScoped<IReviewWorkflow, ReviewWorkflow>();
         services.AddScoped<SchoolAccounts>();
         services.AddScoped<IndependentAccounts>();
+        services.AddScoped<IClassInvitations, ClassInvitations>();
+        services.AddScoped<TelegramStudents>();
         services.AddScoped<Sessions>();
         services.AddScoped<SchoolDirectory>();
         services.AddScoped<CaseEvidence>();
@@ -30,6 +32,18 @@ public static class DependencyInjection
         services.AddScoped<TranslationExport>();
         services.AddScoped<ResolutionProcessor>();
         services.AddScoped<LearningWorkflow>();
+        services.AddScoped<LearningMaterials>();
+        services.AddScoped<AudioPreparation>();
+        services.AddSingleton<IExerciseHandler, TranslationTextHandler>();
+        services.AddSingleton<IExerciseHandler, WordMatchHandler>();
+        services.AddSingleton<IExerciseHandler, DictationHandler>();
+        services.AddSingleton<IExerciseHandler, AudioTranslationHandler>();
+        services.AddSingleton<IExerciseHandler, MissingWordHandler>();
+        services.AddSingleton<IExerciseHandler, SentenceOrderHandler>();
+        services.AddSingleton<ExerciseRegistry>();
+        services.AddSingleton<ISpeechSynthesizer, SileroSpeechSynthesizer>();
+        services.AddScoped<IAudioStorage, S3AudioStorage>();
+        services.AddHttpClient("silero-model", client => client.Timeout = TimeSpan.FromMinutes(10));
         if (configuration.GetValue("Processing:BackgroundEnabled", true)) services.AddHostedService<ResolutionWorker>();
         services.AddIdentityCore<Account>(o =>
         {

@@ -13,6 +13,8 @@ public sealed class BotDbContext(DbContextOptions<BotDbContext> options) : DbCon
             e.Property(x => x.TelegramId).HasColumnName("telegram_id");
             e.Property(x => x.State).HasColumnName("state");
             e.Property(x => x.TaskId).HasColumnName("task_id");
+            e.Property(x => x.AnswerMessageId).HasColumnName("answer_message_id");
+            e.Property(x => x.AnswerExerciseId).HasColumnName("answer_exercise_id");
             e.Property(x => x.UpdatedAt).HasColumnName("updated_at");
         });
         model.Entity<BotCursor>(e =>
@@ -29,6 +31,8 @@ public sealed class BotState
     public long TelegramId { get; set; }
     public string State { get; set; } = "idle";
     public Guid? TaskId { get; set; }
+    public int? AnswerMessageId { get; set; }
+    public Guid? AnswerExerciseId { get; set; }
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }
 public sealed class BotCursor

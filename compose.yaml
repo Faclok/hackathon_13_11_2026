@@ -46,6 +46,8 @@ services:
       Jwt__SigningKey: ${JWT_SIGNING_KEY:-}
       Bootstrap__Username: ${BOOTSTRAP_USERNAME:-admin}
       Bootstrap__Password: ${BOOTSTRAP_PASSWORD:-}
+      Telegram__InternalKey: ${INTERNAL_API_KEY:-}
+      Telegram__BotUsername: ${TELEGRAM_BOT_USERNAME:-}
     depends_on:
       core-db:
         condition: service_healthy
@@ -65,12 +67,13 @@ services:
 
   telegram-bot:
     build: ./src/telegram-bot
-    profiles: ["legacy-bot"]
+    profiles: ["telegram"]
     restart: unless-stopped
     environment:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-}
       MAIN_API_URL: http://main-api:8080
+      STUDENT_PORTAL_URL: ${STUDENT_PORTAL_URL:-https://bashperevod.ru/telegram.html}
       ConnectionStrings__Default: Host=bot-db;Database=bot;Username=app;Password=${POSTGRES_PASSWORD}
     depends_on:
       main-api:
@@ -110,6 +113,7 @@ services:
 
   bot-db:
     image: postgres:17-alpine
+    profiles: ["telegram"]
     restart: unless-stopped
     environment:
       POSTGRES_DB: bot

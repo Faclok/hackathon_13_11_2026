@@ -1,8 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 
-public sealed class BotDbContextFactory : IDesignTimeDbContextFactory<BotDbContext>
+public sealed class BotDbContextFactory : IDesignTimeDbContextFactory<BotDbContext>, IDbContextFactory<BotDbContext>
 {
+    public BotDbContext CreateDbContext() => CreateDbContext([]);
     public BotDbContext CreateDbContext(string[] args)
     {
         var connection = Environment.GetEnvironmentVariable("ConnectionStrings__Default")

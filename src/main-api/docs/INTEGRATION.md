@@ -2,6 +2,8 @@
 
 14 ноября 2026. Каталог ядра — `src/main-api`. Контракт HTTP — [openapi.json](openapi.json), примеры — [core.http](../src/BashkirSchool.Host/core.http). Правила продукта определяются [START-HERE.md](../START-HERE.md).
 
+Расширенный набор заданий, формат условий/ответов, озвучка Silero и S3/MinIO: [EXERCISE-API.md](EXERCISE-API.md). Новые виды клиент выбирает по `kind`, сохранённую схему определяет `schemaVersion`.
+
 ## Запуск и секреты
 
 Все прикладные настройки явно перечислены в [appsettings.json](../src/BashkirSchool.Host/appsettings.json). Пустые `ConnectionStrings:Core`, `Jwt:SigningKey`, `Bootstrap:Password` нужно заполнить через окружение. Готовый перечень переменных непосредственно для контейнера — [container.env.example](../container.env.example): скопируйте его в приватный файл вне Git, замените значения `<...>` и передайте через `docker run --env-file`. Значения окружения переопределяют appsettings.

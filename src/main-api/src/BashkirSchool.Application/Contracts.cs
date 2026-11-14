@@ -12,9 +12,18 @@ public sealed record DeliverContentRequest([property: JsonPropertyName("fragment
 /// <summary>Identifiers created by an idempotent delivery.</summary>
 public sealed record DeliveryResponse(Guid CaseId, Guid FragmentId, Guid VariantId);
 /// <summary>The exact text and variant assigned to the authenticated participant.</summary>
-public sealed record AssignmentResponse(Guid Id, Guid CaseId, Guid VariantId, string Original, string Translation, DateTimeOffset ExpiresAt);
+public sealed record AssignmentResponse(Guid Id, Guid CaseId, Guid VariantId, string Original, string Translation, DateTimeOffset ExpiresAt)
+{
+    public string Kind { get; init; } = "translation-confirm";
+    public IReadOnlyList<ReviewOptionResponse> Options { get; init; } = [];
+    public bool AllowCustom => true;
+}
+public sealed record ReviewOptionResponse(Guid Id, string Text);
 /// <summary>An opinion on the issued translation, without client supplied author or trust.</summary>
-public sealed record SubmitReviewRequest([property: JsonRequired] ReviewAction Action, string? Correction = null);
+public sealed record SubmitReviewRequest([property: JsonRequired] ReviewAction Action, string? Correction = null)
+{
+    public Guid? SelectedVariantId { get; init; }
+}
 /// <summary>Receipt for a saved review.</summary>
 public sealed record ReviewReceipt(Guid ResponseId, bool Archived);
 /// <summary>Unique participant progress and per-variant support, without private trust data.</summary>
@@ -28,6 +37,7 @@ public interface IContentIntake
 public interface IReviewWorkflow
 {
     Task<AssignmentResponse?> ReceiveAsync(Guid participant, CancellationToken cancellationToken);
+    Task<AssignmentResponse?> ReceiveAsync(Guid participant, string kind, CancellationToken cancellationToken);
     Task<ReviewReceipt> SubmitAsync(Guid participant, Guid assignment, SubmitReviewRequest request, CancellationToken cancellationToken);
     Task<CaseStatisticsResponse> StatisticsAsync(Guid participant, Guid caseId, CancellationToken cancellationToken);
 }

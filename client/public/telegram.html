@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Привязать Telegram — Башперевод</title>
+  <style>
+    :root{font-family:Inter,Arial,sans-serif;color:#151a16;background:#f5f8f5;font-synthesis:none}
+    *{box-sizing:border-box}body{margin:0;padding:28px 20px}main{max-width:440px;margin:8vh auto}
+    .brand{color:#2e6d32;font-size:22px;font-weight:800;text-decoration:none}h1{font-size:32px;line-height:1.15;margin:40px 0 18px}
+    p{line-height:1.6;color:#526253}form{margin-top:28px}label{display:block;margin-top:20px;font-weight:600}
+    input{display:block;width:100%;padding:14px;margin-top:8px;border:1px solid #b9c7b9;border-radius:12px;font:inherit;background:#fff}
+    button,.action{display:block;width:100%;padding:16px;margin-top:24px;background:#2e6d32;color:#fff;border:0;border-radius:14px;font:inherit;font-weight:700;text-align:center;text-decoration:none;cursor:pointer}
+    button:disabled{opacity:.6;cursor:wait}.secondary{background:transparent;color:#2e6d32;border:1px solid #b9c7b9}
+    :focus-visible{outline:3px solid #5d90df;outline-offset:4px}[hidden]{display:none!important}
+    #status{min-height:1.6em;color:#92351c}#result{margin-top:28px;padding-top:12px;border-top:1px solid #b9c7b9}code{overflow-wrap:anywhere}
+  </style>
+</head>
+<body>
+<main>
+  <a class="brand" href="/">башперевод</a>
+  <h1>Ежедневная практика в Telegram</h1>
+  <p>Войдите в свою учётную запись ученика и привяжите Telegram. В боте будут доступны ваш профиль и задания на сегодня.</p>
+  <form id="login">
+    <label for="username">Логин ученика</label><input id="username" name="username" autocomplete="username" maxlength="100" required>
+    <label for="password">Пароль</label><input id="password" name="password" type="password" autocomplete="current-password" maxlength="1000" required>
+    <button id="submit" type="submit">Получить ссылку на бота</button>
+  </form>
+  <p id="status" role="status" aria-live="polite"></p>
+  <section id="result" hidden>
+    <p id="instructions"></p>
+    <a id="open" class="action" hidden>Открыть бота в Telegram</a>
+    <p id="manual" hidden>Отправьте своему боту:<br><code id="code"></code></p>
+  </section>
+  <button id="unlink" class="secondary" hidden>Отвязать Telegram</button>
+</main>
+<script type="module" src="/telegram-link.js"></script>
+</body>
+</html>

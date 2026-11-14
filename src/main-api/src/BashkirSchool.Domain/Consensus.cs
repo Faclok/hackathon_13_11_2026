@@ -1,7 +1,10 @@
 namespace BashkirSchool.Domain;
 
 public sealed record ReviewObservation(Guid ParticipantId, Guid VariantId, Guid? SchoolId, Guid? ClassId,
-    DateTimeOffset At, Guid ResponseId, Guid ShownVariantId);
+    DateTimeOffset At, Guid ResponseId, Guid ShownVariantId)
+{
+    public IReadOnlyList<Guid>? ShownVariantIds { get; init; }
+}
 public sealed record CandidateSupport(Guid VariantId, int Supports, int IndependentObservations, decimal? Ratio, bool CoverageSatisfied, bool Qualified);
 
 public static class ConsensusCalculator
@@ -15,7 +18,7 @@ public static class ConsensusCalculator
         return variants.Select(v =>
         {
             var support = latest.Where(x => x.VariantId == v.Id).ToArray();
-            var independent = all.Where(x => x.ShownVariantId == v.Id && x.ParticipantId != v.CreatedBy).Select(x => x.ParticipantId).Distinct().Count();
+            var independent = all.Where(x => (x.ShownVariantIds?.Contains(v.Id) ?? (x.ShownVariantId == v.Id)) && x.ParticipantId != v.CreatedBy).Select(x => x.ParticipantId).Distinct().Count();
             decimal? ratio = latest.Length == 0 ? null : (decimal)support.Length / latest.Length;
             var schoolSupport = support.Where(x => x.SchoolId.HasValue && x.ClassId.HasValue).ToArray();
             var coverage = schoolSupport.Length > 0 && schoolSupport.Select(x => x.SchoolId).Distinct().Count() >= policy.MinimumSchools &&

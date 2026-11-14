@@ -1,6 +1,10 @@
 import './workspace.css';
 import { workspaceMarkup, roles } from './workspace-layout.js';
 import { mountWorkspace } from './workspace-view.js';
+import { exerciseKinds, renderExercise, readExerciseAnswer } from './exercise-view.js';
+import exampleLesson from './examples/daily-lesson.json';
+import exampleChoice from './examples/review-choice.json';
+import exampleConfirm from './examples/review-confirm.json';
 
 const $ = selector => document.querySelector(selector);
 const freshState = () => ({ actors: [], active: '', workspaceRole: 'participant', schoolId: '', classId: '', caseId: '', accountId: '', assignments: {} });
@@ -12,11 +16,13 @@ let caseView = null;
 let courseId = null;
 let ui;
 let currentTask = {};
+let previewAssignment = null;
 const refreshes = new Map();
 const actor = () => state.actors.find(item => item.id === state.active);
 const element = (tag, text, props = {}) => Object.assign(document.createElement(tag), { textContent: text, ...props });
 
 $('#root').innerHTML = workspaceMarkup();
+for (const [kind, title] of Object.entries(exerciseKinds)) $('#exercise-kind').append(element('option', title, { value: kind }));
 
 function save() {
   try { sessionStorage.setItem(storageKey, JSON.stringify(state)); }
@@ -47,11 +53,12 @@ function renderActors() {
   ui?.sync();
 }
 function selectActor(id) {
-  state.active = id; caseView = null; save(); renderActors(); renderAssignment();
-  for (const target of ['variants', 'exercises', 'sessions', 'lms-lessons', 'access-list', 'queue']) $(`#${target}`).replaceChildren();
+  state.active = id; caseView = null; previewAssignment = null; $('#lesson-preview-note').hidden = true; save(); renderActors(); renderAssignment();
+  for (const target of ['variants', 'exercises', 'sessions', 'lms-lessons', 'access-list', 'queue', 'class-invitations', 'my-class-invitations']) $(`#${target}`).replaceChildren();
+  $('#my-class-info').textContent = 'Обновите приглашения под выбранным аккаунтом.';
   $('#case-view').textContent = 'Откройте случай под текущим экспертом.';
   show('profile-result', 'Нажмите «Мой профиль», чтобы прочитать актуальные данные.');
-  for (const target of ['review-result', 'expert-result', 'learning-result', 'lms-result', 'manage-result', 'directory-result']) show(target, 'Прочитайте данные под выбранным аккаунтом.');
+  for (const target of ['review-result', 'expert-result', 'learning-result', 'lms-result', 'manage-result', 'directory-result', 'class-invitation-result', 'my-class-result']) show(target, 'Прочитайте данные под выбранным аккаунтом.');
   $('#setup-token').value = '';
   $('.expert-actions').hidden = true;
   ui?.sync({ actorChanged: true });
@@ -62,10 +69,10 @@ function remember(username, session, workspaceRole) {
     workspaceRole: workspaceRole || known?.workspaceRole || actor()?.workspaceRole || state.workspaceRole || 'participant' };
   state.actors = state.actors.filter(item => item.username !== username).concat(current); save(); renderActors(); return current;
 }
-async function request(path, { method = 'GET', body, current = actor(), auth = true, headers = {}, retry = true } = {}) {
+async function request(path, { method = 'GET', body, current = actor(), auth = true, headers = {}, retry = true, timeoutMs = 30000 } = {}) {
   if (!/^\/(api|auth|health)\//.test(path)) throw new Error('Разрешено только API текущего сайта.');
   if (auth && !current) throw new Error('Для этого действия нужен вход.');
-  const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 30000);
+  const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), timeoutMs);
   let response, data;
   try {
     response = await fetch(path, { method, credentials: 'omit', signal: controller.signal,
@@ -77,7 +84,7 @@ async function request(path, { method = 'GET', body, current = actor(), auth = t
     log(method, path, 'сеть', message); throw new Error(message + ' Изменение могло сохраниться. Проверьте состояние перед повтором.');
   } finally { clearTimeout(timeout); }
   log(method, path, response.status, data);
-  if (response.status === 401 && auth && current.refreshToken && retry) { await refresh(current); return request(path, { method, body, current, auth, headers, retry: false }); }
+  if (response.status === 401 && auth && current.refreshToken && retry) { await refresh(current); return request(path, { method, body, current, auth, headers, retry: false, timeoutMs }); }
   if (!response.ok) {
     const hint = { 400: 'Проверьте заполненные поля и требования к паролю.', 401: 'Не удалось подтвердить вход. Проверьте логин и пароль или войдите заново.',
       403: 'У выбранного аккаунта нет прав на это действие. Выберите подходящий аккаунт сверху; смена рабочего пространства не выдаёт права.',
@@ -105,16 +112,40 @@ async function staff(values, owner) {
   context({ accountId: account.id }); await setPassword(account.id, values.password, owner); await login(values.username, values.password, values.profile); return account;
 }
 function renderAssignment() {
-  const assignment = state.assignments[state.active]; $('#assignment').replaceChildren();
+  const assignment = previewAssignment || state.assignments[state.active]; $('#assignment').replaceChildren();
   $('.review-actions').hidden = !assignment;
+  $('#review-preview-note').hidden = !previewAssignment;
+  $('form[data-action="confirm"] button').textContent = assignment?.kind === 'translation-choice' ? 'Отправить выбранный перевод' : 'Перевод верный';
   if (!assignment) { $('#assignment').append(element('h2', 'Начните с одной фразы'), element('p', 'Нажмите «Получить задание». Здесь появятся оригинал и предложенный перевод.')); return; }
-  $('#assignment').append(element('p', 'Оригинал', { className: 'phrase-label' }), element('h2', assignment.original),
-    element('p', 'Предложенный перевод', { className: 'phrase-label' }), element('p', assignment.translation, { className: 'translation-text' }),
-    element('p', `Ответьте до ${new Date(assignment.expiresAt).toLocaleString('ru-RU')}`, { className: 'hint' }));
+  $('#assignment').append(element('p', 'Оригинал', { className: 'phrase-label' }), element('h2', assignment.original));
+  if (assignment.kind === 'translation-choice') {
+    $('#assignment').append(element('p', 'Выберите один перевод или предложите свой ниже.', { className: 'hint' }));
+    const options = element('div', '', { className: 'answer-options' });
+    for (const option of assignment.options || []) {
+      const label = element('label', '', { className: 'answer-option' });
+      label.append(element('input', '', { type: 'radio', name: 'review-option', value: option.id }), document.createTextNode(option.text)); options.append(label);
+    }
+    $('#assignment').append(options);
+  } else if (!assignment.kind || assignment.kind === 'translation-confirm') {
+    $('#assignment').append(element('p', 'Предложенный перевод', { className: 'phrase-label' }), element('p', assignment.translation, { className: 'translation-text' }));
+  } else {
+    $('#assignment').append(element('p', 'Этот вид проверки пока не поддерживается. Обновите клиент.', { className: 'notice' }));
+    $('.review-actions').hidden = true;
+  }
+  if (!previewAssignment) $('#assignment').append(element('p', `Ответьте до ${new Date(assignment.expiresAt).toLocaleString('ru-RU')}`, { className: 'hint' }));
 }
 async function submitReview(reviewAction, correction) {
-  const current = requireActor(); const assignment = state.assignments[current.id]; if (!assignment) throw new Error('Сначала получите свою выдачу.');
-  const result = await request(`/api/reviews/${assignment.id}/response`, { method: 'POST', body: { action: reviewAction, correction: reviewAction === 'Correct' ? correction : null } });
+  const assignment = previewAssignment || state.assignments[state.active]; if (!assignment) throw new Error('Сначала получите свою выдачу.');
+  const body = { action: reviewAction };
+  if (reviewAction === 'Correct') body.correction = correction;
+  if (reviewAction === 'Confirm' && assignment.kind === 'translation-choice') {
+    const selected = $('#assignment input[name="review-option"]:checked');
+    if (!selected) throw new Error('Выберите один из переводов или напишите свой вариант.');
+    body.selectedVariantId = selected.value;
+  }
+  if (previewAssignment) { show('review-result', { message: 'Предпросмотр: ответ подготовлен, в API не отправлен.', request: body }); return; }
+  const current = requireActor();
+  const result = await request(`/api/reviews/${assignment.id}/response`, { method: 'POST', body });
   delete state.assignments[current.id]; save(); renderAssignment(); show('review-result', result);
 }
 async function readCase(id) {
@@ -134,13 +165,13 @@ async function readCase(id) {
 }
 function requireCase() { if (!caseView || caseView.actor !== state.active) throw new Error('Прочитайте случай под текущим экспертом.'); if (caseView.closed) throw new Error('Случай уже закрыт.'); return caseView; }
 async function lesson() {
-  const data = await request('/api/lessons/today'); $('#exercises').replaceChildren(element('p', `Дата: ${data.date}. Упражнений: ${data.exercises.length}`));
-  data.exercises.forEach(exercise => {
-    const form = element('form', ''); form.dataset.action = 'attempt'; form.dataset.id = exercise.id;
-    form.append(element('h3', exercise.original), element('p', exercise.completed ? 'Попытка уже сохранена.' : 'Точное совпадение с ключом: учитываются регистр и пунктуация.'));
-    if (!exercise.completed) { const label = element('label', 'Перевод'); label.append(element('input', '', { name: 'answer', required: true })); form.append(label, element('button', 'Сдать ответ')); }
-    $('#exercises').append(form);
-  }); show('learning-result', data);
+  const data = await request('/api/lessons/today'); renderLesson(data); show('learning-result', data);
+}
+function renderLesson(data, preview = false) {
+  $('#lesson-preview-note').hidden = !preview;
+  const completed = data.exercises.filter(exercise => exercise.completed).length;
+  $('#exercises').replaceChildren(element('p', `${preview ? 'Пример урока' : 'Дата: ' + data.date}. Выполнено ${completed} из ${data.exercises.length}.`, { className: 'lesson-progress' }));
+  for (const exercise of data.exercises) $('#exercises').append(renderExercise(exercise, { preview, actorId: state.active }));
 }
 async function lmsLessons(id) {
   courseId = id;
@@ -151,6 +182,69 @@ async function lmsLessons(id) {
     const done = progress.some(entry => entry.lesson_id === item.id);
     form.append(element('h3', `${item.position}. ${item.title}`), element('p', item.body), element('button', done ? 'Уже пройдено' : 'Завершить урок', { disabled: done || !actor() })); $('#lms-lessons').append(form);
   }); show('lms-result', { lessons, progress });
+}
+
+const invitationStatuses = { Pending: 'Ожидает ответа ученика', Accepted: 'Принято — ученик в классе', Declined: 'Ученик отклонил', Cancelled: 'Отменено — выбран другой класс' };
+const invitationPageSize = 50;
+function renderInvitations(items, { student, classId = '', offset = 0 }) {
+  const target = $(student ? '#my-class-invitations' : '#class-invitations'); target.replaceChildren();
+  if (!items.length) target.append(element('p', offset ? 'На этой странице приглашений нет. Вернитесь к предыдущей.' : student
+    ? 'Приглашений пока нет. Передайте учителю свой логин и обновите список после отправки приглашения.'
+    : 'Приглашений в этот класс пока нет. Укажите логин ученика в форме выше.'));
+  items.forEach(item => {
+    const card = element('article', '', { className: 'invitation-card' }); card.dataset.invitationId = item.id;
+    card.append(element('h2', student ? `Класс «${item.className}»` : item.participantUsername),
+      element('p', `${item.schoolName} · ${item.className}`), element('p', `Учитель: ${item.teacherUsername}`),
+      element('p', invitationStatuses[item.status] || item.status, { className: 'invitation-status' }),
+      element('p', `Отправлено: ${new Date(item.createdAt).toLocaleString('ru-RU')}`, { className: 'hint' }));
+    if (student && item.status === 'Pending') {
+      const form = element('form', ''); form.dataset.action = 'invitation-accept'; form.dataset.id = item.id;
+      const consent = element('label', '', { className: 'check-label' });
+      consent.append(element('input', '', { type: 'checkbox', required: true, name: 'consent' }),
+        element('span', `Хочу вступить в класс «${item.className}» (${item.schoolName}) к учителю ${item.teacherUsername}. После вступления этот учитель сможет восстанавливать доступ к моему аккаунту.`));
+      const buttons = element('div', '', { className: 'invitation-actions' });
+      const decline = element('button', 'Отклонить', { type: 'button' }); decline.dataset.action = 'invitation-decline'; decline.dataset.id = item.id;
+      buttons.append(element('button', 'Принять приглашение', { type: 'submit', className: 'primary' }), decline);
+      form.append(consent, buttons); card.append(form);
+    }
+    target.append(card);
+  });
+  const pager = element('div', '', { className: 'invitation-pagination' });
+  for (const [title, nextOffset, disabled] of [['Предыдущие', offset - invitationPageSize, offset === 0], ['Следующие', offset + invitationPageSize, items.length < invitationPageSize]]) {
+    const btn = element('button', title, { type: 'button', disabled });
+    btn.dataset.action = student ? 'my-class-invitations' : 'class-invitations-page';
+    btn.dataset.offset = String(nextOffset); btn.dataset.classId = classId; pager.append(btn);
+  }
+  target.append(pager);
+}
+async function loadClassInvitations(classId, offset = 0) {
+  if (!classId) throw new Error('Загрузите классы и выберите свой класс.');
+  context({ classId });
+  const items = await request(`/api/classes/${encodeURIComponent(classId)}/invitations?offset=${offset}&limit=${invitationPageSize}`);
+  renderInvitations(items, { student: false, classId, offset });
+}
+async function loadMyInvitations(offset = 0) {
+  const profile = await request('/api/me');
+  $('#my-class-info').textContent = profile.classId
+    ? `Вы уже состоите в классе. Ниже — история приглашений. Ваш логин: ${profile.username}.`
+    : `Вы пока занимаетесь самостоятельно. Передайте учителю свой логин: ${profile.username}.`;
+  show('profile-result', profile);
+  const items = await request(`/api/me/class-invitations?offset=${offset}&limit=${invitationPageSize}`);
+  renderInvitations(items, { student: true, offset });
+}
+async function respondToInvitation(id, accept) {
+  let decision;
+  try { decision = await request(`/api/me/class-invitations/${encodeURIComponent(id)}/response`, { method: 'POST', body: { accept } }); }
+  catch (error) {
+    // Refresh decisions after a conflict or an uncertain network result before offering another action.
+    $('#my-class-invitations').replaceChildren();
+    try { await loadMyInvitations(); } catch { /* The original request error remains actionable. */ }
+    throw error;
+  }
+  $('#my-class-invitations').replaceChildren();
+  show('my-class-result', decision);
+  try { await loadMyInvitations(); }
+  catch { throw new Error('Решение сохранено. Не удалось обновить список: нажмите «Обновить приглашения».'); }
 }
 
 const actions = {
@@ -181,8 +275,21 @@ const actions = {
   async schools() { show('directory-result', await request('/api/schools?offset=0&limit=100')); },
   async classes() { show('directory-result', await request('/api/classes?offset=0&limit=100')); },
   async students(values) { show('directory-result', await request(`/api/classes/${values.classId}/students?offset=0&limit=100`)); },
+  async 'class-invite'(values) {
+    const invitation = await request(`/api/classes/${encodeURIComponent(values.classId)}/invitations`, { method: 'POST', body: { username: values.username } });
+    show('class-invitation-result', invitation);
+    $('#class-invitations').replaceChildren();
+    try { await loadClassInvitations(values.classId); }
+    catch { throw new Error('Приглашение отправлено. Не удалось обновить список: нажмите «Обновить приглашения».'); }
+  },
+  'class-invitations'(values) { return loadClassInvitations(values.classId); },
+  'class-invitations-page'(_, target) { return loadClassInvitations(target.dataset.classId, Number(target.dataset.offset)); },
+  'my-class-invitations'(_, target) { return loadMyInvitations(Number(target?.dataset.offset || 0)); },
+  'invitation-accept'(_, form) { return respondToInvitation(form.dataset.id, true); },
+  'invitation-decline'(_, target) { return respondToInvitation(target.dataset.id, false); },
   async deliver(values) { const data = await request('/api/deliveries', { method: 'POST', headers: { 'Idempotency-Key': values.key }, body: { fragment_id: values.fragmentId, text_ba: values.original, lang_pair: values.languagePair, translation: values.translation, source: { document_id: values.documentId } } }); context({ caseId: data.caseId }); show('delivery-result', data); },
-  async receive() { const current = requireActor(); const data = await request('/api/reviews/next', { method: 'POST' }); state.assignments[current.id] = data; save(); renderAssignment(); if (data) context({ caseId: data.caseId }); show('review-result', data || 'HTTP 204: нет подходящих заданий. Проверьте материалы, историю участника и ограничения выдачи.'); },
+  async receive() { const current = requireActor(); const kind = $('#review-kind').value; const data = await request(`/api/reviews/next?kind=${encodeURIComponent(kind)}`, { method: 'POST' }); previewAssignment = null; state.assignments[current.id] = data; save(); renderAssignment(); if (data) context({ caseId: data.caseId }); show('review-result', data || 'Подходящих проверок пока нет. Загрузите материалы или проверьте ограничения выдачи.'); },
+  'review-preview'() { previewAssignment = structuredClone($('#review-kind').value === 'translation-choice' ? exampleChoice : exampleConfirm); renderAssignment(); show('review-result', { message: 'Открыт пример проверки. Выберите ответ: в базу он не отправится.' }); },
   confirm() { return submitReview('Confirm'); }, skip() { return submitReview('Skip'); }, correct(values) { return submitReview('Correct', values.correction); },
   async statistics(values) { context({ caseId: values.caseId }); show('review-result', await request(`/api/cases/${values.caseId}/statistics`)); },
   async queue() { const data = await request('/api/expert/cases?offset=0&limit=100'); $('#queue').replaceChildren(); data.forEach((item, index) => { const btn = element('button', `${item.original || 'Перевод ' + (index + 1)} — ответов: ${item.observations}${item.disputed ? ', есть разногласия' : ''}`, { type: 'button' }); btn.dataset.action = 'case-open'; btn.dataset.id = item.caseId; $('#queue').append(btn); }); show('expert-result', data); },
@@ -192,6 +299,21 @@ const actions = {
   async resolve(values) { const view = requireCase(); const primary = [], additional = [], rejected = []; $('#variants').querySelectorAll('select').forEach(item => { if (item.value === 'primary') primary.push(item.name); else if (item.value === 'additional') additional.push(item.name); else if (item.value === 'rejected') rejected.push(item.name); }); if (primary.length !== 1 || additional.length > 4) throw new Error('Выберите ровно один основной и не более четырёх дополнительных вариантов.'); await request(`/api/expert/cases/${view.caseId}/resolution`, { method: 'POST', body: { expectedRevision: view.revision, primaryVariantId: primary[0], additionalVariantIds: additional, rejectedVariantIds: rejected, comment: values.comment || null } }); await readCase(view.caseId); },
   async history(values) { show('expert-result', await request(`/api/expert/cases/${values.caseId}/history`)); },
   lesson,
+  'lesson-preview'() { const data = structuredClone(exampleLesson); renderLesson(data, true); show('learning-result', { message: 'Открыты примеры всех шести учебных видов. Ответ можно собрать и посмотреть без входа и без записи в базу.' }); },
+  async 'exercise-issue'(values) {
+    const body = { kind: values.kind, languagePair: values.languagePair, ...(values.caseId.trim() ? { caseId: values.caseId.trim() } : {}) };
+    if (values.kind.startsWith('audio-')) $('#status').textContent = 'Подготавливается аудиозадание. Первая озвучка может занять несколько минут…';
+    const exercise = await request('/api/lessons/today/exercises', { method: 'POST', body, timeoutMs: values.kind.startsWith('audio-') ? 360000 : 30000 });
+    if (!exercise) { show('learning-result', { message: 'Нет подходящего материала для этого вида. Для пар нужны пять слов, для перевода — принятый перевод; для сборки и пропуска — предложение из нескольких слов.' }); return; }
+    await lesson(); document.querySelector(`[data-action="exercise-answer"][data-id="${exercise.id}"]`)?.scrollIntoView({ block: 'center' });
+  },
+  async 'exercise-answer'(_, form) {
+    const answer = readExerciseAnswer(form);
+    if (form.dataset.preview === 'true') { show('learning-result', { message: 'Предпросмотр: ответ подготовлен, в API не отправлен.', request: { answer } }); return; }
+    if (form.dataset.actor !== state.active) throw new Error('Аккаунт изменился. Откройте урок заново.');
+    const data = await request(`/api/exercises/${encodeURIComponent(form.dataset.id)}/answer`, { method: 'POST', body: { answer } });
+    await lesson(); show('learning-result', { ...data, explanation: data.recognized ? 'Ответ сохранён и совпал с ключом задания.' : 'Ответ сохранён, совпадение с ключом не найдено. Это не экспертная оценка нового перевода. Повторить это упражнение с другим ответом уже нельзя.' });
+  },
   async attempt(values, form) { const data = await request(`/api/exercises/${form.dataset.id}/attempt`, { method: 'POST', body: values }); await lesson(); show('learning-result', { ...data, explanation: data.recognized ? 'Ответ совпал с допустимым текстом.' : 'Ответ сохранён, но не найден в ключе. Это не лингвистический вердикт. Другой ответ на это упражнение уже не принимается.' }); },
   async courses() { const data = await request('/api/lms/courses', { auth: false }); $('#courses').replaceChildren(); data.forEach(item => { const btn = element('button', `${item.title} — уроков ${item.lesson_count}`, { type: 'button' }); btn.dataset.action = 'lms-open'; btn.dataset.id = item.id; $('#courses').append(btn); }); show('lms-result', data); },
   'lms-open'(_, target) { return lmsLessons(target.dataset.id); }, async 'lms-complete'(_, form) { await request(`/api/lms/lessons/${form.dataset.id}/complete`, { method: 'POST' }); await lmsLessons(courseId); },
@@ -214,15 +336,18 @@ function removeActor(current) { state.actors = state.actors.filter(item => item.
 function passwordToken(data) { context({ accountId: data.accountId }); $('#setup-token').value = data.token; show('manage-result', { accountId: data.accountId, expiresAt: data.expiresAt, message: 'Токен подставлен в форму установки пароля.' }); }
 async function run(name, values, target) {
   if (busy || !actions[name]) return;
+  const isPreview = name.endsWith('-preview') || target?.dataset.preview === 'true' || (previewAssignment && ['confirm', 'correct', 'skip'].includes(name));
   currentTask = { name, values };
   busy = true; $('#status').className = ''; $('#status').textContent = 'Выполняется…'; $('#actor').disabled = true;
   document.querySelectorAll('button').forEach(btn => { if (!btn.disabled) { btn.disabled = true; btn.dataset.busy = 'true'; } });
   $('#workspace-mode').disabled = true;
   try {
     await actions[name](values, target);
-    $('#status').textContent = ({ login: 'Вы вошли. На главной странице показан следующий шаг.', register: 'Аккаунт создан. Теперь можно проверять переводы и учиться.',
+    $('#status').textContent = isPreview ? 'Предпросмотр. Данные и ответы в базу не отправляются.' : ({ login: 'Вы вошли. На главной странице показан следующий шаг.', register: 'Аккаунт создан. Теперь можно проверять переводы и учиться.',
       prepare: 'Данные созданы. Выбран участник — откройте «Проверка переводов».', confirm: 'Перевод подтверждён. Можно получить следующее задание.',
       correct: 'Ваш вариант сохранён.', skip: 'Задание пропущено. Можно получить следующее.', resolve: 'Решение эксперта сохранено. Участник может открыть практику перевода.',
+      'class-invite': 'Приглашение отправлено. Ученик увидит его в разделе «Мой класс».',
+      'invitation-accept': 'Вы вступили в класс. Профиль и приглашения обновлены.', 'invitation-decline': 'Приглашение отклонено.',
       'lms-complete': 'Урок пройден. Прогресс сохранён.', deliver: 'Материал отправлен на проверку.', logout: 'Вы вышли из аккаунта.' })[name] || 'Готово. Результат показан ниже.';
     if (target?.tagName === 'FORM') target.querySelectorAll('input[type="password"]').forEach(item => { item.value = ''; });
   }

@@ -54,3 +54,40 @@
 При проверке найдена реальная обёртка Npgsql InvalidOperationException → PostgresException(40001). Обработка конфликтов исправлена, параллельный сценарий повторно прошёл. Проверены конкретные счётчики/редакции, ошибки доступа, отсутствие лишних записей и приватных полей; нет подмены аутентификации. Реальные мутации исходников и измерение процента покрытия не выполнялись.
 
 Границы: Docker Engine отсутствует, именно docker build/запуск Linux-образа ещё не выполнялись. Нет нагрузочного теста, браузерного cookie-refresh-протокола и проверки истечения токенов на реально прошедшем времени. Расширенные игровые механики и экономические правила не входят в этот этап. SQLite и PostgreSQL результаты не подменяют друг друга; PostgreSQL-сценарии отдельно используют настоящие миграции/блокировки.
+
+## Расширяемые задания — 14 ноября 2026
+
+Проверена текущая ветка расширения: полная сборка .NET 10 без инкрементальности — 0 предупреждений/ошибок. Полный запуск xUnit: **71 пройден, 1 пропущен, 0 ошибок**, включая настоящий PostgreSQL на отдельном временном кластере. Пропущен только `RealSileroSynthesizesBashkirWavAndReusesTheCachedModel`: официальный models.silero.ai не отвечает из этого окружения. Попытка реального запуска отдельно завершилась сетевым тайм-аутом до загрузки весов; это не успешная проверка синтеза. Найденный официальный Windows-установщик содержит nostress и не использовался как подмена v5_cis_base.
+
+Команда из `src/main-api`: `dotnet test tests/BashkirSchool.Tests/BashkirSchool.Tests.csproj --no-build '-bl:../../.data/exercises-final-tests-{}.binlog' --logger 'trx;LogFileName=exercises-final.trx' --results-directory ../../.data/exercise-results`. Для PostgreSQL задан `BASHKIR_TEST_POSTGRES`; Windows EventLog отключён переменной `Logging__EventLog__LogLevel__Default=None`, поскольку учётная запись песочницы не может писать в системный журнал.
+
+| Requirement | Evidence |
+| --- | --- |
+| Пять пар, однозначность, проверка каждого ID | `WordMatchRequiresFiveUnambiguousPairsAndChecksBijection`, `WordPairsAreImportedIdempotentlyIssuedPrivatelyAndAnsweredOnlyByOwner` |
+| До четырёх популярных переводов, снимок и ровно один голос | `ReviewChoicesAreTopFourSnapshotAndSelectedVariantGetsTheOnlyVote` |
+| Один доступный вариант либо свой перевод | `SingleChoiceAndCustomTranslationRemainOneAcceptance`; прежний режим — `DeliveryAssignmentConfirmationAndRetryPersistOneVoteAndOutboxMessage` |
+| Диктант без перевода, исходник скрыт | `DictationUsesOriginalWithoutTranslationAndHidesItFromPrompt` |
+| Перевод на слух только с принятым переводом | `AudioTranslationRequiresAudioAndAcceptedResolutionAndAcceptsSynonym` |
+| Создание аудио по запросу, повторное использование и отсутствие готового asset при сбое upload | `AudioIsLazyDeduplicatedAndTranslationWaitsForAnAcceptedRendering` — синтезатор/хранилище в этом тесте подменены |
+| Пропущенное слово: выбор/текст, подмена ID запрещена | `MissingWordAcceptsChoiceOrTextAndRejectsForeignOrMixedInput`, `GapAndOrderSnapshotsSurviveRepeatedRequestsAndValidateAnswers` |
+| Сборка предложения, повторяющиеся слова и уникальность вхождений | `SentenceOrderChecksAllTokensAndAllowsInterchangeableRepeatedWords` |
+| Новый строковый вид и версии без изменения общего процесса | `RegistryAcceptsNewKindAndVersionsWithoutWorkflowChanges` |
+| Неправильный JSON, подмена результата и пустые ответы | `TextAnswerRejectsMalformedOrForgedFields` |
+| Миграция сохраняет старые текстовые упражнения, допускает задание без предложения | `UpgradePreservesLegacyExerciseAndAllowsVocabularyWithoutASentence` — настоящий PostgreSQL |
+| Подписанная MinIO-ссылка приватного bucket | `MinioLinkIsSignedForPrivateBucketWithoutConnectingToStorage` — проверка подписи/URL, без сетевого MinIO |
+
+`dotnet-ef migrations has-pending-model-changes --project src/BashkirSchool.Infrastructure --startup-project src/BashkirSchool.Host --no-build`: модель соответствует миграциям. Обновлён живой OpenAPI-артефакт; договор новых условий/ответов — [EXERCISE-API.md](EXERCISE-API.md).
+
+Пределы: настоящий синтез точной v5_cis_base, сетевой upload в MinIO и Docker build пока не подтверждены. Адрес и секреты MinIO в Coolify не предоставлены; добавлены конфигурация, SDK-адаптер и контейнерные зависимости. Реестр и проверка аудиоупражнений проверены отдельно от этих внешних зависимостей.
+# Проверка приглашений в класс — 14 ноября 2026
+
+`dotnet test tests/BashkirSchool.Tests/BashkirSchool.Tests.csproj --no-restore --logger "trx;LogFileName=invitations-regression.trx" --results-directory ../../.data/invitation-results` из `src/main-api`: 80 пройдено, 1 пропущен (реальный Silero, требуется отдельное окружение), ошибок нет. PostgreSQL-тесты включены через `BASHKIR_TEST_POSTGRES`, отдельный локальный тестовый кластер на порту 55435. `dotnet build src/main-api/BashkirSchool.slnx --no-restore --no-incremental -v:q`: 0 предупреждений и ошибок. EF `has-pending-model-changes`: расхождений нет. OpenAPI выгружен из запущенного Host.
+
+| Требование | Проверка в `ClassInvitationTests` |
+| --- | --- |
+| Членство только после согласия, повтор без дубля, отмена остальных приглашений | `AcceptanceEnrollsOnlyAfterConsentAndCancelsOtherInvitations` |
+| Отказ сохраняет самостоятельный статус, новое приглашение после отказа | `DeclineLeavesParticipantIndependentAndAllowsANewInvitation` |
+| Только собственный класс учителя и собственное приглашение ученика | `OtherUsersCannotInviteReadOrAcceptOutsideTheirScope` |
+| Перед подтверждением повторно проверяются права и состояние сторон | `AcceptanceRechecksTeacherPermissionAndParticipantPrivileges` |
+| Обновление PostgreSQL сохраняет данные, индекс запрещает дубли ожидающих приглашений | `MigrationPreservesAccountsAndEnforcesOnePendingInvitationPerClass` |
+

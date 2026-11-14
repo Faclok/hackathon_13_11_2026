@@ -48,6 +48,14 @@ namespace TelegramBot.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("TelegramId"));
 
+                    b.Property<Guid?>("AnswerExerciseId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("answer_exercise_id");
+
+                    b.Property<int?>("AnswerMessageId")
+                        .HasColumnType("integer")
+                        .HasColumnName("answer_message_id");
+
                     b.Property<string>("State")
                         .IsRequired()
                         .HasColumnType("text")

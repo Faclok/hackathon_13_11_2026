@@ -6,6 +6,8 @@ const uuid = '[0-9a-fA-F-]{36}';
 const routes = [
   ['POST', /^\/auth\/(sign-in|refresh)$/],
   ['GET', /^\/api\/me$/],
+  ['POST', /^\/api\/deliveries$/],
+  ['PUT', new RegExp(`^/api/accounts/${uuid}/access$`)],
   ['GET', /^\/api\/expert\/(dashboard|work|cases)$/],
   ['GET', new RegExp(`^/api/expert/cases/${uuid}(?:/history)?$`)],
   ['POST', new RegExp(`^/api/expert/cases/${uuid}/(?:claim|variants|resolution)$`)],
@@ -35,6 +37,7 @@ http.createServer(async (request, response) => {
     const headers = {};
     if (request.headers.authorization) headers.authorization = request.headers.authorization;
     if (request.headers['content-type']) headers['content-type'] = request.headers['content-type'];
+    if (request.headers['idempotency-key']) headers['idempotency-key'] = request.headers['idempotency-key'];
     const result = await fetch(upstream + url.pathname + url.search, {
       method: request.method,
       headers,

@@ -121,6 +121,44 @@ namespace BashkirSchool.Infrastructure.Migrations
                     b.ToTable("Audit");
                 });
 
+            modelBuilder.Entity("BashkirSchool.Domain.ClassInvitation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ClassId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ParticipantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("RespondedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Status")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TeacherId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TeacherId");
+
+                    b.HasIndex("ClassId", "ParticipantId")
+                        .IsUnique()
+                        .HasFilter("\"Status\" = 0");
+
+                    b.HasIndex("ParticipantId", "CreatedAt");
+
+                    b.ToTable("ClassInvitations");
+                });
+
             modelBuilder.Entity("BashkirSchool.Domain.ContentDelivery", b =>
                 {
                     b.Property<Guid>("Id")
@@ -257,8 +295,28 @@ namespace BashkirSchool.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<Guid>("CaseId")
+                    b.Property<string>("AnswerKeyJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("{}");
+
+                    b.Property<Guid?>("CaseId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasDefaultValue("translation-text");
+
+                    b.Property<string>("LanguagePair")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)")
+                        .HasDefaultValue("ba-ru");
 
                     b.Property<Guid>("LessonId")
                         .HasColumnType("uuid");
@@ -267,14 +325,25 @@ namespace BashkirSchool.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<Guid>("ResolutionId")
+                    b.Property<string>("PromptJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("{}");
+
+                    b.Property<Guid?>("ResolutionId")
                         .HasColumnType("uuid");
+
+                    b.Property<int>("SchemaVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
 
                     b.HasKey("Id");
 
-                    b.HasIndex("LessonId");
-
                     b.HasIndex("ResolutionId");
+
+                    b.HasIndex("LessonId", "Kind", "CaseId");
 
                     b.ToTable("Exercise");
                 });
@@ -613,6 +682,13 @@ namespace BashkirSchool.Infrastructure.Migrations
                     b.Property<DateTimeOffset>("IssuedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasDefaultValue("translation-confirm");
+
                     b.Property<Guid>("ParticipantId")
                         .HasColumnType("uuid");
 
@@ -624,6 +700,12 @@ namespace BashkirSchool.Infrastructure.Migrations
 
                     b.Property<Guid>("ShownVariantId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("ShownVariantsJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("[]");
 
                     b.HasKey("Id");
 
@@ -664,6 +746,9 @@ namespace BashkirSchool.Infrastructure.Migrations
                     b.Property<Guid>("ParticipantId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("SelectedVariantId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset>("SubmittedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -692,6 +777,37 @@ namespace BashkirSchool.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Schools");
+                });
+
+            modelBuilder.Entity("BashkirSchool.Domain.SentenceAudio", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("FragmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ObjectKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ObjectKey");
+
+                    b.HasIndex("FragmentId", "ObjectKey")
+                        .IsUnique();
+
+                    b.ToTable("SentenceAudio");
                 });
 
             modelBuilder.Entity("BashkirSchool.Domain.StudyClass", b =>
@@ -860,6 +976,35 @@ namespace BashkirSchool.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("Judgments");
+                });
+
+            modelBuilder.Entity("BashkirSchool.Domain.VocabularyEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("LanguagePair")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)");
+
+                    b.Property<string>("Translation")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Word")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LanguagePair", "Word", "Translation")
+                        .IsUnique();
+
+                    b.ToTable("VocabularyEntry");
                 });
 
             modelBuilder.Entity("BashkirSchool.Infrastructure.Account", b =>
@@ -1109,6 +1254,27 @@ namespace BashkirSchool.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("BashkirSchool.Domain.ClassInvitation", b =>
+                {
+                    b.HasOne("BashkirSchool.Domain.StudyClass", null)
+                        .WithMany()
+                        .HasForeignKey("ClassId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BashkirSchool.Domain.Participant", null)
+                        .WithMany()
+                        .HasForeignKey("ParticipantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BashkirSchool.Infrastructure.Account", null)
+                        .WithMany()
+                        .HasForeignKey("TeacherId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("BashkirSchool.Domain.ContentDelivery", b =>
                 {
                     b.HasOne("BashkirSchool.Domain.TranslationCase", null)
@@ -1153,8 +1319,7 @@ namespace BashkirSchool.Infrastructure.Migrations
                     b.HasOne("BashkirSchool.Domain.ResolutionRevision", null)
                         .WithMany()
                         .HasForeignKey("ResolutionId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("BashkirSchool.Domain.ExerciseAttempt", b =>
@@ -1236,6 +1401,15 @@ namespace BashkirSchool.Infrastructure.Migrations
                     b.HasOne("BashkirSchool.Domain.ReviewAssignment", null)
                         .WithMany()
                         .HasForeignKey("AssignmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BashkirSchool.Domain.SentenceAudio", b =>
+                {
+                    b.HasOne("BashkirSchool.Domain.Fragment", null)
+                        .WithMany()
+                        .HasForeignKey("FragmentId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

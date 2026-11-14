@@ -36,6 +36,7 @@ public sealed class CoreDbContext(DbContextOptions<CoreDbContext> options) : Ide
     public DbSet<School> Schools => Set<School>();
     public DbSet<StudyClass> Classes => Set<StudyClass>();
     public DbSet<Enrollment> Enrollments => Set<Enrollment>();
+    public DbSet<ClassInvitation> ClassInvitations => Set<ClassInvitation>();
     public DbSet<Participant> Participants => Set<Participant>();
     public DbSet<AccessAssignment> Access => Set<AccessAssignment>();
     public DbSet<ProfilePermission> Permissions => Set<ProfilePermission>();
@@ -53,6 +54,20 @@ public sealed class CoreDbContext(DbContextOptions<CoreDbContext> options) : Ide
         b.Entity<DailyLesson>().HasOne<Participant>().WithMany().HasForeignKey(x => x.ParticipantId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<Exercise>().HasOne<DailyLesson>().WithMany().HasForeignKey(x => x.LessonId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<Exercise>().HasOne<ResolutionRevision>().WithMany().HasForeignKey(x => x.ResolutionId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<Exercise>().Property(x => x.Kind).HasMaxLength(100).HasDefaultValue("translation-text");
+        b.Entity<Exercise>().Property(x => x.LanguagePair).HasMaxLength(7).HasDefaultValue("ba-ru");
+        b.Entity<Exercise>().Property(x => x.PromptJson).HasDefaultValue("{}");
+        b.Entity<Exercise>().Property(x => x.AnswerKeyJson).HasDefaultValue("{}");
+        b.Entity<Exercise>().Property(x => x.SchemaVersion).HasDefaultValue(1);
+        b.Entity<Exercise>().HasIndex(x => new { x.LessonId, x.Kind, x.CaseId });
+        b.Entity<VocabularyEntry>().Property(x => x.LanguagePair).HasMaxLength(7);
+        b.Entity<VocabularyEntry>().Property(x => x.Word).HasMaxLength(200);
+        b.Entity<VocabularyEntry>().Property(x => x.Translation).HasMaxLength(200);
+        b.Entity<VocabularyEntry>().HasIndex(x => new { x.LanguagePair, x.Word, x.Translation }).IsUnique();
+        b.Entity<SentenceAudio>().HasOne<Fragment>().WithMany().HasForeignKey(x => x.FragmentId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<SentenceAudio>().Property(x => x.ObjectKey).HasMaxLength(200);
+        b.Entity<SentenceAudio>().HasIndex(x => new { x.FragmentId, x.ObjectKey }).IsUnique();
+        b.Entity<SentenceAudio>().HasIndex(x => x.ObjectKey);
         b.Entity<ExerciseAttempt>().HasIndex(x => x.ExerciseId).IsUnique();
         b.Entity<ExerciseAttempt>().HasOne<Exercise>().WithOne().HasForeignKey<ExerciseAttempt>(x => x.ExerciseId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<RefreshCredential>().HasKey(x => x.Hash);
@@ -83,6 +98,9 @@ public sealed class CoreDbContext(DbContextOptions<CoreDbContext> options) : Ide
         b.Entity<ReviewAssignment>().HasOne<TranslationVariant>().WithMany()
             .HasForeignKey(x => new { x.CaseId, x.ShownVariantId }).HasPrincipalKey(x => new { x.CaseId, x.Id }).OnDelete(DeleteBehavior.Restrict);
         b.Entity<ReviewAssignment>().HasOne<Participant>().WithMany().HasForeignKey(x => x.ParticipantId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<ReviewAssignment>().Ignore(x => x.ShownVariants);
+        b.Entity<ReviewAssignment>().Property(x => x.Kind).HasMaxLength(100).HasDefaultValue("translation-confirm");
+        b.Entity<ReviewAssignment>().Property(x => x.ShownVariantsJson).HasDefaultValue("[]");
         b.Entity<ReviewAssignment>().HasOne<StudyClass>().WithMany().HasForeignKey(x => x.ClassId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<ReviewAssignment>().HasOne<School>().WithMany().HasForeignKey(x => x.SchoolId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<ReviewAssignment>().HasOne<DistributionPolicy>().WithMany().HasForeignKey(x => x.PolicyId).OnDelete(DeleteBehavior.Restrict);
@@ -97,6 +115,12 @@ public sealed class CoreDbContext(DbContextOptions<CoreDbContext> options) : Ide
         b.Entity<StudyClass>().HasOne<School>().WithMany().HasForeignKey(x => x.SchoolId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<StudyClass>().HasOne<Account>().WithMany().HasForeignKey(x => x.TeacherId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<Enrollment>().HasIndex(x => x.ParticipantId).IsUnique();
+        b.Entity<ClassInvitation>().HasIndex(x => new { x.ClassId, x.ParticipantId }).IsUnique().HasFilter("\"Status\" = 0");
+        b.Entity<ClassInvitation>().HasIndex(x => new { x.ParticipantId, x.CreatedAt });
+        b.Entity<ClassInvitation>().Property(x => x.Status).IsConcurrencyToken();
+        b.Entity<ClassInvitation>().HasOne<StudyClass>().WithMany().HasForeignKey(x => x.ClassId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<ClassInvitation>().HasOne<Account>().WithMany().HasForeignKey(x => x.TeacherId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<ClassInvitation>().HasOne<Participant>().WithMany().HasForeignKey(x => x.ParticipantId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<Enrollment>().HasOne<StudyClass>().WithMany().HasForeignKey(x => x.ClassId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<Enrollment>().HasOne<Participant>().WithMany().HasForeignKey(x => x.ParticipantId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<AccessAssignment>().HasOne<Account>().WithMany().HasForeignKey(x => x.SubjectId).OnDelete(DeleteBehavior.Restrict);

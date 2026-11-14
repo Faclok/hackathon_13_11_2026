@@ -7,7 +7,11 @@ namespace BashkirSchool.Infrastructure;
 public sealed class ReviewWorkflow(CoreDbContext db, IPermissionChecker permissions, TimeProvider clock) : IReviewWorkflow
 {
     public async Task<AssignmentResponse?> ReceiveAsync(Guid participant, CancellationToken ct)
+        => await ReceiveAsync(participant, "translation-confirm", ct);
+
+    public async Task<AssignmentResponse?> ReceiveAsync(Guid participant, string kind, CancellationToken ct)
     {
+        if (kind is not ("translation-confirm" or "translation-choice")) throw new DomainException("Unknown review kind.");
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
         // One small application's allocator serializes reservations; no external lock service is needed.
         if (db.Database.IsNpgsql()) await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(71830421)", ct);
@@ -46,7 +50,19 @@ public sealed class ReviewWorkflow(CoreDbContext db, IPermissionChecker permissi
         var shownVariant = variants.OrderBy(v => assignments.Count(a => a.CaseId == eligible.Case.Id && a.ShownVariantId == v.Id && (a.Completed || a.ExpiresAt > now)))
             .ThenBy(v => v.CreatedAt).ThenBy(v => v.Id).FirstOrDefault();
         if (shownVariant is null) return null;
+        Guid[] choices = [];
+        if (kind == "translation-choice")
+        {
+            var opinions = await (from r in db.Responses where r.CaseId == eligible.Case.Id && !r.Archived
+                                  join j in db.Judgments on r.Id equals j.ResponseId
+                                  select new Opinion(r.ParticipantId, j.VariantId, j.Kind, r.SubmittedAt, r.Id)).ToArrayAsync(ct);
+            var stats = ReviewStatisticsCalculator.Calculate(opinions, variants.Select(x => x.Id));
+            choices = variants.OrderByDescending(v => stats.Variants.Single(x => x.VariantId == v.Id).Supports)
+                .ThenBy(v => v.CreatedAt).ThenBy(v => v.Id).Take(4).Select(v => v.Id).ToArray();
+            shownVariant = variants.Single(v => v.Id == choices[0]);
+        }
         var issued = ReviewAssignment.Issue(participant, eligible.Case, group?.SchoolId, group?.ClassId, policy.Id, now, TimeSpan.FromMinutes(policy.AssignmentMinutes), shownVariant.Id);
+        if (kind == "translation-choice") issued.SetChoices(choices);
         db.Assignments.Add(issued);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
@@ -62,16 +78,21 @@ public sealed class ReviewWorkflow(CoreDbContext db, IPermissionChecker permissi
         var previous = await db.Responses.SingleOrDefaultAsync(x => x.AssignmentId == assignmentId, ct);
         if (previous is not null)
         {
-            if (previous.Action != request.Action || previous.Correction != request.Correction)
+            if (previous.Action != request.Action || previous.Correction != request.Correction || previous.SelectedVariantId != request.SelectedVariantId)
                 throw new ConflictException("An assignment cannot be resubmitted with a different answer.");
             return new(previous.Id, previous.Archived);
         }
         var translationCase = await db.Cases.SingleAsync(x => x.Id == assignment.CaseId, ct);
         var shown = await db.Variants.SingleAsync(x => x.Id == assignment.ShownVariantId, ct);
+        if (request.SelectedVariantId.HasValue && (request.Action != ReviewAction.Confirm || !assignment.ShownVariants.Contains(request.SelectedVariantId.Value)))
+            throw new DomainException("Select one of the issued variants, without a custom correction.");
+        if (assignment.Kind == "translation-choice" && request.Action == ReviewAction.Confirm && !request.SelectedVariantId.HasValue)
+            throw new DomainException("selectedVariantId is required for translation-choice.");
         if (request.Action == ReviewAction.Correct && request.Correction == shown.Text)
             throw new DomainException("Correction must differ from the shown text.");
         var profile = await db.Participants.SingleAsync(x => x.Id == participant, ct);
         var response = ReviewResponse.Submit(assignment, participant, request.Action, request.Correction, profile.Trust, clock.GetUtcNow(), translationCase.ExpertClosed);
+        if (request.SelectedVariantId.HasValue) response.Select(assignment, request.SelectedVariantId.Value);
         Guid? correctionId = null;
         if (request.Action == ReviewAction.Correct)
         {
@@ -116,6 +137,9 @@ public sealed class ReviewWorkflow(CoreDbContext db, IPermissionChecker permissi
         var translationCase = await db.Cases.AsNoTracking().SingleAsync(x => x.Id == assignment.CaseId, ct);
         var fragment = await db.Fragments.AsNoTracking().SingleAsync(x => x.Id == translationCase.FragmentId, ct);
         var variant = await db.Variants.AsNoTracking().SingleAsync(x => x.Id == assignment.ShownVariantId, ct);
-        return new(assignment.Id, assignment.CaseId, variant.Id, fragment.Text, variant.Text, assignment.ExpiresAt);
+        var ids = assignment.ShownVariants;
+        var options = await db.Variants.Where(x => x.CaseId == assignment.CaseId && ids.Contains(x.Id)).ToArrayAsync(ct);
+        return new(assignment.Id, assignment.CaseId, variant.Id, fragment.Text, variant.Text, assignment.ExpiresAt)
+        { Kind = assignment.Kind, Options = ids.Select(id => new ReviewOptionResponse(id, options.Single(x => x.Id == id).Text)).ToArray() };
     }
 }

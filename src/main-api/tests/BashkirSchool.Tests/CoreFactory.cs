@@ -12,6 +12,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 
 namespace BashkirSchool.Tests;
 
@@ -21,7 +22,7 @@ public sealed class ManualClock : TimeProvider
     public override DateTimeOffset GetUtcNow() => Now;
 }
 
-public sealed class CoreFactory(int registrationLimit = 10) : WebApplicationFactory<Program>
+public sealed class CoreFactory(int registrationLimit = 10, string? telegramKey = null) : WebApplicationFactory<Program>
 {
     public const string Password = "School.Test.Password123!";
     private readonly SqliteConnection connection = new("Data Source=:memory:");
@@ -32,6 +33,8 @@ public sealed class CoreFactory(int registrationLimit = 10) : WebApplicationFact
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
+        builder.ConfigureLogging(logging => logging.ClearProviders());
+        if (telegramKey is not null) builder.UseSetting("Telegram:InternalKey", telegramKey);
         builder.UseSetting("Database:InitializeOnStartup", "false");
         builder.UseSetting("Processing:BackgroundEnabled", "false");
         builder.UseSetting("Registration:PermitLimit", registrationLimit.ToString());

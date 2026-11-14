@@ -1,0 +1,40 @@
+@baseUrl = http://localhost:5105
+@teacherToken = replace-with-teacher-access-token
+@studentToken = replace-with-student-access-token
+@classId = 00000000-0000-0000-0000-000000000001
+@invitationId = 00000000-0000-0000-0000-000000000002
+
+### Existing public self-registration (then sign in)
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{"username":"new-student","password":"Student.Password123!"}
+
+### Teacher invites an existing independent participant by exact login
+POST {{baseUrl}}/api/classes/{{classId}}/invitations
+Authorization: Bearer {{teacherToken}}
+Content-Type: application/json
+
+{"username":"new-student"}
+
+### Teacher reads invitations and decisions for their own class
+GET {{baseUrl}}/api/classes/{{classId}}/invitations?offset=0&limit=50
+Authorization: Bearer {{teacherToken}}
+
+### Student reads their invitations
+GET {{baseUrl}}/api/me/class-invitations?offset=0&limit=50
+Authorization: Bearer {{studentToken}}
+
+### Student accepts (use accept:false to decline)
+POST {{baseUrl}}/api/me/class-invitations/{{invitationId}}/response
+Authorization: Bearer {{studentToken}}
+Content-Type: application/json
+
+{"accept":true}
+
+### Nonexistent or another student's invitation returns 404
+POST {{baseUrl}}/api/me/class-invitations/00000000-0000-0000-0000-000000000000/response
+Authorization: Bearer {{studentToken}}
+Content-Type: application/json
+
+{"accept":true}

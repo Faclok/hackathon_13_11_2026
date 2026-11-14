@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace BashkirSchool.Domain;
 
 public enum ReviewAction { Confirm, Correct, Skip }
@@ -10,6 +12,9 @@ public sealed class ReviewAssignment
     public Guid ParticipantId { get; private set; }
     public Guid CaseId { get; private set; }
     public Guid ShownVariantId { get; private set; }
+    public string Kind { get; private set; } = "translation-confirm";
+    public string ShownVariantsJson { get; private set; } = "[]";
+    public Guid[] ShownVariants => ShownVariantsJson == "[]" ? [ShownVariantId] : JsonSerializer.Deserialize<Guid[]>(ShownVariantsJson)!;
     public Guid? SchoolId { get; private set; }
     public Guid? ClassId { get; private set; }
     public Guid PolicyId { get; private set; }
@@ -36,6 +41,15 @@ public sealed class ReviewAssignment
         if (now >= ExpiresAt) throw new DomainException("Assignment has expired.");
         Completed = true;
     }
+
+    public void SetChoices(IEnumerable<Guid> variants)
+    {
+        var ids = variants.ToArray();
+        if (Completed || ids.Length is < 1 or > 4 || ids.Distinct().Count() != ids.Length || ids[0] != ShownVariantId)
+            throw new DomainException("A choice assignment must contain one to four distinct shown variants.");
+        Kind = "translation-choice";
+        ShownVariantsJson = JsonSerializer.Serialize(ids);
+    }
 }
 
 public sealed class ReviewResponse
@@ -47,6 +61,7 @@ public sealed class ReviewResponse
     public Guid CaseId { get; private set; }
     public ReviewAction Action { get; private set; }
     public string? Correction { get; private set; }
+    public Guid? SelectedVariantId { get; private set; }
     public decimal TrustAtSubmission { get; private set; }
     public DateTimeOffset SubmittedAt { get; private set; }
     public bool Archived { get; private set; }
@@ -65,12 +80,19 @@ public sealed class ReviewResponse
 
     public IReadOnlyList<VariantJudgment> Judgments(Guid shownVariantId, Guid? correctionVariantId) => Action switch
     {
-        ReviewAction.Confirm => [VariantJudgment.Create(this, shownVariantId, JudgmentKind.Support)],
+        ReviewAction.Confirm => [VariantJudgment.Create(this, SelectedVariantId ?? shownVariantId, JudgmentKind.Support)],
         ReviewAction.Correct when correctionVariantId.HasValue && correctionVariantId != shownVariantId =>
             [VariantJudgment.Create(this, correctionVariantId.Value, JudgmentKind.Support)],
         ReviewAction.Skip => [],
         _ => throw new DomainException("Correction must differ from the shown text.")
     };
+
+    public void Select(ReviewAssignment assignment, Guid variantId)
+    {
+        if (Action != ReviewAction.Confirm || !assignment.ShownVariants.Contains(variantId))
+            throw new DomainException("Select one of the issued variants.");
+        SelectedVariantId = variantId;
+    }
 }
 
 public sealed class VariantJudgment

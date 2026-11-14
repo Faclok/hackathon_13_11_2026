@@ -24,7 +24,7 @@ public sealed class WorkflowTests
         Assert.Equal(delivery.VariantId, assignment.VariantId);
         Assert.Equal("Һаумы", assignment.Original);
         Assert.Equal("Hello", assignment.Translation);
-        Assert.Equal(assignment, await Post<AssignmentResponse>(student.Client, "/api/reviews/next", new { }));
+        Assert.Equivalent(assignment, await Post<AssignmentResponse>(student.Client, "/api/reviews/next", new { }));
         var receipt = await Post<ReviewReceipt>(student.Client, $"/api/reviews/{assignment.Id}/response", new SubmitReviewRequest(ReviewAction.Confirm));
         Assert.Equal(receipt, await Post<ReviewReceipt>(student.Client, $"/api/reviews/{assignment.Id}/response", new SubmitReviewRequest(ReviewAction.Confirm)));
         var stats = await student.Client.GetFromJsonAsync<ReviewStatistics>($"/api/cases/{delivery.CaseId}/statistics");
