@@ -1,8 +1,79 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { decorations, demoUser } from "../mocks/data";
-import type { BossAnswer, DailyAnswer, IssueReport, User } from "../types";
+import { demoUser } from "../mocks/data";
+import {
+  decorationCatalog,
+  defaultDecorationIds,
+  rewardCases,
+  rollCaseDrop,
+  KEY_PRICE,
+  DUPLICATE_COMPENSATION,
+} from "../mocks/customization";
+import type {
+  BossAnswer,
+  CaseOpening,
+  DailyAnswer,
+  IssueReport,
+  User,
+} from "../types";
 import { schoolDay as today, dayNumber } from "../utils/calendar";
+
+function withCaseInventory(user: User): User {
+  let importedIds: string[] = [];
+  let importedEquipment: Partial<User> = {};
+  try {
+    const standalone = JSON.parse(
+      localStorage.getItem("profile-customization-v2") ?? "null",
+    );
+    if (standalone && Array.isArray(standalone.unlocked)) {
+      importedIds = standalone.unlocked.filter(
+        (id: unknown): id is string =>
+          typeof id === "string" &&
+          decorationCatalog.some((item) => item.id === id),
+      );
+      const slots = {
+        hat: "hatId",
+        frame: "frameId",
+        bg: "backgroundId",
+        pet: "petId",
+      } as const;
+      for (const [slot, field] of Object.entries(slots)) {
+        const item = decorationCatalog.find(
+          (item) => item.id === standalone.equipped?.[slot],
+        );
+        if (
+          item &&
+          item.type === (slot === "bg" ? "background" : slot) &&
+          !item.isDefault &&
+          importedIds.includes(item.id)
+        )
+          importedEquipment[field] = item.id;
+      }
+    }
+  } catch {
+    /* An unreadable standalone save does not affect the main profile. */
+  }
+  return {
+    ...user,
+    ...importedEquipment,
+    caseKeys:
+      Number.isInteger(user.caseKeys) && user.caseKeys >= 0 ? user.caseKeys : 0,
+    equippedItemIds:
+      user.equippedItemIds ??
+      user.ownedDecorationIds.filter((id) =>
+        decorationCatalog.some(
+          (item) => item.id === id && item.type === "item",
+        ),
+      ),
+    ownedDecorationIds: [
+      ...new Set([
+        ...user.ownedDecorationIds,
+        ...defaultDecorationIds,
+        ...importedIds,
+      ]),
+    ],
+  };
+}
 interface UserState {
   user: User | null;
   lastActiveDay: string | null;
@@ -10,17 +81,29 @@ interface UserState {
   login: (nick: string) => void;
   logout: () => void;
   reward: (xp: number, coins: number, tasks: number, trophy?: string) => void;
-  buyDecoration: (id: string) => boolean;
+  caseOpening: CaseOpening | null;
+  caseHistory: CaseOpening[];
+  buyCaseKeys: (quantity: number) => boolean;
+  openCase: (caseId: string) => CaseOpening | null;
+  dismissCaseOpening: () => void;
   equipDecoration: (id: string) => void;
+  unequipDecoration: (id: string) => void;
   reportIssue: (exerciseId: string, text: string) => void;
 }
 export const useUserStore = create<UserState>()(
   persist(
     (set, get) => ({
-      user: demoUser,
+      user: withCaseInventory(demoUser),
       lastActiveDay: null,
       reports: [],
-      login: (nick) => set({ user: { ...demoUser, nick: nick.trim() } }),
+      caseOpening: null,
+      caseHistory: [],
+      login: (nick) =>
+        set({
+          user: { ...demoUser, nick: nick.trim() },
+          caseOpening: null,
+          caseHistory: [],
+        }),
       logout: () => set({ user: null }),
       reward: (xp, coins, tasks, trophy) =>
         set((state) => {
@@ -49,34 +132,60 @@ export const useUserStore = create<UserState>()(
             },
           };
         }),
-      buyDecoration: (id) => {
+      buyCaseKeys: (quantity) => {
         const { user } = get();
-        const item = decorations.find((d) => d.id === id);
         if (
           !user ||
-          !item ||
-          item.source !== "shop" ||
-          user.coins < item.price ||
-          user.ownedDecorationIds.includes(id)
+          !Number.isInteger(quantity) ||
+          quantity < 1 ||
+          quantity > 100 ||
+          user.coins < quantity * KEY_PRICE
         )
           return false;
         set({
           user: {
             ...user,
-            coins: user.coins - item.price,
-            ownedDecorationIds: [...user.ownedDecorationIds, id],
-            ...(item.type === "background"
-              ? { backgroundId: id }
-              : item.type === "frame"
-                ? { frameId: id }
-                : {}),
+            coins: user.coins - quantity * KEY_PRICE,
+            caseKeys: user.caseKeys + quantity,
           },
         });
         return true;
       },
+      openCase: (caseId) => {
+        const { user, caseOpening, caseHistory } = get();
+        const caseItem = rewardCases.find((item) => item.id === caseId);
+        if (!user || user.caseKeys < 1 || caseOpening || !caseItem) return null;
+        const winner = rollCaseDrop(caseItem);
+        const duplicate = user.ownedDecorationIds.includes(winner.id);
+        const opening: CaseOpening = {
+          id:
+            globalThis.crypto?.randomUUID?.() ??
+            `case-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          caseId,
+          decorationId: winner.id,
+          duplicate,
+          compensation: duplicate ? DUPLICATE_COMPENSATION : 0,
+          openedAt: new Date().toISOString(),
+        };
+        // Award and key consumption are one persisted update; animation never changes the balance.
+        set({
+          user: {
+            ...user,
+            caseKeys: user.caseKeys - 1,
+            coins: user.coins + opening.compensation,
+            ownedDecorationIds: duplicate
+              ? user.ownedDecorationIds
+              : [...user.ownedDecorationIds, winner.id],
+          },
+          caseOpening: opening,
+          caseHistory: [opening, ...caseHistory].slice(0, 50),
+        });
+        return opening;
+      },
+      dismissCaseOpening: () => set({ caseOpening: null }),
       equipDecoration: (id) =>
         set(({ user }) => {
-          const item = decorations.find((d) => d.id === id);
+          const item = decorationCatalog.find((d) => d.id === id);
           if (!user || !item || !user.ownedDecorationIds.includes(id))
             return {};
           return {
@@ -85,8 +194,40 @@ export const useUserStore = create<UserState>()(
               ...(item.type === "background"
                 ? { backgroundId: id }
                 : item.type === "frame"
-                  ? { frameId: id }
-                  : {}),
+                  ? { frameId: item.isDefault ? undefined : id }
+                  : item.type === "hat"
+                    ? { hatId: item.isDefault ? undefined : id }
+                    : item.type === "pet"
+                      ? { petId: item.isDefault ? undefined : id }
+                      : {
+                          equippedItemIds: [
+                            ...new Set([...user.equippedItemIds, id]),
+                          ],
+                        }),
+            },
+          };
+        }),
+      unequipDecoration: (id) =>
+        set(({ user }) => {
+          const item = decorationCatalog.find((item) => item.id === id);
+          if (!user || !item || !user.ownedDecorationIds.includes(id))
+            return {};
+          return {
+            user: {
+              ...user,
+              ...(item.type === "frame" && user.frameId === id
+                ? { frameId: undefined }
+                : item.type === "hat" && user.hatId === id
+                  ? { hatId: undefined }
+                  : item.type === "pet" && user.petId === id
+                    ? { petId: undefined }
+                    : item.type === "item"
+                      ? {
+                          equippedItemIds: user.equippedItemIds.filter(
+                            (itemId) => itemId !== id,
+                          ),
+                        }
+                      : {}),
             },
           };
         }),
@@ -100,15 +241,24 @@ export const useUserStore = create<UserState>()(
     }),
     {
       name: "bashkir-school-user-v1",
-      version: 1,
-      migrate: (stored) => {
+      version: 2,
+      migrate: (stored, version) => {
         const previous = stored as UserState;
         if (!previous.user) return previous;
+        if (version >= 1)
+          return {
+            ...previous,
+            user: withCaseInventory(previous.user),
+            caseOpening: null,
+            caseHistory: [],
+          };
         const user = previous.user;
         const xp = Math.max(user.xp, demoUser.xp);
         return {
           ...previous,
-          user: {
+          caseOpening: null,
+          caseHistory: [],
+          user: withCaseInventory({
             ...demoUser,
             ...user,
             nick: "Денис",
@@ -128,15 +278,13 @@ export const useUserStore = create<UserState>()(
             ],
             backgroundId: user.backgroundId ?? demoUser.backgroundId,
             frameId: user.frameId ?? demoUser.frameId,
-          },
+          }),
         };
       },
     },
   ),
 );
 interface ProgressState {
-  dailyPractice: { date: string; answers: { exerciseId: string; correct: boolean }[] } | null;
-  answerDailyExercise: (exerciseId: string, correct: boolean) => void;
   completedLessons: string[];
   dailyAnswers: (DailyAnswer & { date: string })[];
   bossAnswers: BossAnswer[];
@@ -148,12 +296,6 @@ interface ProgressState {
 export const useProgressStore = create<ProgressState>()(
   persist(
     (set, get) => ({
-      dailyPractice: null,
-      answerDailyExercise: (exerciseId, correct) => {
-        const answers = get().dailyPractice?.date === today() ? get().dailyPractice!.answers : [];
-        if (answers.some((a) => a.exerciseId === exerciseId)) return;
-        set({ dailyPractice: { date: today(), answers: [...answers, { exerciseId, correct }] } });
-      },
       completedLessons: [],
       dailyAnswers: [],
       bossAnswers: [],
@@ -171,7 +313,7 @@ export const useProgressStore = create<ProgressState>()(
       },
       saveBoss: (bossAnswers) => set({ bossAnswers }),
       reset: () =>
-        set({ completedLessons: [], dailyAnswers: [], bossAnswers: [], dailyPractice: null }),
+        set({ completedLessons: [], dailyAnswers: [], bossAnswers: [] }),
     }),
     { name: "bashkir-school-progress-v1" },
   ),

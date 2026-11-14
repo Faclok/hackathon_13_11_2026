@@ -1033,6 +1033,13 @@ namespace BashkirSchool.Infrastructure.Migrations
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("boolean");
 
+                    b.Property<int>("ExpertRequiredParticipants")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("ExpertSupportThreshold")
+                        .HasPrecision(18, 12)
+                        .HasColumnType("numeric(18,12)");
+
                     b.Property<bool>("LockoutEnabled")
                         .HasColumnType("boolean");
 

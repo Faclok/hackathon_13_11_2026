@@ -12,6 +12,10 @@ export interface User {
   ownedDecorationIds: string[];
   backgroundId?: string;
   frameId?: string;
+  hatId?: string;
+  petId?: string;
+  caseKeys: number;
+  equippedItemIds: string[];
   langPair: "ba-ru";
 }
 export interface DailyFragment {
@@ -62,12 +66,31 @@ export interface BossAnswer {
 }
 export interface Decoration {
   id: string;
-  type: "background" | "frame" | "item";
+  type: "background" | "frame" | "item" | "hat" | "pet";
   title: string;
   description: string;
   previewUrl: string;
   price: number;
   source: "shop" | "wheel";
+  rarity?: "common" | "rare" | "epic" | "legendary";
+  isDefault?: boolean;
+  background?: string;
+  petName?: string;
+}
+export interface RewardCase {
+  id: string;
+  type: "hat" | "frame" | "background" | "pet";
+  title: string;
+  description: string;
+  imageUrl: string;
+}
+export interface CaseOpening {
+  id: string;
+  caseId: string;
+  decorationId: string;
+  duplicate: boolean;
+  compensation: number;
+  openedAt: string;
 }
 export interface Trophy {
   id: string;

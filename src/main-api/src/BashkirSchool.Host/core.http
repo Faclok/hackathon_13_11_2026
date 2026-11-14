@@ -94,7 +94,7 @@ Content-Type: application/json
 
 {"username":"producer1","profile":"producer"}
 
-### Atomic intake item. Repeat the same key/body for the same result.
+### LMS domain only: atomic unverified intake. Repeat the same key/body for the same result.
 POST {{base}}/api/deliveries
 Authorization: Bearer {{producerToken}}
 Idempotency-Key: initial-fragment-1
@@ -107,6 +107,31 @@ Content-Type: application/json
   "translation":"Здравствуйте!",
   "source":{"document_id":"book-1","title":"Учебник","chapter":"1"}
 }
+
+### Expert domain only: verified dataset row. The source names no individual expert.
+POST {{base}}/api/expert/imports
+Authorization: Bearer {{expertToken}}
+Content-Type: application/json
+
+{"fragment_id":"phr-00001","text_ba":"Һаумыһығыҙ!","lang_pair":"ba-ru","translation":"Здравствуйте!","expertVerified":true,"source":{"document_id":"phrasebook","title":"Разговорник"}}
+
+### Expert domain only: untranslated source fragment.
+POST {{base}}/api/expert/imports
+Authorization: Bearer {{expertToken}}
+Content-Type: application/json
+
+{"fragment_id":"periodical-00001","text_ba":"Һаумыһығыҙ!","lang_pair":"ba-ru","translation":null,"expertVerified":false,"source":{"document_id":"periodical"}}
+
+### Expert domain: find source fragments still needing a translation.
+GET {{base}}/api/expert/untranslated?offset=0&limit=100
+Authorization: Bearer {{expertToken}}
+
+### An expert supplies the verified text for a source-only fragment.
+POST {{base}}/api/expert/fragments/{{fragmentId}}/translation
+Authorization: Bearer {{expertToken}}
+Content-Type: application/json
+
+{"translation":"Здравствуйте!"}
 
 ### Administrator creates another version. Empty body uses initial settings.
 GET {{base}}/api/policies/distribution

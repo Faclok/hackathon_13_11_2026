@@ -5,6 +5,24 @@ namespace BashkirSchool.Tests;
 public sealed class ConsensusTests
 {
     [Fact]
+    public void DefaultPolicyRequiresThreeHundredIndependentViewsAndAnActualMajority()
+    {
+        var a = TranslationVariant.Create(Guid.NewGuid(), "A", true);
+        var b = TranslationVariant.Create(a.CaseId, "B", false);
+        var schools = Enumerable.Range(0, 3).Select(_ => Guid.NewGuid()).ToArray();
+        var classes = Enumerable.Range(0, 3).Select(_ => Guid.NewGuid()).ToArray();
+        var votes = Enumerable.Range(0, 300).Select(i => new ReviewObservation(Guid.NewGuid(), i < 153 ? a.Id : b.Id,
+            schools[i % 3], classes[i % 3], DateTimeOffset.UtcNow, Guid.NewGuid(), a.Id)).ToArray();
+        var policy = new DistributionPolicy();
+        Assert.Equal(300, policy.RequiredParticipants);
+        Assert.Equal(.51m, policy.SupportThreshold);
+        Assert.True(ConsensusCalculator.Calculate(votes, [a, b], policy)[0].Qualified);
+        Assert.False(ConsensusCalculator.Calculate(votes.Take(299), [a, b], policy)[0].Qualified);
+        var tied = votes.Select((vote, index) => index is >= 150 and < 153 ? vote with { VariantId = b.Id } : vote);
+        Assert.False(ConsensusCalculator.Calculate(tied, [a, b], policy)[0].Qualified);
+    }
+
+    [Fact]
     public void ExactNAndEightyPercentAreInclusiveAndInsufficientCandidateCannotInheritSample()
     {
         var a = TranslationVariant.Create(Guid.NewGuid(), "A", true);

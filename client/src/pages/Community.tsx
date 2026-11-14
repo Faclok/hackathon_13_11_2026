@@ -1,23 +1,16 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { getDecorations, getLeaderboard } from "../api";
+import { getLeaderboard } from "../api";
 import { trophies } from "../mocks/data";
 import { useProgressStore, useUserStore } from "../store";
 import type { Decoration } from "../types";
 import { Mascot, SchoolLogo } from "../components/Illustrations";
 import {
   Avatar,
-  DecorationPreview,
   FloatingItems,
   ProfileBackground,
 } from "../components/Personalization";
-import {
-  Icon,
-  Modal,
-  PageTitle,
-  ProgressBar,
-  useToast,
-} from "../components/ui";
+import { Icon, Modal, PageTitle, ProgressBar } from "../components/ui";
 
 export function Login() {
   const [nick, setNick] = useState("");
@@ -223,7 +216,7 @@ export function Profile() {
             <span>{user.xp % 100} / 100 XP</span>
           </div>
           <ProgressBar value={user.xp % 100} max={100} />
-          <Link to="/shop" className="customize-link">
+          <Link to="/inventory" className="customize-link">
             Изменить оформление <Icon name="arrow" size={13} />
           </Link>
         </div>
@@ -316,8 +309,8 @@ export function Profile() {
           ))}
         </div>
       </section>
-      <Link className="button button-soft full-width" to="/shop">
-        В магазин украшений <Icon name="bag" size={18} />
+      <Link className="button button-soft full-width" to="/inventory">
+        Открыть инвентарь <Icon name="bag" size={18} />
       </Link>
       <button
         className="logout-button"
@@ -332,156 +325,6 @@ export function Profile() {
   );
 }
 
-export function Shop() {
-  const user = useUserStore((s) => s.user)!;
-  const [items, setItems] = useState<Decoration[]>([]);
-  const [tab, setTab] = useState<Decoration["type"]>("background");
-  const [info, setInfo] = useState<Decoration | null>(null);
-  const toast = useToast();
-  const buy = useUserStore((s) => s.buyDecoration);
-  const equip = useUserStore((s) => s.equipDecoration);
-  useEffect(() => {
-    getDecorations().then(setItems);
-  }, []);
-  return (
-    <>
-      <PageTitle subtitle="Немного башкирского характера">
-        Магазин украшений
-      </PageTitle>
-      <div className="shop-balance">
-        Твой баланс <strong>🪙 {user.coins}</strong>
-      </div>
-      <section
-        className="shop-preview personal-card"
-        aria-label="Текущее оформление"
-        data-background={user.backgroundId}
-      >
-        <ProfileBackground backgroundId={user.backgroundId} />
-        <FloatingItems user={user} />
-        <Avatar user={user} />
-        <div className="personal-content">
-          <strong>{user.nick}</strong>
-          <p>Твоё оформление</p>
-          <Link to="/leaderboard">
-            Посмотреть в рейтинге <Icon name="arrow" size={12} />
-          </Link>
-        </div>
-      </section>
-      <div className="tabs">
-        {(
-          [
-            ["background", "Фоны"],
-            ["frame", "Рамки"],
-            ["item", "Предметы"],
-          ] as const
-        ).map(([value, label]) => (
-          <button
-            key={value}
-            className={tab === value ? "active" : ""}
-            aria-pressed={tab === value}
-            onClick={() => setTab(value)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      <div className="shop-grid">
-        {items
-          .filter((item) => item.type === tab)
-          .map((item) => {
-            const owned = user.ownedDecorationIds.includes(item.id);
-            const wheel = item.source === "wheel";
-            const equipped =
-              user.backgroundId === item.id || user.frameId === item.id;
-            return (
-              <article
-                className="surface decoration-card"
-                key={item.id}
-                data-decoration-id={item.id}
-              >
-                <DecorationPreview item={item} user={user} />
-                <h2>{item.title}</h2>
-                <button className="item-info" onClick={() => setInfo(item)}>
-                  О предмете <span>↗</span>
-                </button>
-                <strong className="item-price">🪙 {item.price}</strong>
-                <button
-                  className="button button-primary full-width"
-                  disabled={
-                    wheel ||
-                    equipped ||
-                    (!owned && user.coins < item.price) ||
-                    (owned && item.type === "item")
-                  }
-                  title={
-                    !owned && user.coins < item.price
-                      ? "Недостаточно монет"
-                      : undefined
-                  }
-                  onClick={() => {
-                    if (owned) {
-                      equip(item.id);
-                      toast("Украшение надето");
-                    } else if (buy(item.id))
-                      toast(
-                        item.type === "item"
-                          ? `«${item.title}» появился на фоне`
-                          : `«${item.title}» куплен и применён`,
-                      );
-                  }}
-                >
-                  {wheel
-                    ? "Только в барабане"
-                    : equipped
-                      ? "Надето ✓"
-                      : owned
-                        ? item.type === "item"
-                          ? "Куплено ✓"
-                          : "Надеть"
-                        : "Купить"}
-                </button>
-              </article>
-            );
-          })}
-      </div>
-      {info && (
-        <Modal title={info.title} onClose={() => setInfo(null)}>
-          <div className="item-detail-preview">
-            <DecorationPreview item={info} user={user} />
-          </div>
-          <p>{info.description}</p>
-          <button
-            className="button button-soft full-width"
-            onClick={() => setInfo(null)}
-          >
-            Понятно
-          </button>
-        </Modal>
-      )}
-    </>
-  );
-}
-
-export function Wheel() {
-  return (
-    <>
-      <PageTitle>Барабан удачи</PageTitle>
-      <section className="surface intro-card">
-        <div className="wheel-illustration">
-          <Icon name="wheel" size={96} />
-        </div>
-        <span className="rank-badge">Скоро</span>
-        <h2>Удача уже в пути</h2>
-        <p>Здесь можно будет выиграть особые украшения для своего профиля.</p>
-        {/* Компонент другого участника: interface WheelProps { prizes: Prize[]; onSpinEnd: (p: Prize) => void } */}
-        <div id="wheel-slot" />
-        <Link to="/" className="button button-primary full-width">
-          На главную <Icon name="arrow" size={18} />
-        </Link>
-      </section>
-    </>
-  );
-}
 export function NotFound() {
   return (
     <section className="surface intro-card">

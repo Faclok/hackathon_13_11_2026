@@ -7,7 +7,7 @@ import { Icon } from "./ui";
 const navigation = [
   ["/", "home", "Главная"],
   ["/learn", "book", "Учить"],
-  ["/daily", "swords", "Задания"],
+  ["/boss", "swords", "Босс"],
   ["/leaderboard", "trophy", "Рейтинг"],
   ["/profile", "user", "Профиль"],
 ];

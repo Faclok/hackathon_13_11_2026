@@ -1,6 +1,7 @@
 import type { Decoration, User } from "../types";
-import { decorations } from "../mocks/data";
+import { decorationCatalog } from "../mocks/customization";
 import { Mascot, Ornament } from "./Illustrations";
+import { HatOverlay } from "./HatOverlay";
 import "../personalization.css";
 
 export function Avatar({
@@ -15,6 +16,7 @@ export function Avatar({
   return (
     <span
       className={`player-avatar ${framed && user.frameId ? `frame-${user.frameId}` : ""} ${className}`}
+      data-hat-id={user.hatId}
     >
       {user.avatarUrl ? (
         <img
@@ -25,16 +27,35 @@ export function Avatar({
       ) : (
         <Mascot />
       )}
+      {user.hatId && user.hatId !== "hat_none" && (
+        <span className="avatar-hat">
+          <HatOverlay id={user.hatId} />
+        </span>
+      )}
     </span>
   );
 }
 
 export function ProfileBackground({ backgroundId }: { backgroundId?: string }) {
-  const ornament = backgroundId?.startsWith("ornament");
-  const landscape = ["steppe", "yurt", "mountain"].includes(backgroundId ?? "");
+  const background = decorationCatalog.find(
+    (item) => item.id === backgroundId && item.type === "background",
+  );
+  const ornament =
+    backgroundId?.startsWith("ornament") || !!background?.background;
+  const landscape = [
+    "steppe",
+    "yurt",
+    "mountain",
+    "bg_ural_mountains",
+  ].includes(backgroundId ?? "");
   return (
     <div
-      className={`personal-background scenery-${backgroundId ?? "mint"}`}
+      className={`personal-background scenery-${backgroundId ?? "mint"} ${background?.background ? "custom-background" : ""}`}
+      style={
+        background?.background
+          ? { background: background.background }
+          : undefined
+      }
       aria-hidden="true"
     >
       {ornament && (
@@ -51,7 +72,8 @@ export function ProfileBackground({ backgroundId }: { backgroundId?: string }) {
           preserveAspectRatio="xMidYMax slice"
         >
           <circle cx="258" cy="48" r="24" fill="#f2d17c" opacity=".8" />
-          {backgroundId === "mountain" ? (
+          {backgroundId === "mountain" ||
+          backgroundId === "bg_ural_mountains" ? (
             <>
               <path d="m-30 210 95-137 70 87 62-130 140 180Z" fill="#aec8c0" />
               <path
@@ -65,7 +87,12 @@ export function ProfileBackground({ backgroundId }: { backgroundId?: string }) {
           )}
           <path
             d="M-10 188Q78 132 183 179t157-21v82H-10Z"
-            fill={backgroundId === "mountain" ? "#97b69c" : "#b4c589"}
+            fill={
+              backgroundId === "mountain" ||
+              backgroundId === "bg_ural_mountains"
+                ? "#97b69c"
+                : "#b4c589"
+            }
           />
           <path d="M-10 213Q115 180 330 204v36H-10Z" fill="#87aa79" />
           {backgroundId === "yurt" && (
@@ -106,10 +133,13 @@ export function FloatingItems({
   user: User;
   onSelect?: (item: Decoration) => void;
 }) {
-  const items = user.ownedDecorationIds
-    .map((id) => decorations.find((d) => d.id === id))
+  const items = (user.equippedItemIds ?? user.ownedDecorationIds)
+    .map((id) => decorationCatalog.find((d) => d.id === id))
     .filter((item): item is Decoration => item?.type === "item");
-  if (!items.length) return null;
+  const pet = decorationCatalog.find(
+    (item) => item.id === user.petId && item.type === "pet" && !item.isDefault,
+  );
+  if (!items.length && !pet) return null;
   return (
     <div className="floating-items" aria-label="Предметы на фоне">
       {items.map((item) =>
@@ -135,6 +165,23 @@ export function FloatingItems({
           </span>
         ),
       )}
+      {pet &&
+        (onSelect ? (
+          <button
+            className="equipped-pet"
+            aria-label={`О питомце: ${pet.title}`}
+            title={pet.title}
+            onClick={() => onSelect(pet)}
+          >
+            <span>{pet.previewUrl}</span>
+            <small>{pet.petName}</small>
+          </button>
+        ) : (
+          <span className="equipped-pet" role="img" aria-label={pet.title}>
+            <span>{pet.previewUrl}</span>
+            <small>{pet.petName}</small>
+          </span>
+        ))}
     </div>
   );
 }
@@ -154,16 +201,33 @@ export function DecorationPreview({
       {item.type === "background" ? (
         <>
           <ProfileBackground backgroundId={item.id} />
-          <Avatar user={user} className="preview-avatar" framed={false} />
+          <Avatar
+            user={{ ...user, hatId: undefined }}
+            className="preview-avatar"
+            framed={false}
+          />
         </>
       ) : item.type === "frame" ? (
         <Avatar
-          user={{ ...user, frameId: item.id }}
+          user={{
+            ...user,
+            frameId: item.isDefault ? undefined : item.id,
+            hatId: undefined,
+          }}
           className="preview-avatar"
+        />
+      ) : item.type === "hat" ? (
+        <Avatar
+          user={{ ...user, hatId: item.isDefault ? undefined : item.id }}
+          className="preview-avatar"
+          framed={false}
         />
       ) : (
         <span className="item-preview-symbol" aria-hidden="true">
           {item.previewUrl}
+          {item.type === "pet" && item.petName && (
+            <small className="pet-preview-name">{item.petName}</small>
+          )}
         </span>
       )}
     </div>

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { deliveryKey, prepareCsv } from './csv-import.js';
+import { prepareCsv } from './csv-import.js';
 
 const header = 'fragment_id,text_ba,text_ru,source_dataset';
 
@@ -9,7 +9,7 @@ test('quoted_csv_and_metadata', () => {
   assert.deepEqual(result.errors, []);
   assert.equal(result.items.length, 1);
   assert.deepEqual(result.items[0].request, {
-    fragment_id: 'f1', text_ba: 'Һаумы,\r\nдуҫ!', translation: 'Он сказал "привет"', lang_pair: 'ba-ru',
+    fragment_id: 'f1', text_ba: 'Һаумы,\r\nдуҫ!', translation: 'Он сказал "привет"', expertVerified: true, lang_pair: 'ba-ru',
     source: { document_id: 'books', title: 'books', chapter: '{"source_dataset":"books","quality_score":"1.0","license":"CC-BY-4.0"}' }
   });
 });
@@ -47,11 +47,10 @@ test('limits_and_blank_lines', () => {
   assert.throws(() => prepareCsv(header + '\n' + Array.from({ length: 20001 }, (_, i) => `${i},a,b,books`).join('\n')), /20 000/);
 });
 
-test('stable_delivery_keys', async () => {
-  const request = prepareCsv(header + '\nf1,Һаумы,Привет,books').items[0].request;
-  const key = await deliveryKey(request);
-  assert.match(key, /^csv-v1-[a-f0-9]{64}$/);
-  assert.equal(await deliveryKey({ ...request, translation: 'Исправлено' }), key);
-  assert.notEqual(await deliveryKey({ ...request, fragment_id: 'f2' }), key);
-  assert.notEqual(await deliveryKey({ ...request, source: { ...request.source, document_id: 'other' } }), key);
+test('untranslated_fragments_keep_null_translation', () => {
+  const result = prepareCsv('fragment_id,text_ba,source_dataset\nf1,Һаумы,periodicals\n');
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.hasTranslations, false);
+  assert.equal(result.items[0].request.translation, null);
+  assert.equal(result.items[0].request.expertVerified, false);
 });

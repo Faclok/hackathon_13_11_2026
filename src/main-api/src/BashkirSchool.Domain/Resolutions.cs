@@ -38,6 +38,12 @@ public sealed class ResolutionRevision
             AcceptedJson = JsonSerializer.Serialize(valid), RejectedJson = JsonSerializer.Serialize(invalid),
             PolicyId = policyId, DecidedBy = actor, EvidenceJson = evidence, Comment = comment, CreatedAt = now };
     }
+
+    // A supplied dataset may attest expert verification without naming the individual expert.
+    public static ResolutionRevision ImportVerified(Guid caseId, Guid variantId, Guid policyId, string evidence, DateTimeOffset now) =>
+        new() { CaseId = caseId, Revision = 1, Kind = ResolutionKind.Expert, PrimaryVariantId = variantId,
+            AcceptedJson = JsonSerializer.Serialize(new[] { variantId }), PolicyId = policyId,
+            DecidedBy = null, EvidenceJson = evidence, Comment = "Проверено экспертом по данным источника", CreatedAt = now };
 }
 
 public sealed class TrustAssessment

@@ -11,6 +11,8 @@ public sealed class Account : IdentityUser<Guid>
     public bool Active { get; set; } = true;
     public long SessionVersion { get; set; }
     public bool SelfRegistered { get; set; }
+    public int ExpertRequiredParticipants { get; set; } = 300;
+    public decimal ExpertSupportThreshold { get; set; } = .8m;
 }
 
 public sealed class OutboxMessage

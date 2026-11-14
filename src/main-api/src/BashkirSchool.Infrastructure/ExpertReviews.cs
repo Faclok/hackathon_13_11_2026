@@ -5,14 +5,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BashkirSchool.Infrastructure;
 
-public sealed class ExpertReviews(CoreDbContext db, IPermissionChecker permissions, CaseEvidence evidence, TimeProvider clock)
+public sealed class ExpertReviews(CoreDbContext db, CaseEvidence evidence, TimeProvider clock)
 {
     public async Task<Guid> ProposeAsync(Guid actor, Guid caseId, ProposeTranslationRequest request, CancellationToken ct)
     {
         Guard.Text(request.Text, "text");
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
         await CaseWriteLock.Acquire(db, ct);
-        await Require(actor, "expert.translation.resolve", caseId, ct);
+        await RequireExpert(actor, ct);
         var c = await db.Cases.SingleOrDefaultAsync(x => x.Id == caseId, ct) ?? throw new MissingResourceException();
         if (c.ExpertClosed || c.Revision != request.ExpectedRevision) throw new ConflictException("Case has changed or is closed.");
         await EnsureNotClaimedByAnother(actor, caseId, ct);
@@ -26,7 +26,7 @@ public sealed class ExpertReviews(CoreDbContext db, IPermissionChecker permissio
 
     public async Task<IReadOnlyList<ResolutionResponse>> HistoryAsync(Guid actor, Guid caseId, CancellationToken ct)
     {
-        await Require(actor, "expert.case.read", caseId, ct);
+        await RequireExpert(actor, ct);
         return (await db.Resolutions.AsNoTracking().Where(x => x.CaseId == caseId).OrderBy(x => x.Revision).ToArrayAsync(ct)).Select(CaseEvidence.ToResponse).ToArray();
     }
     public async Task<IReadOnlyList<ExpertQueueItem>> QueueAsync(Guid actor, int offset, int limit, CancellationToken ct)
@@ -38,26 +38,28 @@ public sealed class ExpertReviews(CoreDbContext db, IPermissionChecker permissio
     private async Task<IReadOnlyList<ExpertQueueItem>> QueueCandidates(Guid actor, CancellationToken ct)
     {
         var cases = await AccessibleCases(actor, ct);
-        var policy = await CurrentPolicy(ct);
+        var preferences = await PreferencesAsync(actor, ct);
         var result = new List<ExpertQueueItem>();
         foreach (var c in cases)
         {
             var view = await evidence.ViewAsync(c, ct);
             var observations = view.Variants.Sum(x => x.Supports);
             var lead = view.Variants.Max(x => x.SupportRatio) ?? 0m;
-            if (!Eligible(c, observations, lead, policy) || await ActiveClaim(c.Id, ct) is not null) continue;
-            result.Add(new(c.Id, c.Revision, view.Original, true, observations, lead, c.CreatedAt));
+            var teacherRequested = await db.Audit.AnyAsync(x => x.TargetId == c.Id && x.Action == "lms.expert.requested", ct);
+            if (!Eligible(c, observations, lead, preferences, teacherRequested) || await ActiveClaim(c.Id, ct) is not null) continue;
+            result.Add(new(c.Id, c.Revision, view.Original, true, observations, lead, c.CreatedAt, teacherRequested));
         }
-        return result.OrderBy(x => x.LeadingSupport).ThenBy(x => x.CreatedAt).ToArray();
+        return result.OrderByDescending(x => x.TeacherRequested).ThenBy(x => x.LeadingSupport).ThenBy(x => x.CreatedAt).ToArray();
     }
 
     public async Task<ExpertDashboardResponse> DashboardAsync(Guid actor, CancellationToken ct)
     {
         var available = await QueueCandidates(actor, ct);
         var work = await WorkAsync(actor, ct);
-        var policy = await CurrentPolicy(ct);
+        var preferences = await PreferencesAsync(actor, ct);
+        var totalCompleted = await db.Cases.CountAsync(x => x.ExpertClosed, ct);
         return new(available.Count, work.Count(x => !x.Completed), work.Count(x => x.Completed),
-            policy.RequiredParticipants, policy.SupportThreshold);
+            preferences.RequiredParticipants, preferences.SupportThreshold, totalCompleted);
     }
 
     public async Task<IReadOnlyList<ExpertWorkItem>> WorkAsync(Guid actor, CancellationToken ct)
@@ -95,12 +97,13 @@ public sealed class ExpertReviews(CoreDbContext db, IPermissionChecker permissio
     {
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
         await CaseWriteLock.Acquire(db, ct);
-        await Require(actor, "expert.translation.resolve", caseId, ct);
+        await RequireExpert(actor, ct);
         var c = await db.Cases.SingleOrDefaultAsync(x => x.Id == caseId, ct) ?? throw new MissingResourceException();
         var view = await evidence.ViewAsync(c, ct);
         var count = view.Variants.Sum(x => x.Supports);
         var lead = view.Variants.Max(x => x.SupportRatio) ?? 0m;
-        if (!Eligible(c, count, lead, await CurrentPolicy(ct))) throw new ConflictException("Case does not need expert review.");
+        var teacherRequested = await db.Audit.AnyAsync(x => x.TargetId == caseId && x.Action == "lms.expert.requested", ct);
+        if (!Eligible(c, count, lead, await PreferencesAsync(actor, ct), teacherRequested)) throw new ConflictException("Case does not need expert review.");
         var current = await ActiveClaim(caseId, ct);
         if (current is not null && current.ActorId != actor) throw new ConflictException("Case is already taken by another expert.");
         if (current is null)
@@ -117,7 +120,7 @@ public sealed class ExpertReviews(CoreDbContext db, IPermissionChecker permissio
     {
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
         await CaseWriteLock.Acquire(db, ct);
-        await Require(actor, "expert.translation.resolve", caseId, ct);
+        await RequireExpert(actor, ct);
         if ((await ActiveClaim(caseId, ct))?.ActorId != actor) throw new ConflictException("Case is not taken by this expert.");
         if (await db.Cases.AnyAsync(x => x.Id == caseId && x.ExpertClosed, ct)) throw new ConflictException("Case is already closed.");
         db.Audit.Add(new() { ActorId = actor, TargetId = caseId, Action = "expert.released", At = await NextClaimTime(caseId, ct) });
@@ -127,16 +130,18 @@ public sealed class ExpertReviews(CoreDbContext db, IPermissionChecker permissio
 
     public async Task<ExpertCaseResponse> ReadAsync(Guid actor, Guid caseId, CancellationToken ct)
     {
-        await Require(actor, "expert.case.read", caseId, ct);
+        await RequireExpert(actor, ct);
         var c = await db.Cases.AsNoTracking().SingleOrDefaultAsync(x => x.Id == caseId, ct) ?? throw new MissingResourceException();
-        return await evidence.ViewAsync(c, ct);
+        var note = await db.Audit.AsNoTracking().Where(x => x.TargetId == caseId && x.Action == "lms.expert.requested")
+            .OrderByDescending(x => x.At).Select(x => x.Reason).FirstOrDefaultAsync(ct);
+        return (await evidence.ViewAsync(c, ct)) with { TeacherNote = note };
     }
 
     public async Task<ResolutionResponse> ResolveAsync(Guid actor, Guid caseId, ResolveCaseRequest request, CancellationToken ct)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
         await CaseWriteLock.Acquire(db, ct);
-        await Require(actor, "expert.translation.resolve", caseId, ct);
+        await RequireExpert(actor, ct);
         var c = await db.Cases.SingleOrDefaultAsync(x => x.Id == caseId, ct) ?? throw new MissingResourceException();
         if (c.ExpertClosed || c.Revision != request.ExpectedRevision) throw new ConflictException("Case has changed or is already closed.");
         var claim = await EnsureNotClaimedByAnother(actor, caseId, ct);
@@ -164,35 +169,42 @@ public sealed class ExpertReviews(CoreDbContext db, IPermissionChecker permissio
         return CaseEvidence.ToResponse(resolution);
     }
 
-    private async Task Require(Guid actor, string permission, Guid caseId, CancellationToken ct)
-    {
-        if (!await permissions.HasAsync(actor, permission, AccessScope.Case, caseId, ct)) throw new AccessDeniedException();
-    }
-
     private async Task RequireExpert(Guid actor, CancellationToken ct)
     {
-        if (!await permissions.HasAsync(actor, "expert.queue.read", AccessScope.Global, null, ct) &&
-            !await db.Access.AnyAsync(x => x.SubjectId == actor && x.Scope == AccessScope.Case &&
-                db.Permissions.Any(p => p.ProfileId == x.ProfileId && p.Permission == "expert.queue.read"), ct))
-            throw new AccessDeniedException();
+        if (!await db.Users.AnyAsync(x => x.Id == actor && x.Active, ct)) throw new AccessDeniedException();
     }
 
     private async Task<TranslationCase[]> AccessibleCases(Guid actor, CancellationToken ct)
     {
-        var global = await permissions.HasAsync(actor, "expert.queue.read", AccessScope.Global, null, ct);
-        var grants = await (from a in db.Access where a.SubjectId == actor && a.Scope == AccessScope.Case
-                            join p in db.Permissions on a.ProfileId equals p.ProfileId
-                            where p.Permission == "expert.queue.read" select a.ResourceId).ToArrayAsync(ct);
-        if (!global && grants.Length == 0) throw new AccessDeniedException();
-        return await db.Cases.AsNoTracking().Where(x => !x.ExpertClosed && (global || grants.Contains(x.Id)))
+        await RequireExpert(actor, ct);
+        return await db.Cases.AsNoTracking().Where(x => !x.ExpertClosed)
             .OrderBy(x => x.CreatedAt).ToArrayAsync(ct);
     }
 
     private Task<DistributionPolicy> CurrentPolicy(CancellationToken ct) =>
         db.Policies.AsNoTracking().OrderByDescending(x => x.Version).FirstAsync(ct);
 
-    private static bool Eligible(TranslationCase c, int observations, decimal lead, DistributionPolicy policy) =>
-        !c.ExpertClosed && observations >= policy.RequiredParticipants && lead < policy.SupportThreshold;
+    public async Task<ExpertPreferencesResponse> PreferencesAsync(Guid actor, CancellationToken ct)
+    {
+        await RequireExpert(actor, ct);
+        var account = await db.Users.AsNoTracking().SingleAsync(x => x.Id == actor, ct);
+        return new(account.ExpertRequiredParticipants, account.ExpertSupportThreshold);
+    }
+
+    public async Task<ExpertPreferencesResponse> SavePreferencesAsync(Guid actor, ExpertPreferencesResponse preferences, CancellationToken ct)
+    {
+        await RequireExpert(actor, ct);
+        if (preferences.RequiredParticipants is < 1 or > 100000 || preferences.SupportThreshold is <= 0 or > 1)
+            throw new DomainException("Invalid expert queue settings.");
+        var account = await db.Users.SingleAsync(x => x.Id == actor, ct);
+        account.ExpertRequiredParticipants = preferences.RequiredParticipants;
+        account.ExpertSupportThreshold = preferences.SupportThreshold;
+        await db.SaveChangesAsync(ct);
+        return preferences;
+    }
+
+    private static bool Eligible(TranslationCase c, int observations, decimal lead, ExpertPreferencesResponse preferences, bool teacherRequested) =>
+        !c.ExpertClosed && (teacherRequested || observations >= preferences.RequiredParticipants && lead < preferences.SupportThreshold);
 
     private async Task<AuditEntry?> LastClaimEvent(Guid caseId, CancellationToken ct)
     {

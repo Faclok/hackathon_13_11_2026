@@ -118,6 +118,9 @@ api.MapDelete("/access/{assignmentId:guid}", async (ClaimsPrincipal user, Guid a
 api.MapGet("/expert/cases", (ClaimsPrincipal user, int? offset, int? limit, ExpertReviews expert, CancellationToken ct) => expert.QueueAsync(Subject(user), offset ?? 0, limit ?? 50, ct));
 api.MapGet("/expert/dashboard", (ClaimsPrincipal user, ExpertReviews expert, CancellationToken ct) => expert.DashboardAsync(Subject(user), ct));
 api.MapGet("/expert/work", (ClaimsPrincipal user, ExpertReviews expert, CancellationToken ct) => expert.WorkAsync(Subject(user), ct));
+api.MapGet("/expert/preferences", (ClaimsPrincipal user, ExpertReviews expert, CancellationToken ct) => expert.PreferencesAsync(Subject(user), ct));
+api.MapPut("/expert/preferences", (ClaimsPrincipal user, ExpertPreferencesResponse preferences, ExpertReviews expert, CancellationToken ct) =>
+    expert.SavePreferencesAsync(Subject(user), preferences, ct));
 api.MapPost("/expert/cases/{caseId:guid}/claim", (ClaimsPrincipal user, Guid caseId, ExpertReviews expert, CancellationToken ct) => expert.ClaimAsync(Subject(user), caseId, ct));
 api.MapDelete("/expert/cases/{caseId:guid}/claim", async (ClaimsPrincipal user, Guid caseId, ExpertReviews expert, CancellationToken ct) =>
 { await expert.ReleaseAsync(Subject(user), caseId, ct); return TypedResults.NoContent(); });
@@ -181,6 +184,13 @@ api.MapGet("/policies/distribution", async (ClaimsPrincipal user, IPermissionChe
 api.MapPost("/deliveries", async (ClaimsPrincipal user, [FromHeader(Name = "Idempotency-Key")] string key,
     DeliverContentRequest request, IContentIntake intake, CancellationToken ct) =>
     TypedResults.Ok(await intake.DeliverAsync(Subject(user), key, request, ct)));
+api.MapPost("/expert/imports", (ClaimsPrincipal user, ExpertDatasetRow request, ExpertDatasetIntake intake, CancellationToken ct) =>
+    intake.ImportAsync(Subject(user), request, ct));
+api.MapGet("/expert/untranslated", (ClaimsPrincipal user, int? offset, int? limit, ExpertDatasetIntake intake, CancellationToken ct) =>
+    intake.UntranslatedAsync(Subject(user), offset ?? 0, limit ?? 100, ct));
+api.MapPost("/expert/fragments/{fragmentId:guid}/translation", (ClaimsPrincipal user, Guid fragmentId,
+    VerifiedFragmentTranslation request, ExpertDatasetIntake intake, CancellationToken ct) =>
+    intake.TranslateAsync(Subject(user), fragmentId, request, ct));
 api.MapPost("/reviews/next", async (ClaimsPrincipal user, string? kind, IReviewWorkflow reviews, CancellationToken ct) =>
 {
     var assignment = await reviews.ReceiveAsync(Subject(user), kind ?? "translation-confirm", ct);
@@ -193,6 +203,7 @@ api.MapGet("/cases/{caseId:guid}/statistics", (ClaimsPrincipal user, Guid caseId
 
 app.MapTelegramEndpoints();
 app.MapClassInvitationEndpoints();
+app.MapLmsCatalogEndpoints();
 app.Run();
 static Guid Subject(ClaimsPrincipal user) => Guid.Parse(user.FindFirstValue("sub")!);
 public partial class Program;
@@ -204,7 +215,7 @@ public sealed record ResourceCreatedResponse(Guid Id);
 /// <summary>The currently active version of administrator settings.</summary>
 public sealed record DistributionPolicyResponse(Guid Id, int Version, DistributionPolicyRequest Settings);
 /// <summary>Creates a new immutable version of the distribution and consensus settings.</summary>
-public sealed record DistributionPolicyRequest(int RequiredParticipants = 100, decimal SupportThreshold = .8m,
+public sealed record DistributionPolicyRequest(int RequiredParticipants = 300, decimal SupportThreshold = .51m,
     int MinimumSchools = 2, int MinimumClasses = 3, decimal MaximumSchoolShare = .6m, decimal MaximumClassShare = .4m,
     int AssignmentMinutes = 30, int RepeatHours = 24, int WorkingSetSize = 20)
 {

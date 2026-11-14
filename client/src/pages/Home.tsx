@@ -9,10 +9,10 @@ import {
 import { Icon } from "../components/ui";
 const quickActions = [
   {
-    to: "/daily",
+    to: "/boss",
     icon: "swords",
     title: "Испытание Босса",
-    detail: "Финал ежедневных заданий",
+    detail: "Рейтинговый перевод",
     color: "peach",
   },
   {
@@ -23,17 +23,17 @@ const quickActions = [
     color: "yellow",
   },
   {
-    to: "/shop",
+    to: "/inventory",
     icon: "bag",
-    title: "Магазин",
-    detail: "Добавь свой характер",
+    title: "Инвентарь",
+    detail: "Твои находки и украшения",
     color: "purple",
   },
   {
     to: "/wheel",
     icon: "wheel",
     title: "Барабан",
-    detail: "Навстречу удаче",
+    detail: "Испытай удачу",
     color: "blue",
   },
 ];
@@ -57,7 +57,7 @@ export default function Home() {
             </div>
           </div>
           <BookArt />
-          <Link className="daily-button" to="/daily">
+          <Link className="daily-button" to="/learn">
             Начать задание
             <Icon name="arrow" size={15} />
           </Link>

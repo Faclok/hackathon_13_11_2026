@@ -1,21 +1,20 @@
 import {
   bossPhrases,
   dailyFragments,
-  decorations,
   leaderboardUsers,
   lessons,
 } from "../mocks/data";
 import type { DailyAnswer, User } from "../types";
 import { schoolDay, dayNumber } from "../utils/calendar";
+import { decorationCatalog, rewardCases } from "../mocks/customization";
 // Replace mock implementations with fetch calls when the API is connected.
 export const getLessons = async () => lessons;
 export const getDaily = async () =>
   dailyFragments[dayNumber(schoolDay()) % dailyFragments.length];
-export const getDailyExercises = async () =>
-  lessons[dayNumber(schoolDay()) % lessons.length].exercises;
 export const submitDaily = async (answer: DailyAnswer) => answer;
 export const getBossPhrases = async () => bossPhrases;
-export const getDecorations = async () => decorations;
+export const getDecorations = async () => decorationCatalog;
+export const getCases = async () => rewardCases;
 export const getLeaderboard = async (
   user: User,
   period: "global" | "monthly",
