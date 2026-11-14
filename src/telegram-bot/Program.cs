@@ -22,7 +22,7 @@ api.DefaultRequestHeaders.Add("X-Internal-Key", key);
 builder.Services.AddSingleton(api);
 builder.Services.AddSingleton(_ => new ExerciseAudio(new HttpClient { Timeout = TimeSpan.FromSeconds(30), MaxResponseContentBufferSize = 20_000_000 }));
 builder.Services.AddDbContextFactory<BotDbContext>(options => options.UseNpgsql(
-    builder.Configuration.GetConnectionString("Core") ?? "Host=localhost;Database=bot;Username=postgres;Password=postgres",
+    builder.Configuration.GetConnectionString("Default") ?? "Host=localhost;Database=bot;Username=postgres;Password=postgres",
     postgres => postgres.MigrationsHistoryTable("__EFMigrationsHistory_Bot")));
 var bot = builder.Services.AddTelegramBotKit(options =>
 {
