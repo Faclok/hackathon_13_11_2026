@@ -17,7 +17,7 @@ public sealed class ResolutionProcessor(CoreDbContext db, TimeProvider clock)
         var resolution = c.ResolutionId.HasValue ? await db.Resolutions.SingleAsync(x => x.Id == c.ResolutionId, ct) : null;
         if (!c.ExpertClosed)
         {
-            var variants = await db.Variants.Where(x => x.CaseId == caseId).ToArrayAsync(ct);
+            var variants = await db.Variants.Where(x => x.CaseId == caseId && x.Text != "").ToArrayAsync(ct);
             var observationRows = await (from r in db.Responses where r.CaseId == caseId && !r.Archived
                                       join a in db.Assignments on r.AssignmentId equals a.Id
                                       join j in db.Judgments on r.Id equals j.ResponseId where j.Kind == JudgmentKind.Support

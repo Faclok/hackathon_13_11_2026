@@ -10,7 +10,10 @@ public sealed record ExerciseResponse(Guid Id, string Original, bool Completed)
     public JsonElement Prompt { get; init; }
 }
 /// <summary>A stable daily lesson and its progress.</summary>
-public sealed record LessonResponse(Guid Id, DateOnly Date, IReadOnlyList<ExerciseResponse> Exercises);
+public sealed record LessonResponse(Guid Id, DateOnly Date, IReadOnlyList<ExerciseResponse> Exercises)
+{
+    public bool BossCompleted { get; init; }
+}
 /// <summary>A literal translation attempt evaluated against the issued material revision.</summary>
 public sealed record SubmitAttemptRequest(string Answer);
 /// <summary>Recognition by the issued answer key; unrecognized text is not a verdict about linguistic correctness.</summary>

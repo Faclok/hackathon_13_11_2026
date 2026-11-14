@@ -6,9 +6,11 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="TelegramBotKit" Version="0.3.2" />
+    <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
+    <PackageReference Include="TelegramBotKit" Version="0.4.0-preview.1" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.5" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.5" PrivateAssets="all" />
+    <PackageReference Include="TelegramBotKit.Hosting" Version="0.4.0-preview.1" />
   </ItemGroup>
 </Project>

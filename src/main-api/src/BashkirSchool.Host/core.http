@@ -126,6 +126,19 @@ Content-Type: application/json
 GET {{base}}/api/expert/untranslated?offset=0&limit=100
 Authorization: Bearer {{expertToken}}
 
+### Participant requests a source fragment with no translation and submits a proposal.
+POST {{base}}/api/reviews/next?kind=translation-create
+Authorization: Bearer {{studentToken}}
+Content-Type: application/json
+
+{}
+
+POST {{base}}/api/reviews/{{assignmentId}}/response
+Authorization: Bearer {{studentToken}}
+Content-Type: application/json
+
+{"action":"Correct","correction":"Здравствуйте!"}
+
 ### An expert supplies the verified text for a source-only fragment.
 POST {{base}}/api/expert/fragments/{{fragmentId}}/translation
 Authorization: Bearer {{expertToken}}

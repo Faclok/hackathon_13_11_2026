@@ -1,27 +1,19 @@
-using Telegram.Bot.Types.ReplyMarkups;
 
 public sealed record ReviewView(Guid Id, Guid CaseId, Guid VariantId, string Original, string Translation,
     DateTimeOffset ExpiresAt, string Kind, ReviewOption[] Options, bool AllowCustom);
 public sealed record ReviewOption(Guid Id, string Text);
 public sealed record ReviewAnswer(string Action, string? Correction = null, Guid? SelectedVariantId = null);
-public sealed record ReviewDraft(ReviewView Assignment, bool Custom = false);
+public sealed record ReviewDraft(ReviewView Assignment, bool Custom = false, bool Boss = false);
 
 public static class ReviewChat
 {
-    public static string Prompt(ReviewView review) => review.Kind == "translation-choice"
+    public static string Prompt(ReviewView review) => review.Kind == "translation-create"
+        ? $"Для этого предложения ещё нет перевода:\n\n{review.Original}\n\nНапишите свой перевод на русский одним сообщением."
+        : review.Kind == "translation-choice"
         ? $"Выберите перевод предложения:\n\n{review.Original}\n\n" +
           string.Join('\n', review.Options.Select((x, i) => $"{i + 1}. {x.Text}")) +
-          "\n\nНажмите номер варианта. Чтобы написать свой перевод, нажмите «Свой перевод»."
+          "\n\nНажмите вариант перевода под заданием. Чтобы написать свой перевод, нажмите «Свой перевод»."
         : $"Проверьте перевод:\n\n{review.Original}\n\nПредложенный перевод:\n{review.Translation}\n\nПодтвердите его или отправьте свой перевод.";
-
-    public static ReplyKeyboardMarkup Keyboard(ReviewView review)
-    {
-        var choices = review.Kind == "translation-choice"
-            ? review.Options.Select((_, i) => (i + 1).ToString()).ToArray()
-            : ["Подтвердить перевод"];
-        return ExerciseChat.Keyboard(choices.Concat(review.AllowCustom ? new[] { "Свой перевод" } : [])
-            .Append("Пропустить перевод").Append("Виды заданий"));
-    }
 
     public static ReviewAnswer Answer(ReviewView review, string text, bool custom)
     {

@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Telegram.Bot.Types.ReplyMarkups;
 
 public static class ExerciseChat
 {
@@ -10,16 +9,6 @@ public static class ExerciseChat
         ["Пропущенное слово"] = "missing-word", ["Сборка предложения"] = "sentence-order"
     };
 
-    public static ReplyKeyboardMarkup Keyboard(IEnumerable<string> buttons) => new(buttons
-        .Concat(["Профиль", "Задания на сегодня"]).Chunk(2).Select(row => row.Select(x => new KeyboardButton(x)))) { ResizeKeyboard = true };
-
-    public static ReplyKeyboardMarkup KindsKeyboard() => Keyboard(Kinds.Keys.Concat(["Выбор перевода", "Подтверждение перевода", "Продолжить урок"]));
-
-    public static ReplyKeyboardMarkup Keyboard(ExerciseView exercise) => Keyboard(
-        (exercise.Kind == "missing-word"
-            ? Enumerable.Range(1, exercise.Prompt.GetProperty("options").GetArrayLength()).Select(x => x.ToString())
-            : Enumerable.Empty<string>()).Append("Виды заданий"));
-
     public static string Prompt(ExerciseView exercise)
     {
         var p = exercise.Prompt;
@@ -28,9 +17,9 @@ public static class ExerciseChat
             "translation-text" => "Переведите текст:\n" + p.GetProperty("text").GetString() + "\n\nОтправьте перевод сообщением.",
             "audio-dictation" => "Прослушайте аудио и запишите услышанный текст сообщением.",
             "audio-translation" => "Прослушайте аудио и отправьте перевод сообщением.",
-            "missing-word" => $"Заполните пропуск:\n{p.GetProperty("before").GetString()} ___ {p.GetProperty("after").GetString()}\n\n{Items(p, "options")}\nОтправьте номер варианта или впишите слово.",
-            "sentence-order" => $"Соберите предложение:\n{Items(p, "tokens")}\nОтправьте номера слов по порядку через пробел, например: 3 1 2.",
-            "word-match" => $"Сопоставьте слова:\n{Items(p, "left")}\n\nПереводы:\n{Items(p, "right")}\nОтправьте пары номеров, например: 1-3 2-1 3-2.",
+            "missing-word" => $"Заполните пропуск:\n{p.GetProperty("before").GetString()} ___ {p.GetProperty("after").GetString()}\n\n{Items(p, "options")}\nНажмите слово под заданием или впишите свой вариант.",
+            "sentence-order" => $"Соберите предложение:\n{Items(p, "tokens")}\nНажимайте слова в нужном порядке, затем «Отправить ответ».",
+            "word-match" => $"Сопоставьте слова:\n{Items(p, "left")}\n\nПереводы:\n{Items(p, "right")}\nВыберите слово, затем его перевод. Когда все пары собраны, нажмите «Отправить ответ».",
             _ => "Тип задания пока не поддерживается."
         };
     }

@@ -25,7 +25,7 @@ public sealed class CaseEvidence(CoreDbContext db)
             {
                 var s = stats.Variants.Single(x => x.VariantId == v.Id);
                 return new VariantEvidence(v.Id, v.Text, s.Supports, s.SupportRatio);
-            }).ToArray());
+            }).ToArray()) { FragmentId = fragment.Id };
     }
 
     public static ResolutionResponse ToResponse(ResolutionRevision r) => new(r.Id, r.Revision, r.Kind, r.PrimaryVariantId, r.Accepted, r.Rejected, r.CreatedAt);

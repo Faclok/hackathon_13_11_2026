@@ -3365,6 +3365,10 @@
             "items": {
               "$ref": "#/components/schemas/VariantEvidence"
             }
+          },
+          "fragmentId": {
+            "type": "string",
+            "format": "uuid"
           }
         },
         "additionalProperties": false
@@ -3472,6 +3476,9 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "untranslated": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false
