@@ -171,6 +171,15 @@ button:active:not(:disabled),
   letter-spacing: -0.65px;
   margin: 4px 0 12px;
 }
+.profile-prompt {
+  display: block;
+  padding: 16px 18px;
+  margin-bottom: 16px;
+  color: var(--primary-dark);
+  font-size: 14px;
+  font-weight: 650;
+  text-decoration: none;
+}
 .home-cards {
   display: flex;
   flex-direction: column;
@@ -1459,6 +1468,19 @@ input:focus {
   font-size: 17px;
   font-weight: 700;
   margin-bottom: 20px;
+}
+.profile-section form {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+.profile-section form input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font: inherit;
 }
 .rank-list {
   display: grid;

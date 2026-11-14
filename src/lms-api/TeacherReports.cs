@@ -73,6 +73,7 @@ public static class TeacherReports
         var studyClass = await db.TeacherClasses.AsNoTracking().SingleOrDefaultAsync(x => x.Id == classId && x.TeacherId == teacherId);
         if (studyClass is null) return null;
         var members = await db.ClassMembers.AsNoTracking().Where(x => x.ClassId == classId).OrderBy(x => x.DisplayName).ToArrayAsync();
+        var currentNames = await TeacherEndpoints.CurrentNames(request, factory, members.Select(x => x.UserId));
         var tasks = await db.ClassTasks.AsNoTracking().Where(x => x.ClassId == classId).OrderByDescending(x => x.CreatedAt).ToArrayAsync();
         var taskIds = tasks.Select(x => x.Id).ToArray();
         var submissions = await db.TaskSubmissions.AsNoTracking().Where(x => taskIds.Contains(x.TaskId)).ToArrayAsync();
@@ -96,7 +97,8 @@ public static class TeacherReports
             {
                 byTaskAndUser.TryGetValue((task.Id, member.UserId), out var submission);
                 var matching = submission is null ? null : accepted.FirstOrDefault(x => SameTranslation(submission.Answer, x));
-                return new AnswerReport(member.UserId, member.Username, member.DisplayName,
+                return new AnswerReport(member.UserId, member.Username,
+                    currentNames.GetValueOrDefault(member.UserId, member.DisplayName),
                     submission?.Answer, submission?.SubmittedAt, Verdict(submission, status, accepted), matching ?? reference);
             }).ToArray();
             taskReports.Add(new TaskReport(task.Id, task.Title, task.SourceText, reference,

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { getDecorations } from "../api";
 import { useUserStore } from "../store";
+import { displayName } from "../utils/displayName";
 import type { Decoration } from "../types";
 import { isDecorationEquipped } from "../mocks/customization";
 import {
@@ -60,7 +61,7 @@ export default function Inventory() {
         <FloatingItems user={user} />
         <Avatar user={user} />
         <div className="personal-content">
-          <strong>{user.nick}</strong>
+          <strong>{displayName(user)}</strong>
           <p>Твой образ</p>
           <Link to="/leaderboard">
             Посмотреть в рейтинге <Icon name="arrow" size={12} />

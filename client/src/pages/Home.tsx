@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { useUserStore } from "../store";
+import { displayName } from "../utils/displayName";
 import { BOSS_MIN_RANK, canAccessBoss } from "../utils/ranks";
 import {
   BookArt,
@@ -43,7 +44,10 @@ export default function Home() {
   const weekProgress = user.streak === 0 ? 0 : ((user.streak - 1) % 7) + 1;
   return (
     <>
-      <h1 className="home-greeting">Привет, {user.nick}</h1>
+      <h1 className="home-greeting">Привет, {displayName(user)}</h1>
+      {(!user.firstName || !user.lastName) && <Link to="/profile" className="surface profile-prompt">
+        Заполни имя и фамилию, чтобы тебя узнали в классе и рейтинге →
+      </Link>}
       <div className="home-cards">
         <section className="daily-card">
           <Ornament className="daily-ornament" />

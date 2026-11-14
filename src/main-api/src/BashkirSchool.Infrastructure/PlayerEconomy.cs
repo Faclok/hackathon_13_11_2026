@@ -8,7 +8,7 @@ namespace BashkirSchool.Infrastructure;
 
 public sealed class PlayerState
 {
-    public const int RegistrationBonusCoins = 40;
+    public const int RegistrationBonusCoins = 50;
 
     public static PlayerState ForNewRegistration(Guid participantId) => new()
     {
@@ -49,6 +49,8 @@ public sealed record PlayerProfile(Guid Id, string Nick, int Level, int Xp, int 
     string? FrameId, string? HatId, string? PetId, int CaseKeys, string[] EquippedItemIds, string LangPair = "ba-ru")
 {
     public string AvatarUrl { get; init; } = "";
+    public string? FirstName { get; init; }
+    public string? LastName { get; init; }
 }
 public sealed record PlayerLeaderboardEntry(PlayerProfile User, int Value, int Rank);
 
@@ -78,7 +80,9 @@ public sealed class PlayerEconomy(CoreDbContext db, BossAccess access, IPermissi
         var state = await StateAsync(actor, ct);
         var progress = await access.ReadAsync(actor, ct);
         var participant = await db.Participants.AsNoTracking().SingleAsync(x => x.Id == actor, ct);
-        var nick = await db.Users.Where(x => x.Id == actor).Select(x => x.UserName).SingleAsync(ct) ?? "";
+        var account = await db.Users.Where(x => x.Id == actor)
+            .Select(x => new { x.UserName, x.FirstName, x.LastName }).SingleAsync(ct);
+        var nick = account.UserName ?? "";
         var trophies = new List<string>();
         if (progress.TasksSolved >= 1) trophies.Add("first");
         if (progress.TasksSolved >= 10) trophies.Add("learner");
@@ -90,7 +94,8 @@ public sealed class PlayerEconomy(CoreDbContext db, BossAccess access, IPermissi
         var accuracy = participant.Total == 0 ? 0 : (int)Math.Round((decimal)participant.Correct / participant.Total * 100m);
         return new(actor, nick, state.Xp / 100 + 1, state.Xp, state.Coins, progress.Streak, progress.TasksSolved,
             accuracy, trophies.ToArray(), ReadIds(state.OwnedJson), state.BackgroundId, state.FrameId,
-            state.HatId, state.PetId, state.CaseKeys, ReadIds(state.EquippedItemsJson));
+            state.HatId, state.PetId, state.CaseKeys, ReadIds(state.EquippedItemsJson))
+        { FirstName = account.FirstName, LastName = account.LastName };
     }
 
     public async Task RewardReviewAsync(Guid actor, bool boss, CancellationToken ct)

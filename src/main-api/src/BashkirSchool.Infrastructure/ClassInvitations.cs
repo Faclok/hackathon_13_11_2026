@@ -11,8 +11,18 @@ public sealed class ClassInvitations(CoreDbContext db, UserManager<Account> user
     public async Task<ClassInvitationResponse> InviteAsync(Guid actor, Guid classId, InviteStudentRequest request, CancellationToken ct)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+        await CaseWriteLock.Acquire(db, ct);
         await RequireTeacherAsync(actor, classId, ct);
         var student = await users.FindByNameAsync(Guard.Text(request.Username, "username", 100)) ?? throw new MissingResourceException();
+        var existingEnrollment = await db.Enrollments.SingleOrDefaultAsync(x => x.ParticipantId == student.Id, ct);
+        if (existingEnrollment is not null)
+        {
+            if (existingEnrollment.ClassId != classId) throw new ConflictException("Participant already belongs to a class.");
+            var previous = await db.ClassInvitations.Where(x => x.ClassId == classId && x.ParticipantId == student.Id &&
+                x.Status == ClassInvitationStatus.Accepted).OrderByDescending(x => x.CreatedAt).FirstOrDefaultAsync(ct);
+            if (previous is not null) return await ReadAsync(previous.Id, ct);
+            throw new ConflictException("Participant already belongs to this class.");
+        }
         await RequireIndependentAsync(student.Id, ct);
         var invitation = await db.ClassInvitations.SingleOrDefaultAsync(x => x.ClassId == classId &&
             x.ParticipantId == student.Id && x.Status == ClassInvitationStatus.Pending, ct);
@@ -20,9 +30,15 @@ public sealed class ClassInvitations(CoreDbContext db, UserManager<Account> user
         {
             invitation = new() { ClassId = classId, TeacherId = actor, ParticipantId = student.Id, CreatedAt = clock.GetUtcNow() };
             db.ClassInvitations.Add(invitation);
-            Audit(actor, invitation.Id, "class.invitation.created");
-            await db.SaveChangesAsync(ct);
         }
+        invitation.Status = ClassInvitationStatus.Accepted;
+        invitation.RespondedAt = clock.GetUtcNow();
+        db.Enrollments.Add(new() { ParticipantId = student.Id, ClassId = classId });
+        var others = await db.ClassInvitations.Where(x => x.ParticipantId == student.Id && x.Id != invitation.Id &&
+            x.Status == ClassInvitationStatus.Pending).ToArrayAsync(ct);
+        foreach (var other in others) { other.Status = ClassInvitationStatus.Cancelled; other.RespondedAt = clock.GetUtcNow(); }
+        Audit(actor, invitation.Id, "class.student.added");
+        await db.SaveChangesAsync(ct);
         var response = await ReadAsync(invitation.Id, ct);
         await transaction.CommitAsync(ct);
         return response;
@@ -104,7 +120,13 @@ public sealed class ClassInvitations(CoreDbContext db, UserManager<Account> user
         join teacher in db.Users on invitation.TeacherId equals teacher.Id
         join student in db.Users on invitation.ParticipantId equals student.Id
         select new ClassInvitationResponse(invitation.Id, studyClass.Id, studyClass.Name, school.Id, school.Name,
-            teacher.Id, teacher.UserName!, student.Id, student.UserName!, invitation.Status, invitation.CreatedAt, invitation.RespondedAt);
+            teacher.Id, teacher.UserName!, student.Id, student.UserName!, invitation.Status, invitation.CreatedAt, invitation.RespondedAt)
+        {
+            TeacherDisplayName = teacher.FirstName != null && teacher.LastName != null
+                ? teacher.FirstName + " " + teacher.LastName : teacher.UserName,
+            ParticipantDisplayName = student.FirstName != null && student.LastName != null
+                ? student.FirstName + " " + student.LastName : student.UserName
+        };
 
     private Task<ClassInvitationResponse> ReadAsync(Guid id, CancellationToken ct) => Query(db.ClassInvitations.Where(x => x.Id == id)).SingleAsync(ct);
     private static void ValidatePage(int offset, int limit)

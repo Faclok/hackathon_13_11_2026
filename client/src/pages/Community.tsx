@@ -18,6 +18,7 @@ import {
   ProfileBackground,
 } from "../components/Personalization";
 import { Icon, Modal, PageTitle, ProgressBar } from "../components/ui";
+import { displayName } from "../utils/displayName";
 
 export function Login() {
   const [nick, setNick] = useState("");
@@ -53,7 +54,7 @@ export function Login() {
           }}
         >
           <label htmlFor="nick" className="field-label">
-            Как тебя зовут?
+            Твой username
           </label>
           <input
             id="nick"
@@ -63,7 +64,7 @@ export function Login() {
             minLength={3}
             maxLength={20}
             required
-            placeholder="Твой ник"
+            placeholder="Придумай username"
             autoFocus
           />
           <button
@@ -74,7 +75,7 @@ export function Login() {
           </button>
         </form>
         {error && <p className="form-error" role="alert">{error}</p>}
-        <p className="demo-note">Временный вход по username. При создании нового профиля — 40 бонусных монет. Профиль, монеты и инвентарь хранятся на сервере.</p>
+        <p className="demo-note">При регистрации — 50 бонусных монет. После входа заполни имя и фамилию в профиле, чтобы тебя узнали в классе и рейтинге.</p>
       </section>
     </div>
   );
@@ -141,7 +142,7 @@ export function Leaderboard() {
               </span>
               <Avatar user={entry.user} className="podium-avatar" />
               <h2>
-                {entry.user.nick}
+                {displayName(entry.user)}
                 {entry.user.id === user.id && (
                   <small className="you-label">Вы</small>
                 )}
@@ -175,7 +176,7 @@ export function Leaderboard() {
             <Avatar user={entry.user} framed={false} />
             <div>
               <strong>
-                {entry.user.nick}
+                {displayName(entry.user)}
                 {entry.user.id === user.id ? " · Вы" : ""}
               </strong>
               <span>
@@ -193,7 +194,7 @@ export function Leaderboard() {
       {own && (
         <div className="your-rank">
           <span>#{own.rank}</span>
-          <strong>{user.nick} · Вы</strong>
+          <strong>{displayName(user)} · Вы</strong>
           <b>
             {own.value} {metric === "tasks" ? "заданий" : "дней"}
           </b>
@@ -206,11 +207,19 @@ export function Leaderboard() {
 export function Profile() {
   const user = useUserStore((s) => s.user)!;
   const navigate = useNavigate();
+  const [firstName, setFirstName] = useState(user.firstName ?? "");
+  const [lastName, setLastName] = useState(user.lastName ?? "");
+  const [saving, setSaving] = useState(false);
+  const [profileMessage, setProfileMessage] = useState("");
   const currentRank = getCurrentRank(user);
   const [itemInfo, setItemInfo] = useState<Decoration | null>(null);
   useEffect(() => {
     void useUserStore.getState().refreshProfile().catch(() => {});
   }, []);
+  useEffect(() => {
+    setFirstName(user.firstName ?? "");
+    setLastName(user.lastName ?? "");
+  }, [user.firstName, user.lastName]);
   return (
     <>
       <PageTitle>Профиль</PageTitle>
@@ -222,7 +231,7 @@ export function Profile() {
         <FloatingItems user={user} onSelect={setItemInfo} />
         <div className="personal-content">
           <Avatar user={user} className="profile-avatar" />
-          <h2>{user.nick}</h2>
+          <h2>{displayName(user)}</h2>
           <span className="rank-badge" lang="ba">
             {currentRank[0]}
           </span>
@@ -235,6 +244,34 @@ export function Profile() {
             Изменить оформление <Icon name="arrow" size={13} />
           </Link>
         </div>
+      </section>
+      <section className="surface profile-section">
+        <h2>Имя и фамилия</h2>
+        <p>{user.firstName && user.lastName
+          ? "Тебя видят под этим именем в рейтинге и классе."
+          : "Заполни профиль, чтобы преподаватель и другие участники узнали тебя."}</p>
+        <form onSubmit={async (event) => {
+          event.preventDefault();
+          setSaving(true);
+          setProfileMessage("");
+          try {
+            await useUserStore.getState().updateProfile(firstName, lastName);
+            setProfileMessage("Профиль сохранён.");
+          } catch (error) {
+            setProfileMessage(error instanceof Error ? error.message : "Не удалось сохранить профиль.");
+          } finally { setSaving(false); }
+        }}>
+          <label className="field-label" htmlFor="profile-first-name">Имя</label>
+          <input id="profile-first-name" value={firstName} maxLength={100} autoComplete="given-name"
+            onChange={(event) => setFirstName(event.target.value)} placeholder="Имя" required />
+          <label className="field-label" htmlFor="profile-last-name">Фамилия</label>
+          <input id="profile-last-name" value={lastName} maxLength={100} autoComplete="family-name"
+            onChange={(event) => setLastName(event.target.value)} placeholder="Фамилия" required />
+          <button className="button button-primary full-width" disabled={saving || !firstName.trim() || !lastName.trim()}>
+            Сохранить профиль
+          </button>
+        </form>
+        {profileMessage && <p role="status">{profileMessage}</p>}
       </section>
       {itemInfo && (
         <Modal title={itemInfo.title} onClose={() => setItemInfo(null)}>

@@ -48,6 +48,19 @@ public sealed class AudioPreparation(CoreDbContext db, IPermissionChecker permis
     {
         if (!await permissions.HasAsync(actor, "lessons.receive", AccessScope.Own, actor, ct) &&
             !await permissions.HasAsync(actor, "content.deliver", AccessScope.Own, actor, ct)) throw new AccessDeniedException();
+        return await PrepareCoreAsync(caseId, ct);
+    }
+
+    public async Task<AudioAssetResponse> PrepareVerifiedAsync(Guid caseId, CancellationToken ct)
+    {
+        if (!await db.Cases.AsNoTracking().AnyAsync(c => c.Id == caseId && c.ExpertClosed && c.ResolutionId != null &&
+            db.Resolutions.Any(r => r.Id == c.ResolutionId && r.Kind == ResolutionKind.Expert && r.PrimaryVariantId != null), ct))
+            throw new MissingResourceException();
+        return await PrepareCoreAsync(caseId, ct);
+    }
+
+    private async Task<AudioAssetResponse> PrepareCoreAsync(Guid caseId, CancellationToken ct)
+    {
         var fragment = await (from c in db.Cases where c.Id == caseId join f in db.Fragments on c.FragmentId equals f.Id select f).SingleOrDefaultAsync(ct)
             ?? throw new MissingResourceException();
         await Gate.WaitAsync(ct);

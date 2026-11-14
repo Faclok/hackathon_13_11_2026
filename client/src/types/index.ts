@@ -1,6 +1,8 @@
 export interface User {
   id: string;
   nick: string;
+  firstName?: string | null;
+  lastName?: string | null;
   avatarUrl: string;
   level: number;
   xp: number;

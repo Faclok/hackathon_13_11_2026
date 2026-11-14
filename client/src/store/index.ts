@@ -15,6 +15,7 @@ interface UserState {
   login: (username: string) => Promise<void>;
   logout: () => void;
   refreshProfile: () => Promise<void>;
+  updateProfile: (firstName: string, lastName: string) => Promise<void>;
   reward: (xp: number, coins: number, tasks: number, trophy?: string) => void;
   buyCaseKeys: (quantity: number) => Promise<boolean>;
   openCase: (caseId: string) => Promise<CaseOpening | null>;
@@ -73,6 +74,10 @@ export const useUserStore = create<UserState>()((set, get) => ({
   refreshProfile: async () => {
     const user = await apiRequest<User>("/api/player/profile");
     set({ user });
+  },
+  updateProfile: async (firstName, lastName) => {
+    await apiRequest("/api/me", { method: "PUT", body: JSON.stringify({ firstName, lastName }) });
+    await get().refreshProfile();
   },
   // Boss and Learn keep their existing local reward behavior.
   reward: (xp, coins, tasks, trophy) => set((state) => {

@@ -38,9 +38,23 @@ public static class LmsCatalogEndpoints
         {
             if (string.IsNullOrWhiteSpace(username)) return Results.BadRequest(new { title = "Username is required." });
             var user = await db.Users.AsNoTracking().Where(x => x.NormalizedUserName == username.Trim().ToUpperInvariant() && x.Active)
-                .Select(x => new { x.Id, x.UserName }).SingleOrDefaultAsync(ct);
+                .Select(x => new { x.Id, x.UserName, x.FirstName, x.LastName }).SingleOrDefaultAsync(ct);
             return user is not null && await db.Participants.AnyAsync(x => x.Id == user.Id, ct)
-                ? Results.Ok(new { id = user.Id, username = user.UserName }) : Results.NotFound();
+                ? Results.Ok(new { id = user.Id, username = user.UserName,
+                    displayName = user.FirstName != null && user.LastName != null
+                        ? user.FirstName + " " + user.LastName : user.UserName }) : Results.NotFound();
+        });
+        api.MapGet("/participants/names", async (string ids, CoreDbContext db, CancellationToken ct) =>
+        {
+            var parts = ids.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parts.Length is < 1 or > 100 || parts.Any(x => !Guid.TryParse(x, out _)))
+                return Results.BadRequest(new { title = "Provide 1 to 100 participant IDs." });
+            var requested = parts.Select(Guid.Parse).Distinct().ToArray();
+            var names = await db.Users.AsNoTracking().Where(x => requested.Contains(x.Id) && x.Active)
+                .Select(x => new { x.Id, Username = x.UserName!, x.FirstName, x.LastName }).ToArrayAsync(ct);
+            return Results.Ok(names.Select(x => new { id = x.Id, username = x.Username,
+                displayName = x.FirstName != null && x.LastName != null
+                    ? x.FirstName + " " + x.LastName : x.Username }));
         });
         api.MapGet("/translations/{caseId:guid}", async (Guid caseId, CoreDbContext db, CaseEvidence evidence, CancellationToken ct) =>
         {

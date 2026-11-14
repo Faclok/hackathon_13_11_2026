@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import type { Decoration, User } from "../types";
+import { displayName } from "../utils/displayName";
 import { decorationCatalog } from "../mocks/customization";
 import { Mascot, Ornament } from "./Illustrations";
 import { HatOverlay } from "./HatOverlay";
@@ -35,7 +36,7 @@ export function Avatar({
       {user.avatarUrl ? (
         <img
           src={user.avatarUrl}
-          alt={`Аватар: ${user.nick}`}
+          alt={`Аватар: ${displayName(user)}`}
           draggable={false}
         />
       ) : (

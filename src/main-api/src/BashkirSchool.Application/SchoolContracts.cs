@@ -9,7 +9,12 @@ public sealed record CreateClassRequest(Guid SchoolId, string Name);
 /// <summary>A student account in one of the teacher's classes.</summary>
 public sealed record CreateStudentRequest(string Username);
 /// <summary>Public identity, without trust, permission profiles or password hashes.</summary>
-public sealed record AccountResponse(Guid Id, string Username);
+public sealed record AccountResponse(Guid Id, string Username)
+{
+    public string? FirstName { get; init; }
+    public string? LastName { get; init; }
+    public string DisplayName => FirstName is not null && LastName is not null ? FirstName + " " + LastName : Username;
+}
 /// <summary>Credentials used to obtain a short lived JWT.</summary>
 public sealed record SignInRequest(string Username, string Password);
 /// <summary>A short lived JWT access token.</summary>
