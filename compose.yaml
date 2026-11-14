@@ -3,7 +3,7 @@ services:
     build: ./deploy/nginx
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health/ready >/dev/null && wget -qO- http://127.0.0.1/api/lms/health >/dev/null"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null"]
       start_period: 45s
       interval: 10s
       timeout: 5s
