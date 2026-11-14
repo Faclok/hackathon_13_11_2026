@@ -23,9 +23,9 @@ services:
     environment:
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__Core: Host=core-db;Database=core;Username=app;Password=${POSTGRES_PASSWORD}
-      Jwt__SigningKey: ${JWT_SIGNING_KEY:?set JWT_SIGNING_KEY in .env}
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:-}
       Bootstrap__Username: ${BOOTSTRAP_USERNAME:-admin}
-      Bootstrap__Password: ${BOOTSTRAP_PASSWORD:?set BOOTSTRAP_PASSWORD in .env}
+      Bootstrap__Password: ${BOOTSTRAP_PASSWORD:-}
     depends_on:
       core-db:
         condition: service_healthy
@@ -64,7 +64,7 @@ services:
     environment:
       POSTGRES_DB: core
       POSTGRES_USER: app
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
     volumes:
       - core_data:/var/lib/postgresql/data
     healthcheck:
@@ -79,7 +79,7 @@ services:
     environment:
       POSTGRES_DB: lms
       POSTGRES_USER: app
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
     volumes:
       - lms_data_v2:/var/lib/postgresql/data
     healthcheck:
@@ -94,7 +94,7 @@ services:
     environment:
       POSTGRES_DB: bot
       POSTGRES_USER: app
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
     volumes:
       - bot_data_v2:/var/lib/postgresql/data
     healthcheck:
