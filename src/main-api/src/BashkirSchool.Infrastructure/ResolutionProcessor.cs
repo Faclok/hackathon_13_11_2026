@@ -29,14 +29,15 @@ public sealed class ResolutionProcessor(CoreDbContext db, TimeProvider clock)
             var eligible = support.Where(x => x.Qualified).OrderByDescending(x => x.Ratio).ToArray();
             var uniqueWinner = eligible.Length > 0 && (eligible.Length == 1 || eligible[0].Ratio > eligible[1].Ratio);
             var disputed = !uniqueWinner && support.Any(x => x.IndependentObservations >= policy.RequiredParticipants);
-            c.SetDisputed(disputed);
+            var teacherRequested = await db.Audit.AnyAsync(x => x.TargetId == caseId && x.Action == "lms.expert.requested", ct);
+            c.SetDisputed(disputed || teacherRequested);
             var primary = uniqueWinner ? (Guid?)eligible[0].VariantId : null;
             if (resolution?.PrimaryVariantId != primary && (primary.HasValue || resolution is { Kind: ResolutionKind.Community }))
             {
                 resolution = ResolutionRevision.Create(caseId, c.Revision + 1, primary.HasValue ? ResolutionKind.Community : ResolutionKind.Pending,
                     primary, primary.HasValue ? [primary.Value] : [], [], policy.Id, null, JsonSerializer.Serialize(support), null, clock.GetUtcNow());
                 c.Apply(resolution);
-                c.SetDisputed(disputed);
+                c.SetDisputed(disputed || teacherRequested);
                 db.Resolutions.Add(resolution);
                 await db.SaveChangesAsync(ct);
             }

@@ -200,7 +200,7 @@ public sealed record ResourceCreatedResponse(Guid Id);
 /// <summary>The currently active version of administrator settings.</summary>
 public sealed record DistributionPolicyResponse(Guid Id, int Version, DistributionPolicyRequest Settings);
 /// <summary>Creates a new immutable version of the distribution and consensus settings.</summary>
-public sealed record DistributionPolicyRequest(int RequiredParticipants = 100, decimal SupportThreshold = .8m,
+public sealed record DistributionPolicyRequest(int RequiredParticipants = 300, decimal SupportThreshold = .51m,
     int MinimumSchools = 2, int MinimumClasses = 3, decimal MaximumSchoolShare = .6m, decimal MaximumClassShare = .4m,
     int AssignmentMinutes = 30, int RepeatHours = 24, int WorkingSetSize = 20)
 {

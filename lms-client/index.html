@@ -1,58 +1,19 @@
 <!doctype html>
 <html lang="ru">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#183d32">
-  <title>Кабинет преподавателя · Башперевод</title>
-  <link rel="stylesheet" href="/styles.css">
-  <script src="/app.js" defer></script>
-</head>
-<body>
-  <header class="site-header">
-    <a class="brand" href="/"><span class="brand-mark">Б</span><span>Башперевод <small>LMS · ОБУЧЕНИЕ</small></span></a>
-    <nav aria-label="Другие разделы"><a href="https://bashperevod.ru">Переводы ↗</a><a href="https://expert.bashperevod.ru">Экспертиза ↗</a></nav>
-  </header>
-  <main>
-    <section class="hero">
-      <div><span class="eyebrow">УЧЕБНЫЙ КАБИНЕТ</span><h1>Ваши классы.<br><em>Ваши задания.</em></h1><p>Соберите класс, выберите перевод из общего каталога или создайте свой и выдайте предложение ученикам.</p><a class="hero-link" href="#workspace">Перейти к работе <span>↗</span></a></div>
-      <div class="hero-card" aria-hidden="true"><span>ЗАДАНИЕ НА ПЕРЕВОД</span><strong>Һаумыһығыҙ</strong><i>Ваш ответ →</i><div class="card-line"></div><small>ПРЕПОДАВАТЕЛЬ · КЛАСС · УЧЕНИКИ</small></div>
-    </section>
-    <section class="workspace" id="workspace" hidden>
-      <div class="section-heading"><div><span class="eyebrow">01 / ПРЕПОДАВАТЕЛЬ</span><h2>Мои классы</h2></div><span id="teacher-name" class="count"></span></div>
-      <p id="workspace-message" class="message" role="status" aria-live="polite"></p>
-      <div class="workspace-grid">
-        <div class="workspace-panel">
-          <form id="class-form" class="compact-form"><h3>Новый класс</h3><label>Название<input name="name" maxlength="200" required></label><label>Описание<input name="description" maxlength="2000"></label><button class="primary">Создать класс</button></form>
-          <div id="teacher-classes" class="stack"></div>
-        </div>
-        <div id="class-detail" class="workspace-panel" hidden>
-          <div class="panel-head"><div><span class="eyebrow">КЛАСС</span><h3 id="class-title"></h3></div><button id="delete-class" class="text-danger" type="button">Удалить класс</button></div>
-          <form id="edit-class-form" class="compact-form horizontal"><label>Название<input name="name" maxlength="200" required></label><label>Описание<input name="description" maxlength="2000"></label><button class="secondary">Сохранить</button></form>
-          <div class="rule"></div><h3>Участники</h3><form id="member-form" class="inline-form"><input name="username" placeholder="Логин ученика" aria-label="Логин ученика" required><button class="secondary">Добавить</button></form><div id="member-list" class="stack"></div>
-          <div class="rule"></div><h3>Задания</h3><form id="task-form" class="compact-form"><label>Название<input name="title" maxlength="200" required></label><label>Перевод<select name="source" required></select></label><label>Срок сдачи<input name="dueAt" type="datetime-local"></label><div class="form-actions"><button id="task-submit" class="primary">Выдать задание</button><button id="task-cancel" class="secondary" type="button" hidden>Отмена</button></div></form><div id="task-list" class="stack"></div>
-        </div>
-      </div>
-      <div class="workspace-grid lower-grid">
-        <div class="workspace-panel"><div class="panel-head"><div><span class="eyebrow">02 / СВОИ МАТЕРИАЛЫ</span><h3>Мои переводы</h3></div></div><form id="translation-form" class="compact-form"><label>Предложение<textarea name="sourceText" maxlength="5000" required></textarea></label><label>Перевод<textarea name="translationText" maxlength="5000" required></textarea></label><label>Направление<select name="languagePair"><option value="ba-ru">Башкирский → русский</option><option value="ru-ba">Русский → башкирский</option></select></label><div class="form-actions"><button id="translation-submit" class="primary">Добавить перевод</button><button id="translation-cancel" class="secondary" type="button" hidden>Отмена</button></div></form><div id="own-translations" class="stack"></div></div>
-        <div class="workspace-panel"><span class="eyebrow">03 / ГОТОВЫЕ МАТЕРИАЛЫ</span><h3>Каталог переводов</h3><label class="search-label">Поиск по загруженным переводам<input id="catalog-search" placeholder="Предложение или перевод"></label><div id="catalog-list" class="stack"></div><button id="catalog-more" class="secondary" type="button">Показать ещё</button></div>
-      </div>
-      <div class="workspace-panel student-panel"><span class="eyebrow">МОИ ЗАДАНИЯ</span><h3>Задания, выданные мне</h3><div id="student-tasks" class="stack"></div></div>
-    </section>
-    <div class="content-grid">
-      <section class="content" id="courses" aria-labelledby="courses-title">
-        <div class="section-heading"><div><span class="eyebrow">ДОПОЛНИТЕЛЬНО</span><h2 id="courses-title">Вводные уроки</h2></div><span id="course-count" class="count"></span></div>
-        <div id="course-list" class="course-list" aria-live="polite"><p>Загружаем курсы…</p></div>
-        <div id="course-detail" hidden><button id="back-to-courses" class="back" type="button">← Все курсы</button><div class="detail-heading"><span class="eyebrow">ПРОГРАММА КУРСА</span><h2 id="detail-title"></h2><p id="detail-description"></p><div class="progress"><span id="progress-label"></span><div class="progress-track"><div id="progress-fill"></div></div></div></div><div id="lesson-list" class="lesson-list"></div></div>
-      </section>
-      <aside class="account" aria-labelledby="account-title">
-        <span class="eyebrow">АККАУНТ</span><h2 id="account-title">Войти в кабинет</h2>
-        <div id="signed-out"><p>Войдите или зарегистрируйтесь, чтобы работать с классами и заданиями.</p><form id="auth-form"><label>Логин<input name="username" autocomplete="username" required></label><label>Пароль<input name="password" type="password" autocomplete="current-password" required></label><div class="form-actions"><button type="submit" name="mode" value="login" class="primary">Войти</button><button type="submit" name="mode" value="register" class="secondary">Создать аккаунт</button></div></form><p class="hint">Для нового аккаунта придумайте пароль от 12 символов: большие и маленькие буквы, цифра и спецсимвол.</p></div>
-        <div id="signed-in" hidden><p>Вы вошли как <strong id="username"></strong>.</p><p>Ваши классы и задания доступны выше.</p><button id="logout" type="button" class="secondary">Выйти</button></div>
-        <p id="account-message" class="message" role="status" aria-live="polite"></p>
-      </aside>
-    </div>
-  </main>
-  <footer><span>Башперевод · LMS</span><span>Изучайте язык шаг за шагом.</span></footer>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#142335" />
+    <title>Кабинет преподавателя · Башперевод</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>

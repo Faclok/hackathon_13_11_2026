@@ -47,6 +47,7 @@ services:
       Bootstrap__Username: ${BOOTSTRAP_USERNAME:-admin}
       Bootstrap__Password: ${BOOTSTRAP_PASSWORD:-}
       Telegram__InternalKey: ${INTERNAL_API_KEY:-}
+      Lms__InternalKey: ${INTERNAL_API_KEY:-}
       Telegram__BotUsername: ${TELEGRAM_BOT_USERNAME:-}
     depends_on:
       core-db:
@@ -59,6 +60,7 @@ services:
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__Default: Host=lms-db;Database=lms;Username=app;Password=${POSTGRES_PASSWORD}
       MAIN_API_URL: http://main-api:8080
+      MAIN_API_KEY: ${INTERNAL_API_KEY:-}
     depends_on:
       lms-db:
         condition: service_healthy

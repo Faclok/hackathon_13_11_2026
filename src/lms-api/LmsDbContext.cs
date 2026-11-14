@@ -77,6 +77,7 @@ public sealed class LmsDbContext(DbContextOptions<LmsDbContext> options) : DbCon
             e.ToTable("lms_task_submissions"); e.HasKey(x => new { x.TaskId, x.UserId });
             e.HasOne<ClassTask>().WithMany().HasForeignKey(x => x.TaskId).OnDelete(DeleteBehavior.Cascade);
             e.Property(x => x.Answer).HasMaxLength(5000);
+            e.Property(x => x.TeacherComment).HasMaxLength(1000);
         });
     }
 }
@@ -125,6 +126,7 @@ public sealed class TeacherTranslation
     public string SourceText { get; set; } = "";
     public string TranslationText { get; set; } = "";
     public string LanguagePair { get; set; } = "ba-ru";
+    public Guid? CoreCaseId { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 public sealed class ClassTask
@@ -147,4 +149,7 @@ public sealed class TaskSubmission
     public Guid UserId { get; set; }
     public string Answer { get; set; } = "";
     public DateTimeOffset SubmittedAt { get; set; } = DateTimeOffset.UtcNow;
+    public bool? TeacherCorrect { get; set; }
+    public string TeacherComment { get; set; } = "";
+    public DateTimeOffset? ReviewedAt { get; set; }
 }

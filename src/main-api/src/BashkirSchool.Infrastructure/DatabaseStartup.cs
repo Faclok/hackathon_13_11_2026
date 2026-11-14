@@ -1,4 +1,5 @@
 using BashkirSchool.Application;
+using BashkirSchool.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
@@ -25,7 +26,20 @@ public static class DatabaseStartup
         try
         {
             await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_lock(71830422)", ct);
-            if (await db.Users.AnyAsync(ct)) return;
+            if (await db.Users.AnyAsync(ct))
+            {
+                var policy = await db.Policies.OrderByDescending(x => x.Version).FirstOrDefaultAsync(ct);
+                // Upgrade only the untouched bootstrap policy. Administrator-created versions remain authoritative.
+                if (policy is { Version: 1, RequiredParticipants: 100, SupportThreshold: .8m,
+                    MinimumSchools: 2, MinimumClasses: 3, MaximumSchoolShare: .6m,
+                    MaximumClassShare: .4m, AssignmentMinutes: 30, RepeatHours: 24, WorkingSetSize: 20 })
+                {
+                    db.Policies.Add(new DistributionPolicy { Version = 2, ChangedBy = policy.ChangedBy,
+                        CreatedAt = DateTimeOffset.UtcNow });
+                    await db.SaveChangesAsync(ct);
+                }
+                return;
+            }
             var username = configuration["Bootstrap:Username"];
             var password = configuration["Bootstrap:Password"];
             if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))

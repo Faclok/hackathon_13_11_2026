@@ -15,7 +15,10 @@ public sealed record ResolutionResponse(Guid Id, long Revision, ResolutionKind K
 public sealed record VariantEvidence(Guid Id, string Text, int Supports, decimal? SupportRatio);
 /// <summary>Material and evidence available to an authorized expert.</summary>
 public sealed record ExpertCaseResponse(Guid CaseId, long Revision, string Original, string LanguagePair,
-    SourceReference Source, bool Closed, bool Disputed, ResolutionResponse? Resolution, IReadOnlyList<VariantEvidence> Variants);
+    SourceReference Source, bool Closed, bool Disputed, ResolutionResponse? Resolution, IReadOnlyList<VariantEvidence> Variants)
+{
+    public string? TeacherNote { get; init; }
+}
 /// <summary>A queued case, ordered by disagreement among sufficiently sampled cases.</summary>
 public sealed record ExpertQueueItem(Guid CaseId, long Revision, string Original, bool Disputed, int Observations,
     decimal? LeadingSupport, DateTimeOffset CreatedAt);

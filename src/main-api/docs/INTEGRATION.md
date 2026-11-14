@@ -45,7 +45,7 @@
 | `BOOTSTRAP_USERNAME` | `Bootstrap__Username` | Первый администратор, по умолчанию `admin` |
 | `BOOTSTRAP_PASSWORD` | `Bootstrap__Password` | Минимум 12 символов, строчные/прописные буквы, цифра и специальный символ |
 
-`INTERNAL_API_KEY` остаётся настройкой прежнего бота; ядро и LMS его не используют. Строка подключения ядра называется `Core`, не `Default`; Compose направляет её на `Host=core-db;Database=core;Username=app`. Issuer/audience по умолчанию: `BashkirSchool.Core` / `BashkirSchool.Clients`.
+`INTERNAL_API_KEY` Compose передаёт Telegram-боту, LMS и ядру. Бот использует его для `/internal/telegram/*`; LMS передаёт его в `X-Internal-Key` при регистрации кандидата и запросе экспертизы, а ядро сверяет с `Lms__InternalKey`. Строка подключения ядра называется `Core`, не `Default`; Compose направляет её на `Host=core-db;Database=core;Username=app`. Issuer/audience по умолчанию: `BashkirSchool.Core` / `BashkirSchool.Clients`.
 
 Автономный запуск описан в [IMPLEMENTATION.md](../IMPLEMENTATION.md). `.env` не загружается приложением автоматически: значения должен передать Docker или среда запуска. Примеры секретов из `.env.example` перед использованием замените случайными значениями.
 
@@ -96,9 +96,9 @@ Nginx передаёт `X-Forwarded-For`, но ядро пока не обраб
 
 ## LMS и Telegram
 
-LMS адаптирован в коммите `c510a51`: проверяет JWT через `GET /api/me`, передаёт пользовательский bearer-токен и читает поле `id`; общий внутренний ключ не нужен. Ядро проверяет активность аккаунта и отзыв сессии.
+LMS проверяет JWT через `GET /api/me`, передаёт пользовательский bearer-токен и читает поле `id`. Для изменяющих маршрутов `/api/lms-source/*` он дополнительно передаёт общий внутренний ключ. Ядро проверяет активность аккаунта и отзыв сессии.
 
-Бот вызывает `/api/internal/telegram/{id}/start`, `/task`, `/me`, `/submit`. Этих маршрутов в ядре нет. Он вынесен в профиль Compose `legacy-bot` и по умолчанию не запускается. Telegram-привязка и пользовательская сессия бота требуют отдельной реализации. Не заменяйте их общим привилегированным ключом, позволяющим выбирать произвольного пользователя.
+Telegram-бот вынесен в профиль Compose `telegram` и по умолчанию не запускается. Участник создаёт одноразовый код через `POST /api/me/telegram-link`; бот привязывает Telegram ID через `POST /internal/telegram/{telegramId}/link` и затем обращается к внутренним маршрутам профиля, урока и ответов с `X-Internal-Key`. Ядро определяет участника по сохранённой привязке. Подробности — в [README бота](../../telegram-bot/README.md) и [обзоре main-api](SERVICE-OVERVIEW.md).
 
 Прежние JWT, пароли и Telegram-связи автоматически не переносятся. Готовность контейнера ядра не означает готовность прежних клиентов.
 

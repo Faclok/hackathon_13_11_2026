@@ -49,6 +49,7 @@ app.MapPost("/api/lms/lessons/{id:int}/complete", async (int id, HttpRequest req
 });
 
 app.MapTeacherEndpoints();
+app.MapTeacherReports();
 
 app.Run();
 
