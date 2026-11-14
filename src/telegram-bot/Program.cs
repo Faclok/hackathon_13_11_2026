@@ -20,6 +20,8 @@ if (string.IsNullOrWhiteSpace(token))
     await Task.Delay(Timeout.InfiniteTimeSpan);
     return;
 }
+
+
 var key = Environment.GetEnvironmentVariable("INTERNAL_API_KEY") ?? throw new InvalidOperationException("INTERNAL_API_KEY is required");
 var mainUrl = Environment.GetEnvironmentVariable("MAIN_API_URL") ?? "http://main-api:8080";
 using var telegram = new HttpClient { BaseAddress = new Uri($"https://api.telegram.org/bot{token}/"), Timeout = TimeSpan.FromSeconds(40) };

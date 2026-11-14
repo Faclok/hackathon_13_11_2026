@@ -1,4 +1,4 @@
-bashperevod.ru, lms.bashperevod.ru {
+bashperevod.ru, lms.bashperevod.ru, expert.bashperevod.ru {
     encode zstd gzip
     reverse_proxy nginx:80
 }
