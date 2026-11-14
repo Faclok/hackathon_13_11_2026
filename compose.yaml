@@ -69,7 +69,6 @@ services:
 
   telegram-bot:
     build: ./src/telegram-bot
-    profiles: ["telegram"]
     restart: unless-stopped
     environment:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
@@ -115,7 +114,6 @@ services:
 
   bot-db:
     image: postgres:17-alpine
-    profiles: ["telegram"]
     restart: unless-stopped
     environment:
       POSTGRES_DB: bot
