@@ -24,6 +24,9 @@ public sealed class ExerciseHandlerTests
         var wrong = pairs.ToArray();
         wrong[0] = wrong[0] with { RightId = pairs[1].RightId }; wrong[1] = wrong[1] with { RightId = pairs[0].RightId };
         Assert.False(handler.Evaluate(draft.AnswerKey, Answer(new WordMatchAnswer(wrong))));
+        Assert.True(handler.CheckPair(draft.AnswerKey, pairs[0]));
+        Assert.False(handler.CheckPair(draft.AnswerKey, new WordPairAnswer(pairs[0].LeftId, pairs[1].RightId)));
+        Assert.Throws<DomainException>(() => handler.CheckPair(draft.AnswerKey, new WordPairAnswer(pairs[0].LeftId, "foreign")));
         Assert.Throws<DomainException>(() => handler.Evaluate(draft.AnswerKey, Answer(new WordMatchAnswer([pairs[0], pairs[0], pairs[2], pairs[3], pairs[4]]))));
         var ambiguous = words.Select(w => w with { Translation = "same" }).ToArray();
         Assert.Null(handler.Create(new(null, ambiguous, "ba-ru")));
@@ -39,6 +42,7 @@ public sealed class ExerciseHandlerTests
         Assert.DoesNotContain("Мин", draft.Prompt.GetRawText());
         Assert.True(handler.Evaluate(draft.AnswerKey, Answer(new TextExerciseAnswer("Мин мәктәпкә барам."))));
         Assert.False(handler.Evaluate(draft.AnswerKey, Answer(new TextExerciseAnswer("Я иду в школу."))));
+        Assert.Equal("Мин мәктәпкә барам.", handler.CorrectAnswer(draft.AnswerKey));
     }
 
     [Fact]
@@ -52,6 +56,42 @@ public sealed class ExerciseHandlerTests
         Assert.DoesNotContain("школу", draft.Prompt.GetRawText());
         Assert.True(handler.Evaluate(draft.AnswerKey, Answer(new TextExerciseAnswer("Я направляюсь в школу."))));
         Assert.False(handler.Evaluate(draft.AnswerKey, Answer(new TextExerciseAnswer("Мин мәктәпкә барам."))));
+        Assert.Equal("Я иду в школу.", handler.CorrectAnswer(draft.AnswerKey));
+    }
+
+    [Fact]
+    public void NewChoiceExercisesOfferThreeOptionsAndRejectUnissuedAnswers()
+    {
+        var words = new[] { new ExerciseWord(Guid.NewGuid(), "Мин", "Я") };
+        var sentence = new ExerciseSentence(Guid.NewGuid(), Guid.NewGuid(), "Мин барам.", "ba-ru", ["Я иду."], Guid.NewGuid());
+        var material = new ExerciseMaterial(sentence, words, "ba-ru", ["Һаумы!", "Рәхмәт!"], ["Я сплю.", "Я пою."]);
+        var textHandler = new TranslationChoiceHandler();
+        var textDraft = textHandler.Create(material)!;
+        var textPrompt = ExerciseJson.Read<ChoiceTextPrompt>(textDraft.Prompt);
+        Assert.Equal(3, textPrompt.Options.Count);
+        Assert.Contains(textPrompt.WordHints, x => x.Word == "Мин" && x.Translation == "Я");
+        var correct = textPrompt.Options.Single(x => x.Text == "Я иду.");
+        var wrong = textPrompt.Options.First(x => x.Id != correct.Id);
+        Assert.True(textHandler.Evaluate(textDraft.AnswerKey, Answer(new ChoiceExerciseAnswer(correct.Id))));
+        Assert.False(textHandler.Evaluate(textDraft.AnswerKey, Answer(new ChoiceExerciseAnswer(wrong.Id))));
+        Assert.Equal("Я иду.", textHandler.CorrectAnswer(textDraft.AnswerKey));
+        Assert.Throws<DomainException>(() => textHandler.Evaluate(textDraft.AnswerKey, Answer(new ChoiceExerciseAnswer("foreign"))));
+        Assert.Throws<DomainException>(() => textHandler.Evaluate(textDraft.AnswerKey, Answer(new TextExerciseAnswer("Я иду."))));
+
+        var dictation = new DictationChoiceHandler();
+        var dictationDraft = dictation.Create(material)!;
+        var dictationPrompt = ExerciseJson.Read<ChoiceAudioPrompt>(dictationDraft.Prompt);
+        Assert.Equal("Мин барам.", dictationPrompt.Original);
+        Assert.Equal(3, dictationPrompt.Options.Count);
+        Assert.Contains(dictationPrompt.Options, x => x.Text == "Мин барам.");
+        Assert.DoesNotContain(dictationPrompt.Options, x => x.Text == "Я иду.");
+
+        var audioTranslation = new AudioTranslationChoiceHandler();
+        var audioDraft = audioTranslation.Create(material)!;
+        var audioPrompt = ExerciseJson.Read<ChoiceAudioPrompt>(audioDraft.Prompt);
+        Assert.Equal(3, audioPrompt.Options.Count);
+        Assert.Contains(audioPrompt.Options, x => x.Text == "Я иду.");
+        Assert.DoesNotContain(audioPrompt.Options, x => x.Text == "Мин барам.");
     }
 
     [Fact]

@@ -85,8 +85,20 @@ public sealed class CoreFactory(int registrationLimit = 10, string? telegramKey 
 
     public static Task<LevelResponse> CurrentLevel(HttpClient client) => Post<LevelResponse>(client, "/api/learning/current", new { });
     public static string LevelAnswerUrl(LevelResponse level) => $"/api/learning/levels/{level.Id}/questions/{level.Question.Id}/answer";
-    public static Task<LevelAnswerResponse> AnswerLevel(HttpClient client, LevelResponse level, object answer) =>
-        Post<LevelAnswerResponse>(client, LevelAnswerUrl(level), new AnswerLevelRequest(level.Question.AttemptToken, ExerciseJson.Element(answer)));
+    public static Task<LevelAnswerResponse> AnswerLevel(HttpClient client, LevelResponse level, object answer)
+    {
+        if (level.Question.SchemaVersion == 2 && answer is TextExerciseAnswer text)
+            answer = ChoiceAnswer(level.Question, text.Text);
+        return Post<LevelAnswerResponse>(client, LevelAnswerUrl(level), new AnswerLevelRequest(level.Question.AttemptToken, ExerciseJson.Element(answer)));
+    }
+    public static ChoiceExerciseAnswer ChoiceAnswer(LevelQuestionResponse question, string text)
+    {
+        var options = question.Prompt.GetProperty("options").EnumerateArray().ToArray();
+        var selected = options.FirstOrDefault(x => x.GetProperty("text").GetString() == text);
+        if (selected.ValueKind == JsonValueKind.Undefined)
+            selected = options.First(x => x.GetProperty("text").GetString() != question.Prompt.GetProperty("hintTranslation").GetString());
+        return new(selected.GetProperty("id").GetString()!);
+    }
     public static Task<ExpertDatasetReceipt> LearningContent(HttpClient admin, string text = "Һаумы", string translation = "Hello") =>
         Post<ExpertDatasetReceipt>(admin, "/api/expert/imports", new ExpertDatasetRow("test-learning", text, "ba-ru", translation, true, new SourceReference("test")));
 

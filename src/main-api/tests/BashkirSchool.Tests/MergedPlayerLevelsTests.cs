@@ -22,9 +22,11 @@ public sealed class MergedPlayerLevelsTests
         await LearningContent(admin);
         Assert.False((await student.Client.GetFromJsonAsync<BossAccessResponse>("/api/boss/access"))!.CanAccess);
         Assert.Equal(HttpStatusCode.Forbidden, (await student.Client.PostAsJsonAsync("/api/boss/next", new { })).StatusCode);
+        var levelCoins = 0;
         for (var number = 1; number <= 5; number++)
         {
             var level = await CurrentLevel(student.Client);
+            levelCoins += level.QuestionCount / 3;
             Assert.Equal(number, level.Number);
             for (var i = 0; i < level.QuestionCount; i++)
             {
@@ -33,6 +35,7 @@ public sealed class MergedPlayerLevelsTests
             }
         }
         Assert.True((await student.Client.GetFromJsonAsync<BossAccessResponse>("/api/boss/access"))!.CanAccess);
+        Assert.Equal(1, (await student.Client.GetFromJsonAsync<PlayerProfile>("/api/player/profile"))!.Swords);
         using var producer = await f.Producer(admin);
         for (var i = 0; i < 3; i++) await Deliver(producer, "merged-boss-" + i);
         var caseIds = new HashSet<Guid>();
@@ -51,8 +54,21 @@ public sealed class MergedPlayerLevelsTests
         Assert.Equal(HttpStatusCode.Forbidden, (await student.Client.PostAsJsonAsync("/api/boss/next", new { })).StatusCode);
         var profile = (await student.Client.GetFromJsonAsync<PlayerProfile>("/api/player/profile"))!;
         Assert.Equal(100, profile.Xp);
-        Assert.Equal(50, profile.Coins);
+        Assert.Equal(levelCoins + 3, profile.Coins);
+        Assert.Equal(0, profile.Swords);
         Assert.Contains("boss", profile.TrophyIds);
+        using (var expert = await ResolutionFlowTests.Staff(f, admin, "expert"))
+        {
+            var selectedCase = caseIds.First();
+            var view = (await expert.GetFromJsonAsync<ExpertCaseResponse>($"/api/expert/cases/{selectedCase}"))!;
+            var selected = Assert.Single(view.Variants).Id;
+            await Post<ResolutionResponse>(expert, $"/api/expert/cases/{selectedCase}/resolution",
+                new ResolveCaseRequest(0, selected, [], []));
+            await ResolutionFlowTests.Process(f, selectedCase);
+            Assert.Equal(levelCoins + 7, (await student.Client.GetFromJsonAsync<PlayerProfile>("/api/player/profile"))!.Coins);
+            await ResolutionFlowTests.Process(f, selectedCase);
+            Assert.Equal(levelCoins + 7, (await student.Client.GetFromJsonAsync<PlayerProfile>("/api/player/profile"))!.Coins);
+        }
         Assert.Equal(6, (await CurrentLevel(student.Client)).Number);
         using var scope = f.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<CoreDbContext>();

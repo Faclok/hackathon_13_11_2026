@@ -431,7 +431,7 @@ function AuthScreen({ onSuccess }: { onSuccess: (session: Session) => void }) {
             </label>
             {mode === "register" && (
               <p className="form-hint">
-                От 12 символов: заглавная и строчная буквы, цифра и спецсимвол.
+                За регистрацию начисляются 50 монет. Пароль: от 12 символов, заглавная и строчная буквы, цифра и спецсимвол.
               </p>
             )}
             {error && (
@@ -568,6 +568,20 @@ function AnswerReview({
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(getSession);
+  useEffect(() => {
+    if (!session) return;
+    let active = true;
+    api<{ displayName: string }>("/api/lms/teacher/me").then((profile) => {
+      if (!active) return;
+      const current = getSession();
+      if (current && current.displayName !== profile.displayName) {
+        const updated = { ...current, displayName: profile.displayName };
+        saveSession(updated);
+        setSession(updated);
+      }
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [session?.accessToken]);
   const [view, setView] = useState<View>("overview");
   const [classTab, setClassTab] = useState<ClassTab>("tasks");
   const [filter, setFilter] = useState<Filter>("all");
@@ -886,9 +900,9 @@ export default function App() {
             <p>Смотрите, где именно ученику нужна помощь.</p>
           </div>
           <div className="sidebar-account">
-            <div className="avatar">{initials(session.username)}</div>
+            <div className="avatar">{initials(session.displayName || session.username)}</div>
             <span>
-              <b>{session.username}</b>
+              <b>{session.displayName || session.username}</b>
               <small>Преподаватель</small>
             </span>
             <button onClick={signOut} title="Выйти" aria-label="Выйти">
@@ -934,7 +948,7 @@ export default function App() {
                 year: "numeric",
               })}
             </span>
-            <div className="top-avatar">{initials(session.username)}</div>
+            <div className="top-avatar">{initials(session.displayName || session.username)}</div>
           </div>
         </header>
         <main className="main-content">
@@ -951,7 +965,7 @@ export default function App() {
                     <div>
                       <span className="eyebrow">ВАШЕ РАБОЧЕЕ ПРОСТРАНСТВО</span>
                       <h1>
-                        Добрый день, {session.username}{" "}
+                        Добрый день, {session.displayName || session.username}{" "}
                         <span className="wave">✳</span>
                       </h1>
                       <p>
@@ -981,17 +995,27 @@ export default function App() {
                             "Выдавайте задания и следите за прогрессом учеников."
                           : "Создайте класс, добавьте учеников и выберите первое предложение для перевода."}
                       </p>
-                      <Button
-                        variant="light"
-                        icon="arrow"
-                        onClick={() =>
-                          activeClass
-                            ? navigate("classes")
-                            : setModal({ kind: "class" })
-                        }
-                      >
-                        {activeClass ? "Открыть класс" : "Создать класс"}
-                      </Button>
+                      <div className="banner-actions">
+                        <Button
+                          variant="light"
+                          icon="arrow"
+                          onClick={() =>
+                            activeClass
+                              ? navigate("classes")
+                              : setModal({ kind: "class" })
+                          }
+                        >
+                          {activeClass ? "Открыть класс" : "Создать класс"}
+                        </Button>
+                        {activeClass && (
+                          <Button
+                            icon="plus"
+                            onClick={() => setModal({ kind: "member" })}
+                          >
+                            Добавить ученика
+                          </Button>
+                        )}
+                      </div>
                     </div>
                     <div className="banner-visual">
                       <div className="banner-orbit one" />
@@ -1227,6 +1251,13 @@ export default function App() {
                               </div>
                             </div>
                             <div className="class-cover-actions">
+                              <Button
+                                variant="light"
+                                icon="plus"
+                                onClick={() => setModal({ kind: "member" })}
+                              >
+                                Добавить ученика
+                              </Button>
                               <Button
                                 variant="light"
                                 icon="edit"
@@ -1585,17 +1616,6 @@ export default function App() {
                                           </small>
                                         </div>
                                         <div className="student-actions">
-                                          <button
-                                            title="Изменить имя"
-                                            onClick={() =>
-                                              setModal({
-                                                kind: "member",
-                                                item: member,
-                                              })
-                                            }
-                                          >
-                                            <Icon name="edit" size={18} />
-                                          </button>
                                           <button
                                             title="Убрать из класса"
                                             onClick={() => deleteMember(member)}
@@ -2092,6 +2112,28 @@ function EditorModal({
   const [displayName, setDisplayName] = useState(
     modal.kind === "member" ? memberItem?.displayName || "" : "",
   );
+  const [foundMember, setFoundMember] = useState<{ id: string; username: string; displayName?: string } | null>(null);
+  const [memberSearch, setMemberSearch] = useState("");
+  useEffect(() => {
+    if (modal.kind !== "member" || memberItem || username.trim().length < 3) {
+      setFoundMember(null);
+      setMemberSearch("");
+      return;
+    }
+    setFoundMember(null);
+    setMemberSearch("");
+    let active = true;
+    const timer = window.setTimeout(() => {
+      api<{ id: string; username: string; displayName?: string }>(
+        `/api/lms/teacher/participants/lookup?username=${encodeURIComponent(username.trim())}`,
+      ).then((person) => {
+        if (active) { setFoundMember(person); setMemberSearch(""); }
+      }).catch(() => {
+        if (active) { setFoundMember(null); setMemberSearch("Участник не найден"); }
+      });
+    }, 350);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [modal.kind, memberItem, username]);
   const [sourceText, setSourceText] = useState(
     modal.kind === "translation" ? translationItem?.sourceText || "" : "",
   );
@@ -2281,7 +2323,7 @@ function EditorModal({
             ) : (
               <>
                 <label>
-                  Логин ученика
+                  Поиск ученика по username
                   <input
                     autoFocus
                     value={username}
@@ -2291,8 +2333,12 @@ function EditorModal({
                     required
                   />
                 </label>
+                {foundMember && <p className="form-hint" role="status">
+                  Найден: {foundMember.displayName || foundMember.username} (@{foundMember.username})
+                </p>}
+                {memberSearch && <p className="form-hint" role="status">{memberSearch}</p>}
                 <p className="form-hint">
-                  Ученик должен уже иметь аккаунт на платформе.
+                  Найди зарегистрированного ученика и добавь его в класс сразу, без подтверждения.
                 </p>
               </>
             ))}
@@ -2405,6 +2451,8 @@ function EditorModal({
                 ? "Сохраняем…"
                 : editing
                   ? "Сохранить"
+                  : modal.kind === "member"
+                    ? "Добавить ученика"
                   : modal.kind === "task"
                     ? "Выдать задание"
                     : "Создать"}

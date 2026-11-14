@@ -8,20 +8,27 @@ namespace BashkirSchool.Infrastructure;
 
 public sealed class PlayerState
 {
-    public const int RegistrationBonusCoins = 40;
+    public const int RegistrationBonusCoins = 50;
+    public const int ProfileCompletionBonusCoins = 50;
 
-    public static PlayerState ForNewRegistration(Guid participantId) => new()
+    public static PlayerState ForExistingParticipant(Guid participantId) => new()
     {
         ParticipantId = participantId,
-        Coins = RegistrationBonusCoins,
         OwnedJson = JsonSerializer.Serialize(RewardCatalog.Items.Where(x => x.IsDefault).Select(x => x.Id)),
         BackgroundId = "bg_default"
     };
+    public static PlayerState ForNewRegistration(Guid participantId)
+    {
+        var state = ForExistingParticipant(participantId);
+        state.Coins = RegistrationBonusCoins;
+        return state;
+    }
 
     public Guid ParticipantId { get; set; }
     public int Xp { get; set; }
     public int LastRewardedLevel { get; set; } = 1;
     public int Coins { get; set; }
+    public bool ProfileCompletionRewarded { get; set; }
     public int CaseKeys { get; set; }
     public int BossAnswers { get; set; }
     public bool BossRewarded { get; set; }
@@ -49,7 +56,10 @@ public sealed record PlayerProfile(Guid Id, string Nick, int Level, int Xp, int 
     int TasksSolved, int Accuracy, string[] TrophyIds, string[] OwnedDecorationIds, string? BackgroundId,
     string? FrameId, string? HatId, string? PetId, int CaseKeys, string[] EquippedItemIds, string LangPair = "ba-ru")
 {
+    public long Swords { get; init; }
     public string AvatarUrl { get; init; } = "";
+    public string? FirstName { get; init; }
+    public string? LastName { get; init; }
 }
 public sealed record PlayerLeaderboardEntry(PlayerProfile User, int Value, int Rank);
 public sealed record PlayerLevelReward(int Level, string DecorationId, string Rarity, bool Duplicate, int Compensation);
@@ -81,7 +91,9 @@ public sealed class PlayerEconomy(CoreDbContext db, BossAccess access, IPermissi
         var state = await StateAsync(actor, ct);
         var progress = await access.ReadAsync(actor, ct);
         var participant = await db.Participants.AsNoTracking().SingleAsync(x => x.Id == actor, ct);
-        var nick = await db.Users.Where(x => x.Id == actor).Select(x => x.UserName).SingleAsync(ct) ?? "";
+        var account = await db.Users.Where(x => x.Id == actor)
+            .Select(x => new { x.UserName, x.FirstName, x.LastName }).SingleAsync(ct);
+        var nick = account.UserName ?? "";
         var trophies = new List<string>();
         if (progress.TasksSolved >= 1) trophies.Add("first");
         if (progress.TasksSolved >= 10) trophies.Add("learner");
@@ -91,9 +103,12 @@ public sealed class PlayerEconomy(CoreDbContext db, BossAccess access, IPermissi
         if (progress.Streak >= 30) trophies.Add("month");
         if (progress.TasksSolved >= 250) trophies.Add("master");
         var accuracy = participant.Total == 0 ? 0 : (int)Math.Round((decimal)participant.Correct / participant.Total * 100m);
+        var completedLevels = await db.Set<LearningLevel>().LongCountAsync(x => x.ParticipantId == actor && x.CompletedAt != null, ct);
+        var startedBosses = await db.Set<LevelBoss>().LongCountAsync(x => x.ParticipantId == actor, ct);
         return new(actor, nick, state.Xp / 100 + 1, state.Xp, state.Coins, progress.Streak, progress.TasksSolved,
             accuracy, trophies.ToArray(), ReadIds(state.OwnedJson), state.BackgroundId, state.FrameId,
-            state.HatId, state.PetId, state.CaseKeys, ReadIds(state.EquippedItemsJson));
+            state.HatId, state.PetId, state.CaseKeys, ReadIds(state.EquippedItemsJson))
+        { FirstName = account.FirstName, LastName = account.LastName, Swords = Math.Max(0, completedLevels / 5 - startedBosses) };
     }
 
     public async Task RewardReviewAsync(Guid actor, bool boss, CancellationToken ct)
@@ -102,11 +117,11 @@ public sealed class PlayerEconomy(CoreDbContext db, BossAccess access, IPermissi
         if (boss)
         {
             state.BossAnswers++;
+            state.Coins += 1;
             if (!state.BossRewarded && state.BossAnswers >= 3)
             {
                 state.BossRewarded = true;
                 state.Xp += 100;
-                state.Coins += 50;
             }
         }
         else

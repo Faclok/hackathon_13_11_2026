@@ -8,6 +8,8 @@ namespace BashkirSchool.Infrastructure;
 
 public sealed class Account : IdentityUser<Guid>
 {
+    public string? FirstName { get; set; }
+    public string? LastName { get; set; }
     public bool Active { get; set; } = true;
     public long SessionVersion { get; set; }
     public bool SelfRegistered { get; set; }
@@ -53,6 +55,8 @@ public sealed class CoreDbContext(DbContextOptions<CoreDbContext> options) : Ide
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
+        b.Entity<Account>().Property(x => x.FirstName).HasMaxLength(100);
+        b.Entity<Account>().Property(x => x.LastName).HasMaxLength(100);
         b.Entity<LearningLevel>().HasIndex(x => new { x.ParticipantId, x.Number }).IsUnique();
         b.Entity<LearningLevel>().HasIndex(x => x.ParticipantId).IsUnique().HasFilter("\"CompletedAt\" IS NULL");
         b.Entity<LearningLevel>().HasOne<Participant>().WithMany().HasForeignKey(x => x.ParticipantId).OnDelete(DeleteBehavior.Restrict);
@@ -142,6 +146,7 @@ public sealed class CoreDbContext(DbContextOptions<CoreDbContext> options) : Ide
         b.Entity<PlayerState>().HasKey(x => x.ParticipantId);
         b.Entity<PlayerState>().Property(x => x.LastRewardedLevel).HasDefaultValue(1);
         b.Entity<PlayerState>().HasOne<Participant>().WithOne().HasForeignKey<PlayerState>(x => x.ParticipantId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<PlayerState>().Property(x => x.ProfileCompletionRewarded).HasDefaultValue(false);
         b.Entity<PlayerState>().Property(x => x.OwnedJson).HasDefaultValue("[]");
         b.Entity<PlayerState>().Property(x => x.EquippedItemsJson).HasDefaultValue("[]");
         b.Entity<PlayerState>().Property(x => x.BackgroundId).HasMaxLength(100);

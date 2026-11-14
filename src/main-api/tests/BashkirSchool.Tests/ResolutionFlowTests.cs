@@ -108,7 +108,7 @@ public sealed class ResolutionFlowTests
         var level = await CurrentLevel(student.Client);
         Assert.Equal(level.Id, (await CurrentLevel(student.Client)).Id);
         var json = await (await student.Client.PostAsJsonAsync("/api/learning/current", new { })).Content.ReadAsStringAsync();
-        Assert.DoesNotContain("acceptedTexts", json, StringComparison.OrdinalIgnoreCase); Assert.DoesNotContain("Hello", json);
+        Assert.DoesNotContain("acceptedTexts", json, StringComparison.OrdinalIgnoreCase);
         var attempt = await AnswerLevel(student.Client, level, new TextExerciseAnswer("Hello"));
         Assert.True(attempt.Recognized);
         Assert.Equal(attempt, await AnswerLevel(student.Client, level, new TextExerciseAnswer("Hello")));

@@ -7,11 +7,11 @@ using Microsoft.Extensions.Configuration;
 
 namespace BashkirSchool.Infrastructure;
 
-public sealed class LearningMaterials(CoreDbContext db, IPermissionChecker permissions)
+public sealed class LearningMaterials(CoreDbContext db)
 {
-    public async Task<VocabularyDeliveryResponse> DeliverAsync(Guid actor, DeliverVocabularyRequest request, CancellationToken ct)
+    public async Task<VocabularyDeliveryResponse> DeliverAsync(DeliverVocabularyRequest request, CancellationToken ct)
     {
-        if (!await permissions.HasAsync(actor, "content.deliver", AccessScope.Own, actor, ct)) throw new AccessDeniedException();
+        // Temporary CSV uploader: the endpoint requires a session, without a producer role.
         var pair = Guard.Text(request.LanguagePair, "languagePair", 7);
         var languages = pair.Split('-');
         if (languages.Length != 2 || languages.Any(x => x.Length is < 2 or > 3 || !x.All(char.IsAsciiLetterLower)) || languages[0] == languages[1])
@@ -51,6 +51,19 @@ public sealed class AudioPreparation(CoreDbContext db, IPermissionChecker permis
     {
         if (!await permissions.HasAsync(actor, "lessons.receive", AccessScope.Own, actor, ct) &&
             !await permissions.HasAsync(actor, "content.deliver", AccessScope.Own, actor, ct)) throw new AccessDeniedException();
+        return await PrepareCoreAsync(caseId, ct);
+    }
+
+    public async Task<AudioAssetResponse> PrepareVerifiedAsync(Guid caseId, CancellationToken ct)
+    {
+        if (!await db.Cases.AsNoTracking().AnyAsync(c => c.Id == caseId && c.ExpertClosed && c.ResolutionId != null &&
+            db.Resolutions.Any(r => r.Id == c.ResolutionId && r.Kind == ResolutionKind.Expert && r.PrimaryVariantId != null), ct))
+            throw new MissingResourceException();
+        return await PrepareCoreAsync(caseId, ct);
+    }
+
+    private async Task<AudioAssetResponse> PrepareCoreAsync(Guid caseId, CancellationToken ct)
+    {
         var fragment = await (from c in db.Cases where c.Id == caseId join f in db.Fragments on c.FragmentId equals f.Id select f).SingleOrDefaultAsync(ct)
             ?? throw new MissingResourceException();
         await Gate.WaitAsync(ct);

@@ -12,6 +12,48 @@ namespace BashkirSchool.Tests;
 public sealed class LmsTranslationTests
 {
     [Fact]
+    public async Task TeacherBossAnswerUsesOneSwordAndReceivesDelayedCorrectRewardOnce()
+    {
+        using var factory = new CoreFactory(lmsKey: "test-lms-secret", learningKind: "translation-text");
+        using var admin = await factory.Bootstrap();
+        var student = await factory.Student(admin);
+        await LearningContent(admin);
+        var levelCoins = 0;
+        for (var number = 0; number < 5; number++)
+        {
+            var first = await CurrentLevel(student.Client);
+            levelCoins += first.QuestionCount / 3;
+            for (var question = 0; question < first.QuestionCount; question++)
+                Assert.True((await AnswerLevel(student.Client, await CurrentLevel(student.Client), new TextExerciseAnswer("Hello"))).Recognized);
+        }
+        Assert.Equal(1, (await student.Client.GetFromJsonAsync<PlayerProfile>("/api/player/profile"))!.Swords);
+        using var teacher = await factory.Producer(admin);
+        var created = await PostInternal(teacher, "/api/lms-source/teacher/translations",
+            new { externalId = Guid.NewGuid(), sourceText = "Һаумы", translationText = "Привет", languagePair = "ba-ru" });
+        var caseId = (await created.Content.ReadFromJsonAsync<CaseIdResponse>())!.CaseId;
+        var started = await Post<BossStart>(student.Client, "/api/learning/boss/start", new { });
+        Assert.Equal(5, started.Checkpoint);
+        Assert.Equal(0, (await student.Client.GetFromJsonAsync<PlayerProfile>("/api/player/profile"))!.Swords);
+        var taskId = Guid.NewGuid();
+        var contribution = await PostInternal(student.Client, $"/api/lms-source/translations/{caseId}/student-answer",
+            new { taskId, text = "Привет", boss = true });
+        var assignmentId = (await contribution.Content.ReadFromJsonAsync<BossContribution>())!.AssignmentId;
+        var attached = await Post<LevelBossAnswerResponse>(student.Client,
+            $"/api/learning/boss/teacher-answers/{assignmentId}", new { });
+        Assert.False(attached.BossCompleted);
+        Assert.Equal(attached, await Post<LevelBossAnswerResponse>(student.Client,
+            $"/api/learning/boss/teacher-answers/{assignmentId}", new { }));
+        Assert.Equal(levelCoins + 1, (await student.Client.GetFromJsonAsync<PlayerProfile>("/api/player/profile"))!.Coins);
+        using var expert = await ResolutionFlowTests.Staff(factory, admin, "expert");
+        var view = (await expert.GetFromJsonAsync<ExpertCaseResponse>($"/api/expert/cases/{caseId}"))!;
+        await Post<ResolutionResponse>(expert, $"/api/expert/cases/{caseId}/resolution",
+            new ResolveCaseRequest(0, view.Variants.Single().Id, [], []));
+        await ResolutionFlowTests.Process(factory, caseId);
+        await ResolutionFlowTests.Process(factory, caseId);
+        Assert.Equal(levelCoins + 5, (await student.Client.GetFromJsonAsync<PlayerProfile>("/api/player/profile"))!.Coins);
+    }
+
+    [Fact]
     public async Task StudentTaskAnswerAddsVariantAndVoteWithoutRewritingSourceOrExpertTranslation()
     {
         using var factory = new CoreFactory(lmsKey: "test-lms-secret");
@@ -102,6 +144,8 @@ public sealed class LmsTranslationTests
     }
 
     private sealed record CaseIdResponse(Guid CaseId);
+    private sealed record BossStart(Guid Id, long Checkpoint);
+    private sealed record BossContribution(Guid AssignmentId);
     private sealed record LmsCase(string Status, string[] AcceptedTranslations);
     private sealed record CatalogWithTop(string TranslationText, PopularVariant[] TopTranslations);
     private sealed record PopularVariant(string Text, int Votes);

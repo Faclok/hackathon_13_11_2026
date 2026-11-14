@@ -453,6 +453,11 @@ a {
   padding: 8px 12px;
   font-size: 11px;
 }
+.banner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 .banner-visual {
   position: relative;
   min-height: 204px;
@@ -896,6 +901,8 @@ a {
   z-index: 1;
   display: flex;
   align-items: flex-start;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 7px;
 }
 .class-cover-actions .button {

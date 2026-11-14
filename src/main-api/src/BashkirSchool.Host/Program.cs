@@ -21,7 +21,8 @@ builder.Services.AddOpenApi(options => options.AddDocumentTransformer((document,
     document.Components ??= new();
     document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
     document.Components.SecuritySchemes["Bearer"] = new OpenApiSecurityScheme { Type = SecuritySchemeType.Http, Scheme = "bearer", BearerFormat = "JWT" };
-    foreach (var path in document.Paths.Where(x => x.Key.StartsWith("/api/", StringComparison.Ordinal)))
+    foreach (var path in document.Paths.Where(x => x.Key.StartsWith("/api/", StringComparison.Ordinal) &&
+        !x.Key.StartsWith("/api/public/", StringComparison.Ordinal)))
         foreach (var operation in path.Value.Operations!.Values)
         {
             operation.Security ??= [];
@@ -42,6 +43,9 @@ builder.Services.AddRateLimiter(options =>
     options.AddPolicy("registration", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = registrationLimit, Window = TimeSpan.FromSeconds(registrationWindow), QueueLimit = 0, AutoReplenishment = true }));
+    options.AddPolicy("public-tts", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true }));
 });
 builder.Services.ConfigureHttpJsonOptions(o =>
 {
@@ -105,6 +109,8 @@ app.MapPost("/auth/password", async (CompletePasswordRequest request, SchoolAcco
 
 var api = app.MapGroup("/api").RequireAuthorization();
 api.MapGet("/me", (ClaimsPrincipal user, IndependentAccounts accounts, CancellationToken ct) => accounts.ProfileAsync(Subject(user), ct));
+api.MapPut("/me", (ClaimsPrincipal user, UpdateMyProfileRequest request, IndependentAccounts accounts, CancellationToken ct) =>
+    accounts.UpdateProfileAsync(Subject(user), request, ct));
 api.MapGet("/player/profile", (ClaimsPrincipal user, PlayerEconomy economy, CancellationToken ct) =>
     economy.ProfileAsync(Subject(user), ct));
 api.MapPost("/player/level-rewards/claim", (ClaimsPrincipal user, PlayerEconomy economy, CancellationToken ct) =>
@@ -154,9 +160,9 @@ api.MapGet("/translations/export", (ClaimsPrincipal user, int? offset, int? limi
 api.MapGet("/exercises/kinds", (ExerciseRegistry registry) => registry.Kinds)
     .WithName("ListExerciseKinds").WithSummary("Supported learning exercise kinds and answer schema versions.")
     .Produces<IReadOnlyList<ExerciseKindResponse>>();
-api.MapPost("/vocabulary", (ClaimsPrincipal user, DeliverVocabularyRequest request, LearningMaterials materials, CancellationToken ct) =>
-    materials.DeliverAsync(Subject(user), request, ct))
-    .WithName("DeliverVocabulary").WithSummary("Idempotently import prepared word pairs as an authorized content producer.")
+api.MapPost("/vocabulary", (DeliverVocabularyRequest request, LearningMaterials materials, CancellationToken ct) =>
+    materials.DeliverAsync(request, ct))
+    .WithName("DeliverVocabulary").WithSummary("Idempotently import prepared word pairs as an authenticated user.")
     .Produces<VocabularyDeliveryResponse>().ProducesProblem(400);
 api.MapPost("/cases/{caseId:guid}/audio", (ClaimsPrincipal user, Guid caseId, AudioPreparation audio, CancellationToken ct) =>
     audio.PrepareAsync(Subject(user), caseId, ct))
@@ -215,6 +221,7 @@ api.MapGet("/cases/{caseId:guid}/statistics", (ClaimsPrincipal user, Guid caseId
 app.MapTelegramEndpoints();
 app.MapClassInvitationEndpoints();
 app.MapLmsCatalogEndpoints();
+app.MapVerifiedTaskEndpoints();
 app.Run();
 static Guid Subject(ClaimsPrincipal user) => Guid.Parse(user.FindFirstValue("sub")!);
 public partial class Program;

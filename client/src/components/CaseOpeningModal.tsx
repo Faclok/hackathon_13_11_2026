@@ -11,13 +11,12 @@ import type { CaseOpening } from "../types";
 import { DecorationPreview } from "./Personalization";
 import { RarityBadge } from "./CustomizationUI";
 import { Modal, useToast } from "./ui";
+import { plural } from "../utils/plural";
 
 export default function CaseOpeningModal({
   opening,
-  animate,
 }: {
   opening: CaseOpening;
-  animate: boolean;
 }) {
   const user = useUserStore((state) => state.user)!;
   const dismiss = useUserStore((state) => state.dismissCaseOpening);
@@ -30,7 +29,7 @@ export default function CaseOpeningModal({
   const caseId = opening.caseId === "case_item" ? "case_pet" : opening.caseId;
   const caseItem = rewardCases.find((item) => item.id === caseId)!;
   const [spinning, setSpinning] = useState(
-    animate && !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    () => !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
   );
   const [started, setStarted] = useState(false);
   const [tape] = useState(() => {
@@ -91,7 +90,7 @@ export default function CaseOpeningModal({
           <p>{winner.description}</p>
           {opening.duplicate ? (
             <div className="duplicate-notice">
-              Уже есть в коллекции · +{opening.compensation} монет
+              Уже есть в коллекции · +{plural(opening.compensation, "монета", "монеты", "монет")}
             </div>
           ) : (
             <div className="new-item-notice">Добавлено в твой инвентарь</div>

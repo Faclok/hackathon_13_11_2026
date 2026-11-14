@@ -29,23 +29,24 @@ public sealed class LevelAudioTests
 
         var first = await CurrentLevel(student);
         Assert.Equal(kind, first.Question.Kind);
-        var prompt = ExerciseJson.Read<AudioExercisePrompt>(first.Question.Prompt);
+        var prompt = ExerciseJson.Read<ChoiceAudioPrompt>(first.Question.Prompt);
         Assert.NotEqual(Guid.Empty, prompt.AudioId);
         Assert.StartsWith("https://audio.test/", prompt.AudioUrl);
-        Assert.False(first.Question.Prompt.TryGetProperty("original", out _));
+        Assert.Equal("Һаумы", prompt.Original);
+        Assert.Equal(3, prompt.Options.Count);
         Assert.Equal(first.Question.Id, (await CurrentLevel(student)).Question.Id);
         for (var i = 0; i < first.QuestionCount; i++)
         {
             var current = await CurrentLevel(student);
             Assert.Equal(first.Id, current.Id);
-            Assert.Equal(prompt.AudioId, ExerciseJson.Read<AudioExercisePrompt>(current.Question.Prompt).AudioId);
+            Assert.Equal(prompt.AudioId, ExerciseJson.Read<ChoiceAudioPrompt>(current.Question.Prompt).AudioId);
             var result = await AnswerLevel(student, current, new TextExerciseAnswer(answer));
             Assert.True(result.Recognized);
             Assert.Equal(i == first.QuestionCount - 1, result.LevelCompleted);
         }
         var second = await CurrentLevel(student);
         Assert.Equal(2, second.Number);
-        Assert.Equal(prompt.AudioId, ExerciseJson.Read<AudioExercisePrompt>(second.Question.Prompt).AudioId);
+        Assert.Equal(prompt.AudioId, ExerciseJson.Read<ChoiceAudioPrompt>(second.Question.Prompt).AudioId);
         Assert.Equal(1, audio.Syntheses);
         Assert.Equal(1, audio.Uploads);
         using var scope = app.Services.CreateScope();
@@ -106,7 +107,7 @@ public sealed class LevelAudioTests
         var next = await CurrentLevel(student);
         Assert.Equal(2, next.Number);
         Assert.Equal("audio-dictation", next.Question.Kind);
-        Assert.NotEqual(Guid.Empty, ExerciseJson.Read<AudioExercisePrompt>(next.Question.Prompt).AudioId);
+        Assert.NotEqual(Guid.Empty, ExerciseJson.Read<ChoiceAudioPrompt>(next.Question.Prompt).AudioId);
         Assert.Equal(2, audio.Syntheses);
         Assert.Equal(1, audio.Uploads);
     }

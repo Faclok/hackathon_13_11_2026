@@ -1,4 +1,9 @@
 .env
+.worktrees/
+docs/ACCESS.private.md
+backups/
+*.log
+client/src/castomization-page/dist/
 **/bin/
 **/obj/
 **/node_modules/

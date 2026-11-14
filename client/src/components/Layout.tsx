@@ -2,6 +2,7 @@ import { NavLink, Link, Outlet, useLocation } from "react-router-dom";
 import { useEffect } from "react";
 import { useUserStore } from "../store";
 import { Ornament, SchoolLogo } from "./Illustrations";
+import { displayName } from "../utils/displayName";
 import { Avatar } from "./Personalization";
 import { Icon } from "./ui";
 const navigation = [
@@ -11,10 +12,20 @@ const navigation = [
   ["/leaderboard", "trophy", "Рейтинг"],
   ["/profile", "user", "Профиль"],
 ];
+const pageTitles: Record<string, string> = {
+  "/": "Главная",
+  "/learn": "Учить башкирский",
+  "/boss": "Испытание Босса",
+  "/leaderboard": "Рейтинг",
+  "/profile": "Профиль",
+  "/inventory": "Инвентарь",
+  "/cases": "Кейсы",
+};
 export default function Layout() {
   const user = useUserStore((s) => s.user);
   const { pathname, hash } = useLocation();
   useEffect(() => {
+    document.title = `${pageTitles[pathname] ?? "Страница не найдена"} — Башкирская языковая школа`;
     if (pathname === "/profile" && hash === "#telegram") {
       document.getElementById("telegram")?.scrollIntoView();
     } else {
@@ -38,7 +49,7 @@ export default function Layout() {
         </Link>
         <Link to="/profile" className="user-link" aria-label="Открыть профиль">
           {user && <Avatar user={user} framed={false} />}
-          <span className="user-name">{user?.nick}</span>
+          <span className="user-name">{user ? displayName(user) : ""}</span>
         </Link>
       </header>
       <main className="page-content">
@@ -51,7 +62,8 @@ export default function Layout() {
             to={to}
             end={to === "/"}
             className={({ isActive }) =>
-              isActive ? "nav-item active" : "nav-item"
+              isActive || (to === "/profile" && pathname === "/inventory")
+                ? "nav-item active" : "nav-item"
             }
           >
             <Icon

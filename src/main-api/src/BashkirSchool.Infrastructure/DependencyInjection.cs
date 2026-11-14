@@ -39,9 +39,12 @@ public static class DependencyInjection
         services.AddScoped<LearningMaterials>();
         services.AddScoped<AudioPreparation>();
         services.AddSingleton<IExerciseHandler, TranslationTextHandler>();
+        services.AddSingleton<IExerciseHandler, TranslationChoiceHandler>();
         services.AddSingleton<IExerciseHandler, WordMatchHandler>();
         services.AddSingleton<IExerciseHandler, DictationHandler>();
+        services.AddSingleton<IExerciseHandler, DictationChoiceHandler>();
         services.AddSingleton<IExerciseHandler, AudioTranslationHandler>();
+        services.AddSingleton<IExerciseHandler, AudioTranslationChoiceHandler>();
         services.AddSingleton<IExerciseHandler, MissingWordHandler>();
         services.AddSingleton<IExerciseHandler, SentenceOrderHandler>();
         services.AddSingleton<ExerciseRegistry>();

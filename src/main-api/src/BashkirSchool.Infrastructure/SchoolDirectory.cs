@@ -41,7 +41,8 @@ public sealed class SchoolDirectory(CoreDbContext db, IPermissionChecker permiss
             throw new AccessDeniedException();
         return await (from e in db.Enrollments where e.ClassId == classId
                       join u in db.Users on e.ParticipantId equals u.Id
-                      orderby u.UserName, u.Id select new AccountResponse(u.Id, u.UserName!)).Skip(offset).Take(limit).ToArrayAsync(ct);
+                      orderby u.UserName, u.Id select new AccountResponse(u.Id, u.UserName!)
+                      { FirstName = u.FirstName, LastName = u.LastName }).Skip(offset).Take(limit).ToArrayAsync(ct);
     }
 
     public async Task AssignAsync(Guid actor, Guid accountId, AssignAccessRequest request, CancellationToken ct)

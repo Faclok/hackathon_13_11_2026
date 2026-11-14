@@ -51,7 +51,8 @@ async function decode<T>(response: Response): Promise<T> {
     const body = await response.json().catch(() => null);
     throw new ApiError(response.status, body?.title ?? "Сервер не ответил на запрос.");
   }
-  return response.status === 204 ? undefined as T : response.json() as Promise<T>;
+  if (response.status === 204) return null as T;
+  return response.json() as Promise<T>;
 }
 
 export async function loginUsername(username: string) {

@@ -23,7 +23,8 @@ const paths: Record<string, ReactNode> = {
   ),
   swords: (
     <>
-      <path d="m4 3 5 2 10 13-3 3L5 8 4 3Zm16 0-5 2-3 4m-4 5-4 5m10-1 7-5M3 14l7 7" />
+      <path d="M14.5 17.5 3 6V3h3l11.5 11.5M13 19l6-6m-3 3 4 4m-1 1 2-2" />
+      <path d="M14.5 6.5 18 3h3v3l-3.5 3.5M5 14l5 5m-2.5-2.5L4 20m-1-1 2 2" />
     </>
   ),
   trophy: (
@@ -40,6 +41,12 @@ const paths: Record<string, ReactNode> = {
   bag: (
     <>
       <path d="M4 7h16l1 14H3L4 7Zm4 1V6a4 4 0 0 1 8 0v2" />
+    </>
+  ),
+  case: (
+    <>
+      <rect x="3" y="8" width="18" height="13" rx="2" />
+      <path d="M2 8h20M12 8v13M7 8c-2-1-2-4 0-5 2-1 4 2 5 5 1-3 3-6 5-5 2 1 2 4 0 5" />
     </>
   ),
   key: (

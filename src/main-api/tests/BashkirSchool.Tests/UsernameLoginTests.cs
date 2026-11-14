@@ -18,12 +18,12 @@ public sealed class UsernameLoginTests
         client.DefaultRequestHeaders.Authorization = new("Bearer", first.AccessToken);
         var profile = await client.GetFromJsonAsync<PlayerProfile>("/api/player/profile");
         Assert.Equal("Денис", profile!.Nick);
-        Assert.Equal(40, profile.Coins);
+        Assert.Equal(50, profile.Coins);
         var second = await Post<AccessTokenResponse>(client, "/auth/username", new { username = "Денис" });
         client.DefaultRequestHeaders.Authorization = new("Bearer", second.AccessToken);
         var resumed = (await client.GetFromJsonAsync<PlayerProfile>("/api/player/profile"))!;
         Assert.Equal(profile.Id, resumed.Id);
-        Assert.Equal(40, resumed.Coins);
+        Assert.Equal(50, resumed.Coins);
         var assignedStudent = await f.Student(admin);
         using var schoolLogin = f.CreateClient();
         var schoolToken = await Post<AccessTokenResponse>(schoolLogin, "/auth/username", new { username = "student1" });

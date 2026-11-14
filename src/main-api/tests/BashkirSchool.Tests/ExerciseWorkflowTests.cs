@@ -21,8 +21,7 @@ public sealed class ExerciseWorkflowTests
         using var producer = await f.Producer(admin);
         var entries = new[] { new VocabularyItemRequest("бер", "один"), new("ике", "два"), new("өс", "три"), new("дүрт", "четыре"), new("биш", "пять") };
         var input = new DeliverVocabularyRequest("ba-ru", entries);
-        Assert.Equal(HttpStatusCode.Forbidden, (await student.Client.PostAsJsonAsync("/api/vocabulary", input)).StatusCode);
-        var first = await Post<VocabularyDeliveryResponse>(producer, "/api/vocabulary", input);
+        var first = await Post<VocabularyDeliveryResponse>(student.Client, "/api/vocabulary", input);
         Assert.Equal(first.Ids, (await Post<VocabularyDeliveryResponse>(producer, "/api/vocabulary", input)).Ids);
         var level = await CurrentLevel(student.Client); var exercise = level.Question;
         var again = (await CurrentLevel(student.Client)).Question;
@@ -30,15 +29,53 @@ public sealed class ExerciseWorkflowTests
         Assert.False(exercise.Prompt.TryGetProperty("pairs", out _));
         var prompt = ExerciseJson.Read<WordMatchPrompt>(exercise.Prompt);
         var pairs = prompt.Left.Select(l => new WordPairAnswer(l.Id, prompt.Right.Single(r => r.Text == entries.Single(e => e.Word == l.Text).Translation).Id)).ToArray();
+        var checkUrl = $"/api/learning/levels/{level.Id}/questions/{exercise.Id}/pairs/check";
+        var correctPair = new CheckWordPairRequest(exercise.AttemptToken, pairs[0].LeftId, pairs[0].RightId);
+        var wrongPair = correctPair with { RightId = pairs[1].RightId };
+        Assert.Equal(HttpStatusCode.NotFound, (await other.Client.PostAsJsonAsync(checkUrl, correctPair)).StatusCode);
+        Assert.False((await Post<CheckWordPairResponse>(student.Client, checkUrl, wrongPair)).Correct);
+        Assert.True((await Post<CheckWordPairResponse>(student.Client, checkUrl, correctPair)).Correct);
+        Assert.Equal(HttpStatusCode.BadRequest, (await student.Client.PostAsJsonAsync(checkUrl,
+            correctPair with { RightId = "not-issued" })).StatusCode);
         var answer = new AnswerLevelRequest(exercise.AttemptToken, ExerciseJson.Element(new WordMatchAnswer(pairs)));
         Assert.Equal(HttpStatusCode.NotFound, (await other.Client.PostAsJsonAsync(LevelAnswerUrl(level), answer)).StatusCode);
         var result = await Post<LevelAnswerResponse>(student.Client, LevelAnswerUrl(level), answer);
         Assert.True(result.Recognized);
         Assert.Equal(result, await Post<LevelAnswerResponse>(student.Client, LevelAnswerUrl(level), answer));
+        Assert.Equal(HttpStatusCode.Conflict, (await student.Client.PostAsJsonAsync(checkUrl, correctPair)).StatusCode);
         using var scope = f.Services.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<CoreDbContext>();
         Assert.Equal(5, await db.Set<VocabularyEntry>().CountAsync()); Assert.Single(await db.Set<LevelAnswer>().ToArrayAsync());
         Assert.False(await db.Judgments.AnyAsync());
         Assert.All(await db.Participants.ToArrayAsync(), p => Assert.Equal((0, 0), (p.Correct, p.Total)));
+    }
+
+    [Fact]
+    public async Task VocabularyImportNeedsOnlyASessionAndKeepsDataValidation()
+    {
+        using var f = new CoreFactory(); using var admin = await f.Bootstrap();
+        var student = await f.Student(admin);
+        var valid = new DeliverVocabularyRequest("ba-ru", [new("бер", "один")]);
+        using var scope = f.Services.CreateScope();
+        var permissions = scope.ServiceProvider.GetRequiredService<IPermissionChecker>();
+        Assert.False(await permissions.HasAsync(student.Id, "content.deliver", AccessScope.Own, student.Id, default));
+        using var anonymous = f.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsJsonAsync("/api/vocabulary", valid)).StatusCode);
+        var first = await Post<VocabularyDeliveryResponse>(student.Client, "/api/vocabulary", valid);
+        Assert.Equal(first.Ids, (await Post<VocabularyDeliveryResponse>(student.Client, "/api/vocabulary", valid)).Ids);
+        var changed = await Post<VocabularyDeliveryResponse>(student.Client, "/api/vocabulary",
+            new DeliverVocabularyRequest("ba-ru", [new("бер", "единственный")]));
+        Assert.NotEqual(first.Ids[0], changed.Ids[0]);
+        foreach (var invalid in new[]
+        {
+            new DeliverVocabularyRequest("invalid", [new("бер", "один")]),
+            new DeliverVocabularyRequest("ba-ru", []),
+            new DeliverVocabularyRequest("ba-ru", [new("два слова", "один")]),
+            new DeliverVocabularyRequest("ba-ru", [new(new string('а', 201), "один")]),
+            new DeliverVocabularyRequest("ba-ru", Enumerable.Repeat(new VocabularyItemRequest("бер", "один"), 501).ToArray())
+        })
+            Assert.Equal(HttpStatusCode.BadRequest, (await student.Client.PostAsJsonAsync("/api/vocabulary", invalid)).StatusCode);
+        var db = scope.ServiceProvider.GetRequiredService<CoreDbContext>();
+        Assert.Equal(2, await db.Set<VocabularyEntry>().CountAsync());
     }
 
     [Fact]
@@ -166,9 +203,10 @@ public sealed class ExerciseWorkflowTests
         }
         var level = await CurrentLevel(student);
         Assert.Equal(kind, level.Question.Kind);
-        var prompt = ExerciseJson.Read<AudioExercisePrompt>(level.Question.Prompt);
+        var prompt = ExerciseJson.Read<ChoiceAudioPrompt>(level.Question.Prompt);
         Assert.StartsWith("https://audio.test/", prompt.AudioUrl);
-        Assert.False(level.Question.Prompt.TryGetProperty("original", out _));
+        Assert.Equal("Мин мәктәпкә барам.", prompt.Original);
+        Assert.Equal(3, prompt.Options.Count);
         Assert.Equal(1, fake.Syntheses);
         using (var scope = customized.Services.CreateScope())
         {

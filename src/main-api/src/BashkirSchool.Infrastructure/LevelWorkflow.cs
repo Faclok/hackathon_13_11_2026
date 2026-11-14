@@ -11,7 +11,7 @@ namespace BashkirSchool.Infrastructure;
 
 public sealed class LevelWorkflow(CoreDbContext db, IPermissionChecker permissions, TimeProvider clock,
     IConfiguration configuration, ExerciseRegistry registry, IAudioStorage audioStorage, IReviewWorkflow reviews,
-    AudioPreparation audioPreparation, ILogger<LevelWorkflow> logger)
+    AudioPreparation audioPreparation, PlayerEconomy economy, ILogger<LevelWorkflow> logger)
 {
     public async Task<LevelResponse?> CurrentAsync(Guid actor, CancellationToken ct)
     {
@@ -62,24 +62,51 @@ public sealed class LevelWorkflow(CoreDbContext db, IPermissionChecker permissio
         {
             if (prior.QuestionId != question.Id || prior.AnswerJson != canonical)
                 throw new ConflictException("Attempt token was already used for a different answer.");
-            return new(prior.Id, prior.Recognized, prior.LevelCompleted);
+            using var previousKey = JsonDocument.Parse(question.AnswerKeyJson);
+            var previousCorrect = prior.Recognized ? null : registry.Get(question.Kind, question.SchemaVersion).CorrectAnswer(previousKey.RootElement);
+            return new(prior.Id, prior.Recognized, prior.LevelCompleted, previousCorrect);
         }
         var questions = await Questions(level.Id, ct);
         var current = Next(questions);
         if (level.CompletedAt.HasValue || current?.Id != question.Id || request.AttemptToken != question.AttemptToken)
             throw new ConflictException("Only the current question and its current attempt token can be answered.");
         using var key = JsonDocument.Parse(question.AnswerKeyJson);
-        var recognized = registry.Get(question.Kind, question.SchemaVersion).Evaluate(key.RootElement, request.Answer);
+        var handler = registry.Get(question.Kind, question.SchemaVersion);
+        var recognized = handler.Evaluate(key.RootElement, request.Answer);
+        var correctAnswer = recognized ? null : handler.CorrectAnswer(key.RootElement);
         if (recognized) question.CompletedAt = clock.GetUtcNow();
         else question.QueueOrder = questions.Max(x => x.QueueOrder) + 1;
         question.AttemptToken = Guid.NewGuid();
-        if (questions.All(x => x.CompletedAt.HasValue)) level.CompletedAt = clock.GetUtcNow();
+        if (questions.All(x => x.CompletedAt.HasValue))
+        {
+            level.CompletedAt = clock.GetUtcNow();
+            (await economy.StateAsync(actor, ct)).Coins += questions.Length / 3;
+        }
         var answer = new LevelAnswer { Id = request.AttemptToken, QuestionId = question.Id, AnswerJson = canonical,
             Recognized = recognized, SubmittedAt = clock.GetUtcNow(), LevelCompleted = level.CompletedAt.HasValue };
         db.Add(answer);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
-        return new(answer.Id, recognized, answer.LevelCompleted);
+        return new(answer.Id, recognized, answer.LevelCompleted, correctAnswer);
+    }
+
+    public async Task<CheckWordPairResponse> CheckWordPairAsync(Guid actor, Guid levelId, Guid questionId,
+        CheckWordPairRequest request, CancellationToken ct)
+    {
+        await Require(actor, "exercises.submit", ct);
+        if (request.AttemptToken == Guid.Empty) throw new DomainException("Supply the issued attemptToken.");
+        var level = await db.Set<LearningLevel>().SingleOrDefaultAsync(x => x.Id == levelId && x.ParticipantId == actor, ct)
+            ?? throw new MissingResourceException();
+        var question = await db.Set<LevelQuestion>().SingleOrDefaultAsync(x => x.Id == questionId && x.LevelId == level.Id, ct)
+            ?? throw new MissingResourceException();
+        var current = Next(await Questions(level.Id, ct));
+        if (level.CompletedAt.HasValue || current?.Id != question.Id || request.AttemptToken != question.AttemptToken)
+            throw new ConflictException("Only the current question and its current attempt token can be checked.");
+        if (question.Kind != "word-match" || question.SchemaVersion != 1)
+            throw new DomainException("This question does not contain word pairs.");
+        using var key = JsonDocument.Parse(question.AnswerKeyJson);
+        var handler = (WordMatchHandler)registry.Get(question.Kind, question.SchemaVersion);
+        return new(handler.CheckPair(key.RootElement, new(request.LeftId, request.RightId)));
     }
 
     public async Task<LevelProgressResponse> ProgressAsync(Guid actor, CancellationToken ct)
@@ -117,27 +144,8 @@ public sealed class LevelWorkflow(CoreDbContext db, IPermissionChecker permissio
 
     public async Task<LevelBossResponse?> BossAsync(Guid actor, CancellationToken ct)
     {
-        await Require(actor, "lessons.receive", ct);
-        await Require(actor, "reviews.receive", ct);
-        LevelBoss boss;
-        await using (var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct))
-        {
-            await Lock(actor, ct);
-            var completed = await db.Set<LearningLevel>().LongCountAsync(x => x.ParticipantId == actor && x.CompletedAt != null, ct);
-            var existing = await db.Set<LevelBoss>().SingleOrDefaultAsync(x => x.ParticipantId == actor && x.CompletedAt == null, ct);
-            if (existing is null)
-            {
-                var last = await db.Set<LevelBoss>().Where(x => x.ParticipantId == actor).MaxAsync(x => (long?)x.Checkpoint, ct) ?? 0;
-                if (completed < last + 5) return null;
-                existing = new LevelBoss { ParticipantId = actor, Checkpoint = last + 5, StartedAt = clock.GetUtcNow() };
-                db.Add(existing);
-                await db.SaveChangesAsync(ct);
-            }
-            boss = existing;
-            await ReconcileBoss(boss, ct);
-            await db.SaveChangesAsync(ct);
-            await transaction.CommitAsync(ct);
-        }
+        var boss = await StartBossAsync(actor, ct);
+        if (boss is null) return null;
         var count = await db.Set<LevelBossQuestion>().CountAsync(x => x.BossId == boss.Id && x.CompletedAt != null, ct);
         if (boss.CompletedAt.HasValue) return new(boss.Id, boss.Checkpoint, 3, count, null);
 
@@ -162,6 +170,70 @@ public sealed class LevelWorkflow(CoreDbContext db, IPermissionChecker permissio
             await transaction.CommitAsync(ct);
         }
         return new(boss.Id, boss.Checkpoint, 3, count, assignment);
+    }
+
+    public async Task<LevelBoss?> StartBossAsync(Guid actor, CancellationToken ct)
+    {
+        await Require(actor, "lessons.receive", ct);
+        await Require(actor, "reviews.receive", ct);
+        LevelBoss boss;
+        await using (var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct))
+        {
+            await Lock(actor, ct);
+            var completed = await db.Set<LearningLevel>().LongCountAsync(x => x.ParticipantId == actor && x.CompletedAt != null, ct);
+            var existing = await db.Set<LevelBoss>().SingleOrDefaultAsync(x => x.ParticipantId == actor && x.CompletedAt == null, ct);
+            if (existing is null)
+            {
+                var last = await db.Set<LevelBoss>().Where(x => x.ParticipantId == actor).MaxAsync(x => (long?)x.Checkpoint, ct) ?? 0;
+                if (completed < last + 5) return null;
+                existing = new LevelBoss { ParticipantId = actor, Checkpoint = last + 5, StartedAt = clock.GetUtcNow() };
+                db.Add(existing);
+                await db.SaveChangesAsync(ct);
+            }
+            boss = existing;
+            await ReconcileBoss(boss, ct);
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+        }
+        return boss;
+    }
+
+    private async Task<LevelBossAnswerResponse> AttachTeacherAnswerAsync(Guid actor, Guid bossId, Guid assignmentId, CancellationToken ct)
+    {
+        await Require(actor, "reviews.submit", ct);
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        await Lock(actor, ct);
+        var boss = await db.Set<LevelBoss>().SingleOrDefaultAsync(x => x.Id == bossId && x.ParticipantId == actor, ct)
+            ?? throw new MissingResourceException();
+        var response = await db.Responses.SingleOrDefaultAsync(x => x.AssignmentId == assignmentId && x.ParticipantId == actor && x.Action != ReviewAction.Skip, ct)
+            ?? throw new MissingResourceException();
+        if (!await db.Audit.AnyAsync(x => x.ActorId == actor && x.Action == "lms.boss-answer" && x.Reason == assignmentId.ToString(), ct))
+            throw new AccessDeniedException();
+        var existing = await db.Set<LevelBossQuestion>().SingleOrDefaultAsync(x => x.AssignmentId == assignmentId, ct);
+        if (existing is null)
+        {
+            if (boss.CompletedAt.HasValue) throw new ConflictException("Boss has already been completed.");
+            await ReconcileBoss(boss, ct);
+            var count = await db.Set<LevelBossQuestion>().CountAsync(x => x.BossId == boss.Id && x.CompletedAt != null, ct);
+            if (count >= 3) throw new ConflictException("Boss has already been completed.");
+            var slot = await db.Set<LevelBossQuestion>().SingleOrDefaultAsync(x => x.BossId == boss.Id && x.CompletedAt == null, ct);
+            if (slot is null) db.Add(new LevelBossQuestion { BossId = boss.Id, Position = count, AssignmentId = assignmentId });
+            else slot.AssignmentId = assignmentId;
+        }
+        else if (existing.BossId != boss.Id) throw new ConflictException("Answer belongs to another boss.");
+        await db.SaveChangesAsync(ct);
+        await ReconcileBoss(boss, ct);
+        await transaction.CommitAsync(ct);
+        return new(response.Id, response.Archived, boss.CompletedAt.HasValue);
+    }
+
+    public async Task<LevelBossAnswerResponse> AttachTeacherAnswerAsync(Guid actor, Guid assignmentId, CancellationToken ct)
+    {
+        var existing = await db.Set<LevelBossQuestion>().Where(x => x.AssignmentId == assignmentId)
+            .Select(x => (Guid?)x.BossId).SingleOrDefaultAsync(ct);
+        var bossId = existing ?? await db.Set<LevelBoss>().Where(x => x.ParticipantId == actor && x.CompletedAt == null)
+            .Select(x => (Guid?)x.Id).SingleOrDefaultAsync(ct) ?? throw new MissingResourceException();
+        return await AttachTeacherAnswerAsync(actor, bossId, assignmentId, ct);
     }
 
     public async Task<LevelBossAnswerResponse> AnswerBossAsync(Guid actor, Guid bossId, Guid assignmentId,
@@ -212,12 +284,17 @@ public sealed class LevelWorkflow(CoreDbContext db, IPermissionChecker permissio
         if (rows.Length == 0) return [];
         var acceptedIds = rows.SelectMany(x => JsonSerializer.Deserialize<Guid[]>(x.AcceptedJson)!).Distinct().ToArray();
         var variants = await db.Variants.Where(x => acceptedIds.Contains(x.Id)).ToDictionaryAsync(x => x.Id, x => x.Text, ct);
+        var sourceAlternatives = rows.GroupBy(x => x.LanguagePair).ToDictionary(x => x.Key,
+            x => (IReadOnlyList<string>)x.Select(row => row.Text).Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
+        var translationAlternatives = rows.GroupBy(x => x.LanguagePair).ToDictionary(x => x.Key,
+            x => (IReadOnlyList<string>)x.SelectMany(row => JsonSerializer.Deserialize<Guid[]>(row.AcceptedJson)!
+                .Select(id => variants[id])).Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
         var fragmentIds = rows.Select(x => x.Id).ToArray();
         var audio = (await db.Set<SentenceAudio>().Where(x => fragmentIds.Contains(x.FragmentId)).ToArrayAsync(ct))
             .GroupBy(x => x.FragmentId).ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.CreatedAt).First().Id);
         var words = await db.Set<VocabularyEntry>().OrderBy(x => x.Id).Take(500).ToArrayAsync(ct);
         var drafts = new List<LevelQuestion>();
-        var size = Random.Shared.Next(3, 7);
+        var size = Random.Shared.Next(6, 11);
         // Cycle all available kinds/materials before reusing one; a small corpus can still
         // supply a full level, and each issued answer key remains an immutable snapshot.
         var candidates = new List<(IExerciseHandler Handler, ExerciseMaterial Material)>();
@@ -232,7 +309,8 @@ public sealed class LevelWorkflow(CoreDbContext db, IPermissionChecker permissio
                 // A placeholder permits material validation before synthesis. It is
                 // replaced with a persisted asset before any question is saved.
                 var candidate = handler.RequiresAudio && sentence.AudioId is null ? sentence with { AudioId = Guid.Empty } : sentence;
-                candidates.Add((handler, new(handler.RequiresSentence ? candidate : null, vocabulary, row.LanguagePair)));
+                candidates.Add((handler, new(handler.RequiresSentence ? candidate : null, vocabulary, row.LanguagePair,
+                    sourceAlternatives[row.LanguagePair], translationAlternatives[row.LanguagePair])));
             }
         }
         var offset = (int)((number - 1) % candidates.Count);

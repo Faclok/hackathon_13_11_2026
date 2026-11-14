@@ -16,7 +16,8 @@ public sealed class LevelFlowTests
 {
     private const string Root = "/api/learning";
     private static AnswerLevelRequest Answer(LevelResponse level, string text) =>
-        new(level.Question.AttemptToken, ExerciseJson.Element(new TextExerciseAnswer(text)));
+        new(level.Question.AttemptToken, ExerciseJson.Element(level.Question.SchemaVersion == 2
+            ? (object)ChoiceAnswer(level.Question, text) : new TextExerciseAnswer(text)));
     private static string AnswerUrl(LevelResponse level) => $"{Root}/levels/{level.Id}/questions/{level.Question.Id}/answer";
     private static Task<LevelResponse> Current(HttpClient client) => Post<LevelResponse>(client, Root + "/current", new { });
     private static Task<ExpertDatasetReceipt> Training(HttpClient admin) => Post<ExpertDatasetReceipt>(admin, "/api/expert/imports",
@@ -31,12 +32,13 @@ public sealed class LevelFlowTests
         await Training(admin);
         var first = await Current(student.Client);
         Assert.Equal(1, first.Number);
-        Assert.InRange(first.QuestionCount, 3, 6);
+        Assert.InRange(first.QuestionCount, 6, 10);
         Assert.Equal(0, first.CorrectCount);
         var wrong = Answer(first, "Wrong");
         var failed = await Post<LevelAnswerResponse>(student.Client, AnswerUrl(first), wrong);
         Assert.False(failed.Recognized);
         Assert.False(failed.LevelCompleted);
+        Assert.Equal("Hello", failed.CorrectAnswer);
         Assert.Equal(failed, await Post<LevelAnswerResponse>(student.Client, AnswerUrl(first), wrong));
         Assert.Equal(HttpStatusCode.Conflict, (await student.Client.PostAsJsonAsync(AnswerUrl(first), Answer(first, "Hello"))).StatusCode);
         for (var i = 1; i < first.QuestionCount; i++)
@@ -73,6 +75,9 @@ public sealed class LevelFlowTests
         Assert.Equal(first.QuestionCount + 2, completed.Attempts);
         Assert.Equal(2, completed.Mistakes);
         Assert.NotNull(completed.CompletedAt);
+        var reward = (await student.Client.GetFromJsonAsync<PlayerProfile>("/api/player/profile"))!;
+        Assert.Equal(first.QuestionCount / 3, reward.Coins);
+        Assert.Equal(0, reward.Swords);
     }
 
     [Fact]
@@ -87,7 +92,7 @@ public sealed class LevelFlowTests
         var json = await (await student.Client.PostAsJsonAsync(Root + "/current", new { })).Content.ReadAsStringAsync();
         using var payload = JsonDocument.Parse(json);
         Assert.False(payload.RootElement.TryGetProperty("questions", out _));
-        Assert.DoesNotContain("Hello", json);
+        Assert.Contains("options", json);
         Assert.DoesNotContain("answerKey", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("accepted", json, StringComparison.OrdinalIgnoreCase);
         var otherLevel = await Current(other.Client);
@@ -209,6 +214,33 @@ public sealed class LevelFlowTests
         Assert.Equal(3, await db.Responses.CountAsync());
         Assert.Equal(3, await db.Judgments.CountAsync());
         Assert.Equal(3, await db.Outbox.CountAsync());
+    }
+
+    [Fact]
+    public async Task BossOffersChoicesWhenSeveralTranslationsExist()
+    {
+        using var f = new CoreFactory(learningKind: "translation-text");
+        using var admin = await f.Bootstrap();
+        var student = await f.Student(admin);
+        await Training(admin);
+        using var producer = await f.Producer(admin);
+        var content = await Deliver(producer, "boss-choices");
+        using (var scope = f.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<CoreDbContext>();
+            db.Variants.Add(TranslationVariant.Create(content.CaseId, "Another translation", false));
+            await db.SaveChangesAsync();
+        }
+        for (var i = 0; i < 5; i++) await CompleteLevel(student.Client);
+        var boss = await Post<LevelBossResponse>(student.Client, Root + "/boss", new { });
+        Assert.Equal("translation-choice", boss.Question!.Kind);
+        Assert.Equal(2, boss.Question.Options.Count);
+        var chosen = boss.Question.Options[0];
+        var receipt = await Post<LevelBossAnswerResponse>(student.Client,
+            $"{Root}/bosses/{boss.Id}/questions/{boss.Question.Id}/answer",
+            new SubmitReviewRequest(ReviewAction.Confirm) { SelectedVariantId = chosen.Id });
+        Assert.False(receipt.BossCompleted);
+        Assert.Equal(1, (await Post<LevelBossResponse>(student.Client, Root + "/boss", new { })).CompletedCount);
     }
 
     [Fact]

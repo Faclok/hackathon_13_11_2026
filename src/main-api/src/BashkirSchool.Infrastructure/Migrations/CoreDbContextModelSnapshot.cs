@@ -1105,6 +1105,14 @@ namespace BashkirSchool.Infrastructure.Migrations
                         .HasPrecision(18, 12)
                         .HasColumnType("numeric(18,12)");
 
+                    b.Property<string>("FirstName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("LastName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<bool>("LockoutEnabled")
                         .HasColumnType("boolean");
 
@@ -1299,6 +1307,11 @@ namespace BashkirSchool.Infrastructure.Migrations
                     b.Property<string>("PetId")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<bool>("ProfileCompletionRewarded")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.Property<int>("Xp")
                         .HasColumnType("integer");

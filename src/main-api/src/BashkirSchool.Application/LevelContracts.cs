@@ -8,8 +8,11 @@ public sealed record LevelResponse(Guid Id, long Number, int QuestionCount, int 
 public sealed record LevelQuestionResponse(Guid Id, Guid AttemptToken, string Kind, int SchemaVersion, JsonElement Prompt);
 /// <summary>A typed answer to the current question. Repeating the same token and answer is idempotent.</summary>
 public sealed record AnswerLevelRequest(Guid AttemptToken, JsonElement Answer);
+/// <summary>Check one issued word pair without submitting or consuming the question attempt.</summary>
+public sealed record CheckWordPairRequest(Guid AttemptToken, string LeftId, string RightId);
+public sealed record CheckWordPairResponse(bool Correct);
 /// <summary>The immutable outcome of one attempt; fetch the current level to continue.</summary>
-public sealed record LevelAnswerResponse(Guid AttemptToken, bool Recognized, bool LevelCompleted);
+public sealed record LevelAnswerResponse(Guid AttemptToken, bool Recognized, bool LevelCompleted, string? CorrectAnswer = null);
 /// <summary>Progress totals, including optional boss opportunities accumulated every five completed levels.</summary>
 public sealed record LevelProgressResponse(long CompletedLevels, long CompletedBosses, long AvailableBosses,
     long Attempts, long Mistakes);

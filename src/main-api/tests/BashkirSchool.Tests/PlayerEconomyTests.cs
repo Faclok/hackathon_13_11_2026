@@ -67,7 +67,7 @@ public sealed class PlayerEconomyTests
     }
 
     [Fact]
-    public async Task DuplicateReturnsFiveCoinsAndLeaderboardUsesRealParticipants()
+    public async Task DuplicateReturnsThreeCoinsAndLeaderboardUsesRealParticipants()
     {
         using var f = new CoreFactory();
         using var admin = await f.Bootstrap();
@@ -87,8 +87,8 @@ public sealed class PlayerEconomyTests
         }
         var opening = await Post<PlayerCaseOpening>(first.Client, "/api/player/cases/case_hat/open", new { });
         Assert.True(opening.Duplicate);
-        Assert.Equal(5, opening.Compensation);
-        Assert.Equal(15, (await first.Client.GetFromJsonAsync<PlayerProfile>("/api/player/profile"))!.Coins);
+        Assert.Equal(3, opening.Compensation);
+        Assert.Equal(13, (await first.Client.GetFromJsonAsync<PlayerProfile>("/api/player/profile"))!.Coins);
         var board = await first.Client.GetFromJsonAsync<PlayerLeaderboardEntry[]>("/api/leaderboard?period=global&metric=tasks");
         Assert.Equal(first.Id, board![0].User.Id);
         Assert.Equal(1, board[0].Value);

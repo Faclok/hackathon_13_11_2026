@@ -62,6 +62,12 @@ public sealed class ReviewAssignment
         if (Kind != "translation-choice" || Completed) throw new DomainException("Boss needs translation choices.");
         Kind = "boss";
     }
+
+    public void SetTeacherBoss()
+    {
+        if (Completed || Kind != "translation-confirm") throw new DomainException("Teacher boss requires a fresh assignment.");
+        Kind = "boss-teacher";
+    }
 }
 
 public sealed class ReviewResponse

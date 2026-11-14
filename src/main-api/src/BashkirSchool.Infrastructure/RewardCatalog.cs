@@ -10,7 +10,7 @@ public sealed record RewardCaseInfo(string Id, string[] Types, RewardDrop[] Drop
 public static class RewardCatalog
 {
     public const int KeyPrice = 10;
-    public const int DuplicateCompensation = 5;
+    public const int DuplicateCompensation = 3;
     public static readonly RewardCase[] Cases =
     [
         new("case_hat", ["hat"]), new("case_frame", ["frame"]),

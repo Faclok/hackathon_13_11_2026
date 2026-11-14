@@ -35,7 +35,6 @@ function AuthGuard() {
 export default function App() {
   useEffect(() => {
     void useUserStore.getState().bootstrap();
-    document.title = "Башкирская языковая школа";
     document
       .querySelector('meta[name="theme-color"]')
       ?.setAttribute("content", "#f5f8f5");
@@ -70,7 +69,8 @@ export default function App() {
                 path="shop"
                 element={<Navigate to="/inventory" replace />}
               />
-              <Route path="wheel" element={<Cases />} />
+              <Route path="cases" element={<Cases />} />
+              <Route path="wheel" element={<Navigate to="/cases" replace />} />
               <Route path="*" element={<NotFound />} />
             </Route>
           </Route>

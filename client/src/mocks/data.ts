@@ -30,6 +30,7 @@ export const demoUser: User = {
     "pet_none",
   ],
   caseKeys: 0,
+  swords: 0,
   equippedItemIds: ["honey", "hat"],
   backgroundId: "mint",
   frameId: "green",

@@ -59,7 +59,52 @@ public sealed class IndependentAccounts(CoreDbContext db, UserManager<Account> u
         var account = await db.Users.AsNoTracking().SingleAsync(x => x.Id == actor, ct);
         var group = await (from e in db.Enrollments where e.ParticipantId == actor
                            join c in db.Classes on e.ClassId equals c.Id select new { ClassId = c.Id, c.SchoolId }).SingleOrDefaultAsync(ct);
-        return new(account.Id, account.UserName!, group?.SchoolId, group?.ClassId);
+        return new(account.Id, account.UserName!, group?.SchoolId, group?.ClassId)
+        { FirstName = account.FirstName, LastName = account.LastName };
+    }
+
+    public async Task<MyProfileResponse> UpdateProfileAsync(Guid actor, UpdateMyProfileRequest request, CancellationToken ct)
+    {
+        if (!await permissions.HasAsync(actor, "profile.read", AccessScope.Own, actor, ct)) throw new AccessDeniedException();
+        var firstName = CleanName(request.FirstName);
+        var lastName = CleanName(request.LastName);
+        if ((firstName is null) != (lastName is null))
+            throw new DomainException("Provide both first name and last name, or leave both empty.");
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+        await CaseWriteLock.Acquire(db, ct);
+        var account = await users.FindByIdAsync(actor.ToString()) ?? throw new MissingResourceException();
+        account.FirstName = firstName;
+        account.LastName = lastName;
+        var bonus = 0;
+        if (firstName is not null && lastName is not null &&
+            await db.Participants.AnyAsync(x => x.Id == actor, ct))
+        {
+            var state = await db.PlayerStates.SingleOrDefaultAsync(x => x.ParticipantId == actor, ct);
+            if (state is null)
+            {
+                state = PlayerState.ForExistingParticipant(actor);
+                db.PlayerStates.Add(state);
+            }
+            if (!state.ProfileCompletionRewarded)
+            {
+                state.Coins += PlayerState.ProfileCompletionBonusCoins;
+                state.ProfileCompletionRewarded = true;
+                bonus = PlayerState.ProfileCompletionBonusCoins;
+            }
+        }
+        Check(await users.UpdateAsync(account));
+        db.Audit.Add(new() { ActorId = actor, TargetId = actor, Action = "profile.updated", At = clock.GetUtcNow() });
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+        return (await ProfileAsync(actor, ct)) with { BonusCoinsAwarded = bonus };
+    }
+
+    private static string? CleanName(string? value)
+    {
+        var name = value?.Trim();
+        if (string.IsNullOrEmpty(name)) return null;
+        if (name.Length > 100) throw new DomainException("Name must contain at most 100 characters.");
+        return name;
     }
 
     public async Task<PasswordSetupResponse> IssueRecoveryAsync(Guid actor, Guid accountId, RecoverIndependentAccountRequest request, CancellationToken ct)
