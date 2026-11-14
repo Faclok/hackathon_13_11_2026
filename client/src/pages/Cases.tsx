@@ -7,10 +7,14 @@ import {
   decorationCatalog,
   DUPLICATE_COMPENSATION,
   getCaseDrops,
+  getCaseDropChance,
   KEY_PRICE,
   rarities,
 } from "../mocks/customization";
-import { DecorationPreview } from "../components/Personalization";
+import {
+  DecorationArtwork,
+  DecorationPreview,
+} from "../components/Personalization";
 import {
   EconomyBalance,
   keyCount,
@@ -94,10 +98,22 @@ export default function Cases() {
             </div>
             <h2>{caseItem.title}</h2>
             <p>{caseItem.description}</p>
-            <div className="case-rarity-dots" aria-label="Четыре редкости">
-              {Object.keys(rarities).map((rarity) => (
-                <span key={rarity} className={`rarity-dot rarity-${rarity}`} />
-              ))}
+            <div
+              className="case-rarity-dots"
+              aria-label="Редкости в этом кейсе"
+            >
+              {Object.keys(rarities)
+                .filter((rarity) =>
+                  getCaseDrops(caseItem).some(
+                    (item) => (item.rarity ?? "common") === rarity,
+                  ),
+                )
+                .map((rarity) => (
+                  <span
+                    key={rarity}
+                    className={`rarity-dot rarity-${rarity}`}
+                  />
+                ))}
             </div>
             <button
               className="case-contents-button"
@@ -133,7 +149,9 @@ export default function Cases() {
             )!;
             return (
               <div key={entry.id}>
-                <span className="history-item-icon">{item.previewUrl}</span>
+                <span className="history-item-icon">
+                  <DecorationArtwork item={item} />
+                </span>
                 <span>
                   <strong>{item.title}</strong>
                   <small>
@@ -161,7 +179,12 @@ export default function Cases() {
                   <strong>{item.title}</strong>
                   <RarityBadge item={item} />
                 </span>
-                <b>{rarities[item.rarity ?? "common"].weight}%</b>
+                <b>
+                  {getCaseDropChance(contents, item).toLocaleString("ru-RU", {
+                    maximumFractionDigits: 2,
+                  })}
+                  %
+                </b>
               </div>
             ))}
           </div>

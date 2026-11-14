@@ -40,13 +40,52 @@ public sealed class ExpertReviews(CoreDbContext db, CaseEvidence evidence, TimeP
         var cases = await AccessibleCases(actor, ct);
         var preferences = await PreferencesAsync(actor, ct);
         var result = new List<ExpertQueueItem>();
-        foreach (var c in cases)
+        var placeholderIds = (await db.Variants.AsNoTracking().Where(v => v.Text == "")
+            .Select(v => v.CaseId).ToArrayAsync(ct)).ToHashSet();
+        var resolutionIds = cases.Where(c => placeholderIds.Contains(c.Id) && c.ResolutionId.HasValue)
+            .Select(c => c.ResolutionId!.Value).ToArray();
+        var resolvedIds = (await db.Resolutions.AsNoTracking().Where(r => resolutionIds.Contains(r.Id) && r.PrimaryVariantId != null)
+            .Select(r => r.Id).ToArrayAsync(ct)).ToHashSet();
+        var emptyCases = cases.Where(c => placeholderIds.Contains(c.Id) &&
+            (c.ResolutionId is null || !resolvedIds.Contains(c.ResolutionId.Value))).ToArray();
+        var untranslatedIds = emptyCases.Select(c => c.Id).ToHashSet();
+        if (emptyCases.Length > 0)
+        {
+            var caseIds = emptyCases.Select(c => c.Id).ToArray();
+            var fragmentIds = emptyCases.Select(c => c.FragmentId).ToArray();
+            var fragments = await db.Fragments.AsNoTracking().Where(f => fragmentIds.Contains(f.Id))
+                .ToDictionaryAsync(f => f.Id, f => f.Text, ct);
+            var events = await db.Audit.AsNoTracking().Where(a => caseIds.Contains(a.TargetId) &&
+                (a.Action == "expert.claimed" || a.Action == "expert.released" || a.Action == "lms.expert.requested"))
+                .ToArrayAsync(ct);
+            var claimed = events.Where(a => a.Action is "expert.claimed" or "expert.released")
+                .GroupBy(a => a.TargetId).Where(g => g.OrderByDescending(a => a.At).ThenByDescending(a => a.Id).First().Action == "expert.claimed")
+                .Select(g => g.Key).ToHashSet();
+            var teacherRequested = events.Where(a => a.Action == "lms.expert.requested").Select(a => a.TargetId).ToHashSet();
+            var votes = await (from r in db.Responses.AsNoTracking() where caseIds.Contains(r.CaseId) && !r.Archived
+                               join j in db.Judgments.AsNoTracking() on r.Id equals j.ResponseId where j.Kind == JudgmentKind.Support
+                               select new { r.CaseId, r.ParticipantId, r.SubmittedAt, r.Id, j.VariantId }).ToArrayAsync(ct);
+            var voteSummaries = votes.GroupBy(v => v.CaseId).ToDictionary(g => g.Key, g =>
+            {
+                var latest = g.GroupBy(v => v.ParticipantId)
+                    .Select(v => v.OrderByDescending(x => x.SubmittedAt).ThenByDescending(x => x.Id).First()).ToArray();
+                return new { Count = latest.Length, Lead = latest.Length == 0 ? (decimal?)null :
+                    (decimal)latest.GroupBy(v => v.VariantId).Max(v => v.Count()) / latest.Length };
+            });
+            foreach (var c in emptyCases.Where(c => !claimed.Contains(c.Id)))
+            {
+                voteSummaries.TryGetValue(c.Id, out var summary);
+                result.Add(new(c.Id, c.Revision, fragments[c.FragmentId], true, summary?.Count ?? 0, summary?.Lead, c.CreatedAt,
+                    teacherRequested.Contains(c.Id)) { Untranslated = true });
+            }
+        }
+        foreach (var c in cases.Where(c => !untranslatedIds.Contains(c.Id)))
         {
             var view = await evidence.ViewAsync(c, ct);
             var observations = view.Variants.Sum(x => x.Supports);
             var lead = view.Variants.Max(x => x.SupportRatio) ?? 0m;
             var teacherRequested = await db.Audit.AnyAsync(x => x.TargetId == c.Id && x.Action == "lms.expert.requested", ct);
-            if (!Eligible(c, observations, lead, preferences, teacherRequested) || await ActiveClaim(c.Id, ct) is not null) continue;
+            if (!Eligible(c, observations, lead, preferences, teacherRequested, false) || await ActiveClaim(c.Id, ct) is not null) continue;
             result.Add(new(c.Id, c.Revision, view.Original, true, observations, lead, c.CreatedAt, teacherRequested));
         }
         return result.OrderByDescending(x => x.TeacherRequested).ThenBy(x => x.LeadingSupport).ThenBy(x => x.CreatedAt).ToArray();
@@ -103,7 +142,10 @@ public sealed class ExpertReviews(CoreDbContext db, CaseEvidence evidence, TimeP
         var count = view.Variants.Sum(x => x.Supports);
         var lead = view.Variants.Max(x => x.SupportRatio) ?? 0m;
         var teacherRequested = await db.Audit.AnyAsync(x => x.TargetId == caseId && x.Action == "lms.expert.requested", ct);
-        if (!Eligible(c, count, lead, await PreferencesAsync(actor, ct), teacherRequested)) throw new ConflictException("Case does not need expert review.");
+        var untranslated = view.Variants.Any(v => v.Text == "") &&
+            (c.ResolutionId is not Guid resolutionId || !await db.Resolutions.AnyAsync(r => r.Id == resolutionId && r.PrimaryVariantId != null, ct));
+        if (!Eligible(c, count, lead, await PreferencesAsync(actor, ct), teacherRequested, untranslated))
+            throw new ConflictException("Case does not need expert review.");
         var current = await ActiveClaim(caseId, ct);
         if (current is not null && current.ActorId != actor) throw new ConflictException("Case is already taken by another expert.");
         if (current is null)
@@ -153,6 +195,8 @@ public sealed class ExpertReviews(CoreDbContext db, CaseEvidence evidence, TimeP
         var ids = accepted.Concat(request.RejectedVariantIds).Distinct().ToArray();
         if (await db.Variants.CountAsync(x => x.CaseId == caseId && ids.Contains(x.Id), ct) != ids.Length)
             throw new DomainException("All variants must belong to this case.");
+        if (await db.Variants.AnyAsync(x => x.CaseId == caseId && ids.Contains(x.Id) && x.Text == "", ct))
+            throw new DomainException("An empty translation cannot be accepted or rejected as a rendering.");
         if (request.Comment is { Length: > 10000 }) throw new DomainException("Comment is too long.");
         var policy = await db.Policies.OrderByDescending(x => x.Version).FirstAsync(ct);
         var view = await evidence.ViewAsync(c, ct);
@@ -203,8 +247,9 @@ public sealed class ExpertReviews(CoreDbContext db, CaseEvidence evidence, TimeP
         return preferences;
     }
 
-    private static bool Eligible(TranslationCase c, int observations, decimal lead, ExpertPreferencesResponse preferences, bool teacherRequested) =>
-        !c.ExpertClosed && (teacherRequested || observations >= preferences.RequiredParticipants && lead < preferences.SupportThreshold);
+    private static bool Eligible(TranslationCase c, int observations, decimal lead, ExpertPreferencesResponse preferences,
+        bool teacherRequested, bool untranslated) =>
+        !c.ExpertClosed && (untranslated || teacherRequested || observations >= preferences.RequiredParticipants && lead < preferences.SupportThreshold);
 
     private async Task<AuditEntry?> LastClaimEvent(Guid caseId, CancellationToken ct)
     {

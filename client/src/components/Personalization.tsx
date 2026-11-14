@@ -1,8 +1,22 @@
+import type { CSSProperties } from "react";
 import type { Decoration, User } from "../types";
 import { decorationCatalog } from "../mocks/customization";
 import { Mascot, Ornament } from "./Illustrations";
 import { HatOverlay } from "./HatOverlay";
 import "../personalization.css";
+
+export function DecorationArtwork({ item }: { item: Decoration }) {
+  return item.imageUrl ? (
+    <img
+      className="decoration-art"
+      src={item.imageUrl}
+      alt=""
+      draggable={false}
+    />
+  ) : (
+    <>{item.previewUrl}</>
+  );
+}
 
 export function Avatar({
   user,
@@ -50,7 +64,7 @@ export function ProfileBackground({ backgroundId }: { backgroundId?: string }) {
   ].includes(backgroundId ?? "");
   return (
     <div
-      className={`personal-background scenery-${backgroundId ?? "mint"} ${background?.background ? "custom-background" : ""}`}
+      className={`personal-background scenery-${backgroundId ?? "mint"} ${background?.imageUrl ? "artwork-background" : background?.background ? "custom-background" : ""}`}
       style={
         background?.background
           ? { background: background.background }
@@ -58,6 +72,14 @@ export function ProfileBackground({ backgroundId }: { backgroundId?: string }) {
       }
       aria-hidden="true"
     >
+      {background?.imageUrl && (
+        <img
+          className="background-art"
+          src={background.imageUrl}
+          alt=""
+          draggable={false}
+        />
+      )}
       {ornament && (
         <div className="personal-ornaments">
           {Array.from({ length: 6 }, (_, i) => (
@@ -139,29 +161,40 @@ export function FloatingItems({
   const pet = decorationCatalog.find(
     (item) => item.id === user.petId && item.type === "pet" && !item.isDefault,
   );
+  const itemStyle = (index: number): CSSProperties | undefined => {
+    if (items.length <= 4) return undefined;
+    const rows = Math.ceil(items.length / 2);
+    return {
+      "--item-top": `${6 + (Math.floor(index / 2) * 60) / (rows - 1)}%`,
+      "--item-left": index % 2 === 0 ? "4%" : "auto",
+      "--item-right": index % 2 === 1 ? "4%" : "auto",
+    } as CSSProperties;
+  };
   if (!items.length && !pet) return null;
   return (
     <div className="floating-items" aria-label="Предметы на фоне">
-      {items.map((item) =>
+      {items.map((item, index) =>
         onSelect ? (
           <button
-            className="floating-item"
+            className={`floating-item ${items.length > 4 ? "distributed-item" : ""}`}
+            style={itemStyle(index)}
             key={item.id}
             aria-label={`О предмете: ${item.title}`}
             title={item.title}
             onClick={() => onSelect(item)}
           >
-            {item.previewUrl}
+            <DecorationArtwork item={item} />
           </button>
         ) : (
           <span
-            className="floating-item"
+            className={`floating-item ${items.length > 4 ? "distributed-item" : ""}`}
+            style={itemStyle(index)}
             key={item.id}
             role="img"
             aria-label={item.title}
             title={item.title}
           >
-            {item.previewUrl}
+            <DecorationArtwork item={item} />
           </span>
         ),
       )}
@@ -173,12 +206,16 @@ export function FloatingItems({
             title={pet.title}
             onClick={() => onSelect(pet)}
           >
-            <span>{pet.previewUrl}</span>
+            <span>
+              <DecorationArtwork item={pet} />
+            </span>
             <small>{pet.petName}</small>
           </button>
         ) : (
           <span className="equipped-pet" role="img" aria-label={pet.title}>
-            <span>{pet.previewUrl}</span>
+            <span>
+              <DecorationArtwork item={pet} />
+            </span>
             <small>{pet.petName}</small>
           </span>
         ))}
@@ -224,8 +261,8 @@ export function DecorationPreview({
         />
       ) : (
         <span className="item-preview-symbol" aria-hidden="true">
-          {item.previewUrl}
-          {item.type === "pet" && item.petName && (
+          <DecorationArtwork item={item} />
+          {item.type === "pet" && item.petName && !item.imageUrl && (
             <small className="pet-preview-name">{item.petName}</small>
           )}
         </span>

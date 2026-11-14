@@ -13,12 +13,22 @@ public static class LmsCatalogEndpoints
     public static void MapLmsCatalogEndpoints(this WebApplication app)
     {
         var api = app.MapGroup("/api/lms-source").RequireAuthorization();
-        api.MapGet("/translations", async (int? offset, int? limit, CoreDbContext db, CaseEvidence evidence, CancellationToken ct) =>
+        api.MapGet("/translations", async (int? offset, int? limit, string? query, CoreDbContext db, CaseEvidence evidence, CancellationToken ct) =>
         {
             var skip = offset ?? 0;
             var take = limit ?? 50;
             if (skip < 0 || take is < 1 or > 100) return Results.BadRequest(new { title = "Invalid pagination." });
-            var cases = await db.Cases.AsNoTracking().OrderByDescending(x => x.CreatedAt).ThenBy(x => x.Id)
+            var search = query?.Trim();
+            if (search?.Length > 200) return Results.BadRequest(new { title = "Search query is too long." });
+            var matching = db.Cases.AsNoTracking().AsQueryable();
+            if (!string.IsNullOrEmpty(search))
+            {
+                var pattern = $"%{search.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_")}%";
+                matching = matching.Where(item =>
+                    db.Fragments.Any(fragment => fragment.Id == item.FragmentId && EF.Functions.ILike(fragment.Text, pattern, "\\")) ||
+                    db.Variants.Any(variant => variant.CaseId == item.Id && EF.Functions.ILike(variant.Text, pattern, "\\")));
+            }
+            var cases = await matching.OrderByDescending(x => x.CreatedAt).ThenBy(x => x.Id)
                 .Skip(skip).Take(take).ToArrayAsync(ct);
             var result = new List<CatalogRow>(cases.Length);
             foreach (var item in cases) result.Add(await ReadTranslation(item, db, evidence, ct));
@@ -98,7 +108,7 @@ public static class LmsCatalogEndpoints
             .ThenBy(x => x.VariantId).First().VariantId;
         var selected = variants.Single(x => x.Id == selectedId);
         var rating = statistics.Variants.Single(x => x.VariantId == selectedId).Supports;
-        var status = resolution?.Kind == ResolutionKind.Expert ? "expert" : item.NeedsExpert ? "expert_review" :
+        var status = selected.Text == "" ? "untranslated" : resolution?.Kind == ResolutionKind.Expert ? "expert" : item.NeedsExpert ? "expert_review" :
             resolution?.Kind == ResolutionKind.Community ? "community" : "pending";
         var accepted = resolution?.Accepted.Select(id => variants.Single(x => x.Id == id).Text).ToArray() ?? [];
         var requested = await db.Audit.AsNoTracking().AnyAsync(x => x.TargetId == item.Id && x.Action == "lms.expert.requested", ct);

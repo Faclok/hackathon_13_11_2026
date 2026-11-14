@@ -105,6 +105,8 @@ public sealed class StudentConversationTests
     [InlineData("translation-confirm", "Подтвердить перевод", false, "Confirm")]
     [InlineData("translation-confirm", "Приветствую!", true, "Correct")]
     [InlineData("translation-choice", "Пропустить перевод", false, "Skip")]
+    [InlineData("translation-create", "Здравствуйте!", true, "Correct")]
+    [InlineData("translation-create", "Добрый день!", false, "Correct")]
     public async Task ReviewModesPreserveIssuedOptionsAndCustomInputAcrossRestart(string kind, string text, bool custom, string action)
     {
         using var connection = new SqliteConnection("Data Source=:memory:"); connection.Open();
@@ -115,20 +117,22 @@ public sealed class StudentConversationTests
         {
             var dispatcher = provider.GetRequiredService<IUpdateDispatcher>();
             await dispatcher.DispatchAsync(Callback(1, "review " + kind), default);
-            Assert.Contains(telegram.Messages, x => x.Contains("Һаумы!") && x.Contains("Здравствуй!"));
-            Assert.Contains(kind == "translation-choice" ? "Привет!" : "Подтвердить перевод", telegram.Buttons);
+            Assert.Contains(telegram.Messages, x => x.Contains("Һаумы!") &&
+                (kind == "translation-create" ? x.Contains("ещё нет перевода") : x.Contains("Здравствуй!")));
+            if (kind == "translation-create") Assert.DoesNotContain("Подтвердить перевод", telegram.Buttons);
+            else Assert.Contains(kind == "translation-choice" ? "Привет!" : "Подтвердить перевод", telegram.Buttons);
             if (custom) await dispatcher.DispatchAsync(Callback(2, $"vote {api.Assignment:N} custom"), default);
         }
         await using (var provider = Build(factory, api, telegram))
         {
             var dispatcher = provider.GetRequiredService<IUpdateDispatcher>();
-            var update = custom ? Update(3, text) : Callback(3, $"vote {api.Assignment:N} " + (action == "Skip" ? "skip" : kind == "translation-choice" ? "v1" : "confirm"));
+            var update = custom || kind == "translation-create" ? Update(3, text) : Callback(3, $"vote {api.Assignment:N} " + (action == "Skip" ? "skip" : kind == "translation-choice" ? "v1" : "confirm"));
             await dispatcher.DispatchAsync(update, default);
             await dispatcher.DispatchAsync(update, default);
         }
         var answer = Assert.Single(api.Answers);
         Assert.Equal(action, answer.GetProperty("action").GetString());
-        Assert.Equal(custom ? text : null, answer.GetProperty("correction").GetString());
+        Assert.Equal(custom || kind == "translation-create" ? text : null, answer.GetProperty("correction").GetString());
         Assert.Equal(kind == "translation-choice" && action == "Confirm" ? api.Second.ToString() : null, answer.GetProperty("selectedVariantId").GetString());
         Assert.Contains(telegram.Messages, x => x.Contains(action == "Skip" ? "Перевод пропущен" : "Ваш ответ сохранён"));
         Assert.DoesNotContain(telegram.Messages, x => x.Contains("верный"));
@@ -322,8 +326,8 @@ public sealed class StudentConversationTests
             {
                 Assert.Equal(HttpMethod.Post, request.Method);
                 Assert.Equal("?kind=" + kind, request.RequestUri.Query);
-                return new(HttpStatusCode.OK) { Content = JsonContent.Create(new ReviewView(Assignment, Guid.NewGuid(), Guid.NewGuid(), "Һаумы!", "Здравствуй!", DateTimeOffset.UtcNow.AddMinutes(30), kind,
-                    [new(Guid.NewGuid(), "Здравствуй!"), new(Second, "Привет!")], true)) };
+                return new(HttpStatusCode.OK) { Content = JsonContent.Create(new ReviewView(Assignment, Guid.NewGuid(), Guid.NewGuid(), "Һаумы!", kind == "translation-create" ? "" : "Здравствуй!", DateTimeOffset.UtcNow.AddMinutes(30), kind,
+                    kind == "translation-create" ? [] : [new(Guid.NewGuid(), "Здравствуй!"), new(Second, "Привет!")], true)) };
             }
             Assert.Equal($"/internal/telegram/101/reviews/{Assignment}/response", request.RequestUri.AbsolutePath);
             Answers.Add(await request.Content!.ReadFromJsonAsync<JsonElement>(ct));

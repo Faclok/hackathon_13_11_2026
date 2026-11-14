@@ -26,7 +26,9 @@ export default function CaseOpeningModal({
   const winner = decorationCatalog.find(
     (item) => item.id === opening.decorationId,
   )!;
-  const caseItem = rewardCases.find((item) => item.id === opening.caseId)!;
+  // Saved openings of the former cultural case now use the merged case.
+  const caseId = opening.caseId === "case_item" ? "case_pet" : opening.caseId;
+  const caseItem = rewardCases.find((item) => item.id === caseId)!;
   const [spinning, setSpinning] = useState(
     animate && !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
   );
@@ -109,7 +111,9 @@ export default function CaseOpeningModal({
                 ? "Применить фон"
                 : winner.type === "pet"
                   ? "Позвать питомца"
-                  : "Надеть"}
+                  : winner.type === "item"
+                    ? "На фон"
+                    : "Надеть"}
           </button>
           <Link
             to="/inventory"

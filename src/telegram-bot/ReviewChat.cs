@@ -7,7 +7,9 @@ public sealed record ReviewDraft(ReviewView Assignment, bool Custom = false, boo
 
 public static class ReviewChat
 {
-    public static string Prompt(ReviewView review) => review.Kind == "translation-choice"
+    public static string Prompt(ReviewView review) => review.Kind == "translation-create"
+        ? $"Для этого предложения ещё нет перевода:\n\n{review.Original}\n\nНапишите свой перевод на русский одним сообщением."
+        : review.Kind == "translation-choice"
         ? $"Выберите перевод предложения:\n\n{review.Original}\n\n" +
           string.Join('\n', review.Options.Select((x, i) => $"{i + 1}. {x.Text}")) +
           "\n\nНажмите вариант перевода под заданием. Чтобы написать свой перевод, нажмите «Свой перевод»."

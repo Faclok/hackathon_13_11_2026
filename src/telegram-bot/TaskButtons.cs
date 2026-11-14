@@ -14,6 +14,7 @@ public static class TaskButtons
     public static InlineKeyboardMarkup Kinds() => Keyboard.Inline(
         ExerciseChat.Kinds.Select(x => Keyboard.Row(Keyboard.Callback(x.Key, "kind", x.Value)))
             .Concat([
+                Keyboard.Row(Keyboard.Callback("Предложить перевод", "review", "translation-create")),
                 Keyboard.Row(Keyboard.Callback("Выбор перевода", "review", "translation-choice")),
                 Keyboard.Row(Keyboard.Callback("Подтверждение перевода", "review", "translation-confirm")),
                 Keyboard.Row(Keyboard.Callback("Продолжить урок", "nav", "daily"))
@@ -52,9 +53,12 @@ public static class TaskButtons
     public static InlineKeyboardMarkup Review(ReviewView review, bool boss = false)
     {
         InlineKeyboardButton Button(string label, string value) => Keyboard.Callback(label, "vote", review.Id.ToString("N"), value);
-        var rows = review.Kind == "translation-choice"
-            ? review.Options.Select((x, i) => Keyboard.Row(Button(x.Text, "v" + i))).ToList()
-            : new List<IReadOnlyList<InlineKeyboardButton>> { Keyboard.Row(Button("Подтвердить перевод", "confirm")) };
+        var rows = review.Kind switch
+        {
+            "translation-choice" => review.Options.Select((x, i) => Keyboard.Row(Button(x.Text, "v" + i))).ToList(),
+            "translation-create" => [],
+            _ => new List<IReadOnlyList<InlineKeyboardButton>> { Keyboard.Row(Button("Подтвердить перевод", "confirm")) }
+        };
         if (review.AllowCustom) rows.Add(Keyboard.Row(Button("Свой перевод", "custom")));
         if (!boss) rows.Add(Keyboard.Row(Button("Пропустить перевод", "skip")));
         rows.Add(Keyboard.Row(Keyboard.Callback("Виды заданий", "nav", "kinds")));

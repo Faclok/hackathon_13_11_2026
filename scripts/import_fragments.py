@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import argparse
 import csv
+import http.client
 import json
 import os
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -72,6 +74,8 @@ def request_json(url: str, payload: dict, token: str | None = None):
 class Session:
     def __init__(self, base_url: str):
         self.base_url = base_url.rstrip("/")
+        self.host = urllib.parse.urlsplit(self.base_url).netloc
+        self.connection = http.client.HTTPSConnection(self.host, timeout=30)
         self.token = os.getenv("EXPERT_API_TOKEN")
         self.refresh = os.getenv("EXPERT_API_REFRESH_TOKEN")
         self.username = os.getenv("EXPERT_API_USERNAME")
@@ -97,19 +101,30 @@ class Session:
                 pass
         self.sign_in()
 
+    def reconnect(self):
+        self.connection.close()
+        self.connection = http.client.HTTPSConnection(self.host, timeout=30)
+
 
 def send(url: str, session: Session, payload: dict):
+    path = urllib.parse.urlsplit(url).path
+    body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     for attempt in range(5):
         try:
-            return request_json(url, payload, session.token)
-        except urllib.error.HTTPError as error:
-            if error.code == 401:
+            session.connection.request("POST", path, body, {
+                "Authorization": f"Bearer {session.token}", "Content-Type": "application/json"
+            })
+            response = session.connection.getresponse()
+            data = response.read()
+            if response.status == 200:
+                return json.loads(data)
+            if response.status == 401:
                 session.renew()
                 continue
-            if error.code not in {429, 502, 503, 504} or attempt == 4:
-                detail = error.read(1000).decode("utf-8", "replace")
-                raise RuntimeError(f"HTTP {error.code}: {detail}") from error
-        except (TimeoutError, urllib.error.URLError):
+            if response.status not in {429, 502, 503, 504} or attempt == 4:
+                raise RuntimeError(f"HTTP {response.status}: {data[:1000].decode('utf-8', 'replace')}")
+        except (OSError, http.client.HTTPException):
+            session.reconnect()
             if attempt == 4:
                 raise
         time.sleep(min(2 ** attempt, 15))

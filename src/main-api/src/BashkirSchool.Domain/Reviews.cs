@@ -50,6 +50,12 @@ public sealed class ReviewAssignment
         Kind = "translation-choice";
         ShownVariantsJson = JsonSerializer.Serialize(ids);
     }
+
+    public void SetCreation()
+    {
+        if (Completed) throw new DomainException("Assignment has already been completed.");
+        Kind = "translation-create";
+    }
 }
 
 public sealed class ReviewResponse
@@ -70,6 +76,8 @@ public sealed class ReviewResponse
         string? correction, decimal trust, DateTimeOffset now, bool expertClosed)
     {
         if (!Enum.IsDefined(action)) throw new DomainException("Unknown review action.");
+        if (assignment.Kind == "translation-create" && action == ReviewAction.Confirm)
+            throw new DomainException("An untranslated fragment needs a translation, not confirmation.");
         if (action == ReviewAction.Correct) Guard.Text(correction, nameof(correction));
         else if (correction is not null) throw new DomainException("Correction is only valid for Correct.");
         if (trust is < 0 or > 1) throw new DomainException("Invalid trust snapshot.");

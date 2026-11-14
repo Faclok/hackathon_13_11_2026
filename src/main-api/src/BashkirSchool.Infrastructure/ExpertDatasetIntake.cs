@@ -32,7 +32,8 @@ public sealed class ExpertDatasetIntake(CoreDbContext db, IPermissionChecker per
         if (existing is not null)
         {
             var existingCase = await db.Cases.SingleOrDefaultAsync(x => x.FragmentId == existing.Id, ct);
-            var existingText = existingCase is null ? null : (await db.Variants.SingleAsync(x => x.Id == existingCase.ShownVariantId, ct)).Text;
+            var shownText = existingCase is null ? null : (await db.Variants.SingleAsync(x => x.Id == existingCase.ShownVariantId, ct)).Text;
+            var existingText = shownText == "" ? null : shownText;
             if (existing.Text != text || existing.SourceJson != sourceJson || existingText != row.Translation ||
                 (existingCase?.ExpertClosed ?? false) != row.ExpertVerified)
                 throw new ConflictException("Fragment ID already exists with different data or status.");
@@ -44,11 +45,16 @@ public sealed class ExpertDatasetIntake(CoreDbContext db, IPermissionChecker per
         db.Fragments.Add(fragment);
         if (!row.ExpertVerified)
         {
+            var now = clock.GetUtcNow();
+            var variantId = Guid.NewGuid();
+            var translationCase = TranslationCase.Open(fragment.Id, variantId, now);
+            translationCase.SetDisputed(true);
+            db.AddRange(translationCase, TranslationVariant.CreatePlaceholder(translationCase.Id, variantId, now));
             db.Audit.Add(new() { ActorId = actor, TargetId = fragment.Id, Action = "dataset.imported.untranslated",
-                Reason = row.Source.DocumentId, At = clock.GetUtcNow() });
+                Reason = row.Source.DocumentId, At = now });
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
-            return new(fragment.Id, null, null, "untranslated");
+            return new(fragment.Id, translationCase.Id, variantId, "untranslated");
         }
 
         var receipt = await CreateVerified(fragment, row.Translation!, null, true, ct);
@@ -63,7 +69,11 @@ public sealed class ExpertDatasetIntake(CoreDbContext db, IPermissionChecker per
     {
         if (!await CanImport(actor, ct)) throw new AccessDeniedException();
         if (offset < 0 || limit is < 1 or > 1000) throw new DomainException("Invalid pagination.");
-        var rows = await db.Fragments.AsNoTracking().Where(f => !db.Cases.Any(c => c.FragmentId == f.Id))
+        var rows = await db.Fragments.AsNoTracking().Where(f =>
+                !db.Cases.Any(c => c.FragmentId == f.Id) ||
+                db.Cases.Any(c => c.FragmentId == f.Id && !c.ExpertClosed &&
+                    db.Variants.Any(v => v.CaseId == c.Id && v.Id == c.ShownVariantId && v.Text == "") &&
+                    (c.ResolutionId == null || db.Resolutions.Any(r => r.Id == c.ResolutionId && r.PrimaryVariantId == null))))
             .OrderBy(f => f.ExternalId).ThenBy(f => f.Id).Skip(offset).Take(limit).ToArrayAsync(ct);
         return rows.Select(f => new UntranslatedFragment(f.Id, f.ExternalId, f.Text, f.LanguagePair,
             JsonSerializer.Deserialize<SourceReference>(f.SourceJson)!)).ToArray();
@@ -76,8 +86,34 @@ public sealed class ExpertDatasetIntake(CoreDbContext db, IPermissionChecker per
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         await CaseWriteLock.Acquire(db, ct);
         var fragment = await db.Fragments.SingleOrDefaultAsync(x => x.Id == fragmentId, ct) ?? throw new MissingResourceException();
-        if (await db.Cases.AnyAsync(x => x.FragmentId == fragmentId, ct)) throw new ConflictException("Fragment already has a translation case.");
-        var receipt = await CreateVerified(fragment, translation, actor, false, ct);
+        var existingCase = await db.Cases.SingleOrDefaultAsync(x => x.FragmentId == fragmentId, ct);
+        ExpertDatasetReceipt receipt;
+        if (existingCase is null) receipt = await CreateVerified(fragment, translation, actor, false, ct);
+        else
+        {
+            var shown = await db.Variants.SingleAsync(x => x.Id == existingCase.ShownVariantId, ct);
+            if (existingCase.ExpertClosed || shown.Text != "") throw new ConflictException("Fragment already has a verified translation.");
+            var lastClaim = await db.Audit.AsNoTracking().Where(a => a.TargetId == existingCase.Id &&
+                    (a.Action == "expert.claimed" || a.Action == "expert.released"))
+                .OrderByDescending(a => a.At).ThenByDescending(a => a.Id).FirstOrDefaultAsync(ct);
+            if (lastClaim is { Action: "expert.claimed" } && lastClaim.ActorId != actor)
+                throw new ConflictException("Case is taken by another expert.");
+            var variant = await db.Variants.SingleOrDefaultAsync(x => x.CaseId == existingCase.Id && x.Text == translation, ct);
+            if (variant is null)
+            {
+                variant = TranslationVariant.Create(existingCase.Id, translation, false, createdBy: actor, createdAt: clock.GetUtcNow());
+                db.Variants.Add(variant);
+            }
+            var policy = await db.Policies.OrderByDescending(x => x.Version).FirstAsync(ct);
+            var resolution = ResolutionRevision.Create(existingCase.Id, existingCase.Revision + 1, ResolutionKind.Expert,
+                variant.Id, [variant.Id], [], policy.Id, actor,
+                JsonSerializer.Serialize(new { provenance = "expert_submission", source = JsonSerializer.Deserialize<SourceReference>(fragment.SourceJson) }),
+                "Перевод добавлен экспертом", clock.GetUtcNow());
+            existingCase.Apply(resolution);
+            db.Resolutions.Add(resolution);
+            db.Outbox.Add(new() { CaseId = existingCase.Id, ResponseId = Guid.NewGuid(), CreatedAt = clock.GetUtcNow() });
+            receipt = new(fragment.Id, existingCase.Id, variant.Id, "expert_verified");
+        }
         db.Audit.Add(new() { ActorId = actor, TargetId = receipt.CaseId!.Value, Action = "expert.fragment.translated",
             At = clock.GetUtcNow() });
         await db.SaveChangesAsync(ct);

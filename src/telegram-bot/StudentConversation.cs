@@ -62,7 +62,7 @@ public sealed class StudentConversation(HttpClient api, IDbContextFactory<BotDbC
 
     public Task ReviewAsync(CallbackQuery query, string[] args, BotContext ctx) => Run(ctx, async () =>
     {
-        if (args.Length != 1 || args[0] is not ("translation-choice" or "translation-confirm")) { await ShowKinds(); return; }
+        if (args.Length != 1 || args[0] is not ("translation-choice" or "translation-confirm" or "translation-create")) { await ShowKinds(); return; }
         using var response = await api.PostAsJsonAsync(Prefix + "/reviews/next?kind=" + args[0], new { }, Ct);
         Check(response);
         if (response.StatusCode == HttpStatusCode.NoContent) { await Say("Сейчас нет доступных переводов для проверки. Можно пройти учебные упражнения.", TaskButtons.Kinds()); return; }

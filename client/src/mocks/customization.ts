@@ -4,6 +4,7 @@ import hatsCase from "../assets/cases/hats-case.png";
 import framesCase from "../assets/cases/frames-case.png";
 import backgroundsCase from "../assets/cases/backgrounds-case.png";
 import petsCase from "../assets/cases/pets-case.png";
+import { culturalPrizes } from "./prizes";
 
 // Catalog, artwork and drop weights adapted from castomization-page.
 export const KEY_PRICE = 10;
@@ -16,6 +17,7 @@ export const rarities = {
 } as const;
 
 export const caseDecorations: Decoration[] = [
+  ...culturalPrizes,
   {
     id: "hat_none",
     type: "hat",
@@ -185,6 +187,11 @@ export const caseDecorations: Decoration[] = [
     price: 0,
     source: "wheel",
   },
+];
+
+// Retired pets stay resolvable for existing inventories and opening history,
+// but are not included in any case's reward pool.
+const retiredPets: Decoration[] = [
   {
     id: "pet_bee",
     type: "pet",
@@ -239,6 +246,7 @@ export const decorationCatalog: Decoration[] = [
     rarity: "common" as const,
   })),
   ...caseDecorations,
+  ...retiredPets,
 ];
 export const defaultDecorationIds = caseDecorations
   .filter((item) => item.isDefault)
@@ -262,30 +270,46 @@ export const rewardCases: RewardCase[] = [
     id: "case_bg",
     type: "background",
     title: "Фоны профиля",
-    description: "Медовый рассвет и огни Уфы",
+    description: "Агидель, Шульган-Таш и башкирские узоры",
     imageUrl: backgroundsCase,
   },
   {
     id: "case_pet",
     type: "pet",
-    title: "Питомцы",
-    description: "Верные спутники рядом с профилем",
+    dropTypes: ["pet", "item"],
+    title: "Питомцы и предметы",
+    description: "Акбузат, курай и другие открытия о Башкортостане",
     imageUrl: petsCase,
   },
 ];
 export const getCaseDrops = (caseItem: RewardCase) =>
   caseDecorations.filter(
-    (item) => item.type === caseItem.type && !item.isDefault,
+    (item) =>
+      (caseItem.dropTypes ?? [caseItem.type]).includes(item.type) &&
+      !item.isDefault,
   );
-export function rollCaseDrop(caseItem: RewardCase): Decoration {
+// Rarity weights apply to the whole tier, then split equally among its items.
+// If a case has no items of a tier, the remaining weights are normalized.
+export function getCaseDropChance(caseItem: RewardCase, item: Decoration) {
   const pool = getCaseDrops(caseItem);
-  const total = pool.reduce(
-    (sum, item) => sum + rarities[item.rarity ?? "common"].weight,
+  if (!pool.some((drop) => drop.id === item.id)) return 0;
+  const tiers = new Set(pool.map((drop) => drop.rarity ?? "common"));
+  const total = [...tiers].reduce(
+    (sum, rarity) => sum + rarities[rarity].weight,
     0,
   );
-  let point = Math.random() * total;
+  const rarity = item.rarity ?? "common";
+  const count = pool.filter(
+    (drop) => (drop.rarity ?? "common") === rarity,
+  ).length;
+  return (rarities[rarity].weight / total / count) * 100;
+}
+export function rollCaseDrop(caseItem: RewardCase): Decoration {
+  const pool = getCaseDrops(caseItem);
+  if (!pool.length) throw new Error(`Пустой кейс: ${caseItem.id}`);
+  let point = Math.random() * 100;
   for (const item of pool) {
-    point -= rarities[item.rarity ?? "common"].weight;
+    point -= getCaseDropChance(caseItem, item);
     if (point < 0) return item;
   }
   return pool[pool.length - 1];

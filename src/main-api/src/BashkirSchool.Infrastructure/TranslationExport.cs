@@ -38,7 +38,7 @@ public sealed class TranslationExport(CoreDbContext db, IPermissionChecker permi
             var support = ReviewStatisticsCalculator.Calculate(opinions, [row.VariantId]).Variants[0].Supports;
             result.Add(new(row.ExternalId, row.Text, row.LanguagePair, variant.Text,
                 JsonSerializer.Deserialize<SourceReference>(row.SourceJson)!, support,
-                row.Resolved && !row.NeedsExpert ? "confirmed" : "expert_review"));
+                variant.Text == "" ? "untranslated" : row.Resolved && !row.NeedsExpert ? "confirmed" : "expert_review"));
         }
         await transaction.CommitAsync(ct);
         return result;

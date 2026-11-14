@@ -582,6 +582,7 @@ export default function App() {
   const [catalogOffset, setCatalogOffset] = useState(0);
   const [catalogHasMore, setCatalogHasMore] = useState(true);
   const [catalogQuery, setCatalogQuery] = useState("");
+  const [catalogLoading, setCatalogLoading] = useState(false);
   const [studentTasks, setStudentTasks] = useState<StudentTask[]>([]);
   const [modal, setModal] = useState<Modal>(null);
   const [toast, setToast] = useState("");
@@ -589,6 +590,7 @@ export default function App() {
   const [mobileMenu, setMobileMenu] = useState(false);
   const baseRequest = useRef(0);
   const classRequest = useRef(0);
+  const catalogRequest = useRef(0);
 
   const show = (text: string) => {
     setToast(text);
@@ -636,13 +638,19 @@ export default function App() {
     }));
     setReport(classReport);
   }, []);
-  const loadMoreCatalog = useCallback(async (offset: number) => {
-    const page = await api<Translation[]>(
-      `/api/lms/teacher/catalog?offset=${offset}&limit=50`,
-    );
-    setCatalog((previous) => (offset === 0 ? page : [...previous, ...page]));
-    setCatalogOffset(offset + page.length);
-    setCatalogHasMore(page.length === 50);
+  const loadCatalogPage = useCallback(async (offset: number, query: string, requestId: number) => {
+    setCatalogLoading(true);
+    try {
+      const page = await api<Translation[]>(
+        `/api/lms/teacher/catalog?offset=${offset}&limit=13&query=${encodeURIComponent(query)}`,
+      );
+      if (requestId !== catalogRequest.current) return;
+      setCatalog(page.slice(0, 12));
+      setCatalogOffset(offset);
+      setCatalogHasMore(page.length > 12);
+    } finally {
+      if (requestId === catalogRequest.current) setCatalogLoading(false);
+    }
   }, []);
   useEffect(() => {
     if (!session?.accessToken) {
@@ -650,11 +658,23 @@ export default function App() {
       return;
     }
     setLoading(true);
-    Promise.all([loadBase(), loadMoreCatalog(0)])
+    loadBase()
       .catch(fail)
       .finally(() => setLoading(false));
     // The access token identifies the active account; data refreshes when it changes.
-  }, [session?.accessToken, loadBase, loadMoreCatalog]);
+  }, [session?.accessToken, loadBase]);
+  useEffect(() => {
+    if (!session?.accessToken) return;
+    const requestId = ++catalogRequest.current;
+    setCatalog([]);
+    setCatalogOffset(0);
+    setCatalogHasMore(false);
+    setCatalogLoading(true);
+    const timer = window.setTimeout(() => {
+      loadCatalogPage(0, catalogQuery, requestId).catch(fail);
+    }, catalogQuery ? 300 : 0);
+    return () => window.clearTimeout(timer);
+  }, [session?.accessToken, catalogQuery, loadCatalogPage]);
   useEffect(() => {
     if (!session?.accessToken || !selectedClassId) {
       classRequest.current++;
@@ -676,11 +696,6 @@ export default function App() {
     (report?.memberCount || 0) * (report?.tasks.length || 0);
   const reviewCount =
     report?.tasks.reduce((sum, task) => sum + task.needsReview, 0) || 0;
-  const visibleCatalog = catalog.filter((item) =>
-    `${item.sourceText} ${item.translationText}`
-      .toLocaleLowerCase("ru")
-      .includes(catalogQuery.toLocaleLowerCase("ru")),
-  );
   const selectedAnswers =
     reportTask?.answers.filter(
       (answer) =>
@@ -1824,7 +1839,7 @@ export default function App() {
                           <h2>Готовый каталог</h2>
                         </div>
                         <span className="count-pill">
-                          {catalog.length}
+                          {catalogQuery ? "Результаты" : "Каталог"} · {catalogOffset + catalog.length}
                           {catalogHasMore ? "+" : ""}
                         </span>
                       </div>
@@ -1839,7 +1854,7 @@ export default function App() {
                         />
                       </label>
                       <div className="material-list">
-                        {visibleCatalog.map((item) => (
+                        {catalog.map((item) => (
                           <article key={item.id} className="material-card">
                             <div className="material-top">
                               <span
@@ -1871,21 +1886,22 @@ export default function App() {
                             </div>
                           </article>
                         ))}
-                        {!visibleCatalog.length && (
+                        {!catalogLoading && !catalog.length && (
                           <p className="no-search">
-                            Переводы не найдены среди загруженных.
+                            Переводы не найдены.
                           </p>
                         )}
+                        {catalogLoading && <p className="no-search">Загрузка переводов…</p>}
                       </div>
-                      {catalogHasMore && (
-                        <button
-                          className="load-more"
-                          onClick={() =>
-                            loadMoreCatalog(catalogOffset).catch(fail)
-                          }
-                        >
-                          Показать ещё переводы <Icon name="arrow" size={16} />
-                        </button>
+                      {!catalogLoading && (catalogOffset > 0 || catalogHasMore) && (
+                        <div className="catalog-pagination">
+                          {catalogOffset > 0 && <button className="load-more" onClick={() =>
+                            loadCatalogPage(catalogOffset - 12, catalogQuery, catalogRequest.current).catch(fail)
+                          }>Назад</button>}
+                          {catalogHasMore && <button className="load-more" onClick={() =>
+                            loadCatalogPage(catalogOffset + 12, catalogQuery, catalogRequest.current).catch(fail)
+                          }>Следующие переводы <Icon name="arrow" size={16} /></button>}
+                        </div>
                       )}
                     </section>
                   </div>
@@ -2091,6 +2107,19 @@ function EditorModal({
     modal.kind === "task" ? taskItem?.title || "" : "",
   );
   const [source, setSource] = useState(initialSource);
+  const [sourceSearch, setSourceSearch] = useState("");
+  const [sourceResults, setSourceResults] = useState<Translation[]>([]);
+  const [sourceLoading, setSourceLoading] = useState(false);
+  const [sourceError, setSourceError] = useState("");
+  const sourceRequest = useRef(0);
+  const [selectedSource, setSelectedSource] = useState<Translation | null>(() =>
+    ownTranslations.find((value) => `own:${value.id}` === initialSource) ||
+    catalog.find((value) => `catalog:${value.id}` === initialSource) ||
+    (taskItem && initialSource
+      ? { id: initialSource.split(":")[1], sourceText: taskItem.sourceText,
+          translationText: taskItem.referenceTranslation, languagePair: "" }
+      : null),
+  );
   const [dueAt, setDueAt] = useState(
     modal.kind === "task" && taskItem?.dueAt
       ? new Date(
@@ -2102,6 +2131,31 @@ function EditorModal({
       : "",
   );
   const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (modal.kind !== "task") return;
+    const requestId = ++sourceRequest.current;
+    setSourceResults([]);
+    setSourceLoading(true);
+    setSourceError("");
+    const timer = window.setTimeout(() => {
+      api<Translation[]>(`/api/lms/teacher/catalog?offset=0&limit=8&query=${encodeURIComponent(sourceSearch)}`)
+        .then((results) => {
+          if (requestId === sourceRequest.current) setSourceResults(results);
+        })
+        .catch((cause: unknown) => {
+          if (requestId === sourceRequest.current)
+            setSourceError((cause as Error).message || "Не удалось найти переводы.");
+        })
+        .finally(() => {
+          if (requestId === sourceRequest.current) setSourceLoading(false);
+        });
+    }, sourceSearch ? 300 : 0);
+    return () => window.clearTimeout(timer);
+  }, [modal.kind, sourceSearch]);
+  const ownResults = ownTranslations.filter((value) =>
+    `${value.sourceText} ${value.translationText}`
+      .toLocaleLowerCase("ru").includes(sourceSearch.trim().toLocaleLowerCase("ru")),
+  ).slice(0, 4);
   const modalTitle =
     modal.kind === "class"
       ? classItem
@@ -2161,9 +2215,6 @@ function EditorModal({
       setBusy(false);
     }
   }
-  const sourceExists =
-    ownTranslations.some((value) => `own:${value.id}` === source) ||
-    catalog.some((value) => `catalog:${value.id}` === source);
   return (
     <div
       className="modal-backdrop"
@@ -2293,40 +2344,38 @@ function EditorModal({
                   required
                 />
               </label>
-              <label>
-                Предложение для перевода
-                <select
-                  value={source}
-                  onChange={(event) => setSource(event.target.value)}
-                  required
-                >
-                  <option value="">Выберите перевод</option>
-                  {!sourceExists && source && (
-                    <option value={source}>
-                      {taskItem?.sourceText || "Выбранный перевод"}
-                    </option>
-                  )}
-                  {ownTranslations.length > 0 && (
-                    <optgroup label="Мои переводы">
-                      {ownTranslations.map((value) => (
-                        <option key={value.id} value={`own:${value.id}`}>
-                          {value.sourceText.slice(0, 90)}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                  {catalog.length > 0 && (
-                    <optgroup label="Готовый каталог">
-                      {catalog.map((value) => (
-                        <option key={value.id} value={`catalog:${value.id}`}>
-                          {value.sourceText.slice(0, 85)} · ★{" "}
-                          {value.rating ?? 0}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                </select>
-              </label>
+              <div className="source-picker">
+                <label htmlFor="task-source-search">Предложение для перевода</label>
+                {source && selectedSource && (
+                  <div className="source-selected">
+                    <strong>Выбрано: {selectedSource.sourceText}</strong>
+                    <span>{selectedSource.translationText}</span>
+                    <button type="button" onClick={() => { setSource(""); setSelectedSource(null); }}
+                      aria-label="Убрать выбранный перевод">×</button>
+                  </div>
+                )}
+                <input id="task-source-search" type="search" value={sourceSearch}
+                  onChange={(event) => setSourceSearch(event.target.value)}
+                  placeholder="Поиск по оригиналу или переводу" maxLength={200} />
+                <div className="source-results" aria-live="polite">
+                  {ownResults.map((value) => (
+                    <button type="button" key={`own:${value.id}`} className="source-result"
+                      onClick={() => { setSource(`own:${value.id}`); setSelectedSource(value); }}>
+                      <small>Мой перевод</small><strong>{value.sourceText}</strong><span>{value.translationText}</span>
+                    </button>
+                  ))}
+                  {sourceResults.map((value) => (
+                    <button type="button" key={`catalog:${value.id}`} className="source-result"
+                      onClick={() => { setSource(`catalog:${value.id}`); setSelectedSource(value); }}>
+                      <small>Каталог · ★ {value.rating ?? 0}</small><strong>{value.sourceText}</strong><span>{value.translationText}</span>
+                    </button>
+                  ))}
+                  {sourceLoading && <p className="form-hint">Ищем переводы…</p>}
+                  {sourceError && <p className="form-error">{sourceError}</p>}
+                  {!sourceLoading && !sourceError && !ownResults.length && !sourceResults.length &&
+                    <p className="form-hint">Переводы не найдены.</p>}
+                </div>
+              </div>
               <label>
                 Срок сдачи <span className="optional">необязательно</span>
                 <input
