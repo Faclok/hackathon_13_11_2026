@@ -98,7 +98,7 @@ public static class LmsCatalogEndpoints
             .ThenBy(x => x.VariantId).First().VariantId;
         var selected = variants.Single(x => x.Id == selectedId);
         var rating = statistics.Variants.Single(x => x.VariantId == selectedId).Supports;
-        var status = resolution?.Kind == ResolutionKind.Expert ? "expert" : item.NeedsExpert ? "expert_review" :
+        var status = selected.Text == "" ? "untranslated" : resolution?.Kind == ResolutionKind.Expert ? "expert" : item.NeedsExpert ? "expert_review" :
             resolution?.Kind == ResolutionKind.Community ? "community" : "pending";
         var accepted = resolution?.Accepted.Select(id => variants.Single(x => x.Id == id).Text).ToArray() ?? [];
         var requested = await db.Audit.AsNoTracking().AnyAsync(x => x.TargetId == item.Id && x.Action == "lms.expert.requested", ct);

@@ -94,6 +94,7 @@ public sealed class StudentConversationTests
     [InlineData("translation-confirm", "Подтвердить перевод", false, "Confirm")]
     [InlineData("translation-confirm", "Приветствую!", true, "Correct")]
     [InlineData("translation-choice", "Пропустить перевод", false, "Skip")]
+    [InlineData("translation-create", "Здравствуйте!", true, "Correct")]
     public async Task ReviewModesPreserveIssuedOptionsAndCustomInputAcrossRestart(string kind, string text, bool custom, string action)
     {
         using var connection = new SqliteConnection("Data Source=:memory:"); connection.Open();
@@ -103,9 +104,10 @@ public sealed class StudentConversationTests
         await using (var provider = Build(factory, api, telegram))
         {
             var dispatcher = provider.GetRequiredService<IUpdateDispatcher>();
-            await dispatcher.DispatchAsync(Update(1, kind == "translation-choice" ? "Выбор перевода" : "Подтверждение перевода"), default);
-            Assert.Contains(telegram.Messages, x => x.Contains("Һаумы!") && x.Contains("Здравствуй!"));
-            Assert.Contains(kind == "translation-choice" ? "2" : "Подтвердить перевод", telegram.Buttons);
+            await dispatcher.DispatchAsync(Update(1, kind switch { "translation-choice" => "Выбор перевода", "translation-create" => "Предложить перевод", _ => "Подтверждение перевода" }), default);
+            Assert.Contains(telegram.Messages, x => x.Contains("Һаумы!") && (kind == "translation-create" ? x.Contains("ещё нет перевода") : x.Contains("Здравствуй!")));
+            if (kind == "translation-create") Assert.DoesNotContain("Подтвердить перевод", telegram.Buttons);
+            else Assert.Contains(kind == "translation-choice" ? "2" : "Подтвердить перевод", telegram.Buttons);
             if (custom) await dispatcher.DispatchAsync(Update(2, "Свой перевод"), default);
         }
         await using (var provider = Build(factory, api, telegram))
@@ -205,8 +207,8 @@ public sealed class StudentConversationTests
             {
                 Assert.Equal(HttpMethod.Post, request.Method);
                 Assert.Equal("?kind=" + kind, request.RequestUri.Query);
-                return new(HttpStatusCode.OK) { Content = JsonContent.Create(new ReviewView(assignment, Guid.NewGuid(), Guid.NewGuid(), "Һаумы!", "Здравствуй!", DateTimeOffset.UtcNow.AddMinutes(30), kind,
-                    [new(Guid.NewGuid(), "Здравствуй!"), new(Second, "Привет!")], true)) };
+                return new(HttpStatusCode.OK) { Content = JsonContent.Create(new ReviewView(assignment, Guid.NewGuid(), Guid.NewGuid(), "Һаумы!", kind == "translation-create" ? "" : "Здравствуй!", DateTimeOffset.UtcNow.AddMinutes(30), kind,
+                    kind == "translation-create" ? [] : [new(Guid.NewGuid(), "Здравствуй!"), new(Second, "Привет!")], true)) };
             }
             Assert.Equal($"/internal/telegram/101/reviews/{assignment}/response", request.RequestUri.AbsolutePath);
             Answers.Add(await request.Content!.ReadFromJsonAsync<JsonElement>(ct));

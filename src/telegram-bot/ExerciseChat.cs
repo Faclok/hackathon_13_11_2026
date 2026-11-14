@@ -13,7 +13,7 @@ public static class ExerciseChat
     public static ReplyKeyboardMarkup Keyboard(IEnumerable<string> buttons) => new(buttons
         .Concat(["Профиль", "Задания на сегодня"]).Chunk(2).Select(row => row.Select(x => new KeyboardButton(x)))) { ResizeKeyboard = true };
 
-    public static ReplyKeyboardMarkup KindsKeyboard() => Keyboard(Kinds.Keys.Concat(["Выбор перевода", "Подтверждение перевода", "Продолжить урок"]));
+    public static ReplyKeyboardMarkup KindsKeyboard() => Keyboard(Kinds.Keys.Concat(["Предложить перевод", "Выбор перевода", "Подтверждение перевода", "Продолжить урок"]));
 
     public static ReplyKeyboardMarkup Keyboard(ExerciseView exercise) => Keyboard(
         (exercise.Kind == "missing-word"

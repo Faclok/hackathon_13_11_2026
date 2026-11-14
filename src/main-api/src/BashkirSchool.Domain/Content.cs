@@ -71,4 +71,7 @@ public sealed class TranslationVariant
         Guid? createdBy = null, DateTimeOffset? createdAt = null) =>
         new() { Id = id ?? Guid.NewGuid(), CaseId = caseId, Text = Guard.Text(text, nameof(text)), MachineGenerated = machineGenerated,
             CreatedBy = createdBy, CreatedAt = createdAt ?? DateTimeOffset.MinValue };
+
+    public static TranslationVariant CreatePlaceholder(Guid caseId, Guid id, DateTimeOffset now) =>
+        new() { Id = id, CaseId = caseId, Text = "", MachineGenerated = false, CreatedAt = now };
 }

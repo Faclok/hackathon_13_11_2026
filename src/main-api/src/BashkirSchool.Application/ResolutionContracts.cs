@@ -17,11 +17,15 @@ public sealed record VariantEvidence(Guid Id, string Text, int Supports, decimal
 public sealed record ExpertCaseResponse(Guid CaseId, long Revision, string Original, string LanguagePair,
     SourceReference Source, bool Closed, bool Disputed, ResolutionResponse? Resolution, IReadOnlyList<VariantEvidence> Variants)
 {
+    public Guid FragmentId { get; init; }
     public string? TeacherNote { get; init; }
 }
 /// <summary>A queued case, ordered by disagreement among sufficiently sampled cases.</summary>
 public sealed record ExpertQueueItem(Guid CaseId, long Revision, string Original, bool Disputed, int Observations,
-    decimal? LeadingSupport, DateTimeOffset CreatedAt, bool TeacherRequested);
+    decimal? LeadingSupport, DateTimeOffset CreatedAt, bool TeacherRequested)
+{
+    public bool Untranslated { get; init; }
+}
 /// <summary>An expert's reserved or completed case.</summary>
 public sealed record ExpertWorkItem(Guid CaseId, long Revision, string Original, int Observations,
     decimal? LeadingSupport, DateTimeOffset TakenAt, bool Completed, DateTimeOffset? CompletedAt);

@@ -11,7 +11,7 @@ public sealed class ReviewWorkflow(CoreDbContext db, IPermissionChecker permissi
 
     public async Task<AssignmentResponse?> ReceiveAsync(Guid participant, string kind, CancellationToken ct)
     {
-        if (kind is not ("translation-confirm" or "translation-choice")) throw new DomainException("Unknown review kind.");
+        if (kind is not ("translation-confirm" or "translation-choice" or "translation-create")) throw new DomainException("Unknown review kind.");
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
         // One small application's allocator serializes reservations; no external lock service is needed.
         if (db.Database.IsNpgsql()) await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(71830421)", ct);
@@ -24,7 +24,12 @@ public sealed class ReviewWorkflow(CoreDbContext db, IPermissionChecker permissi
                            select new { ClassId = c.Id, c.SchoolId }).SingleOrDefaultAsync(ct);
         var policy = await db.Policies.OrderByDescending(x => x.Version).FirstOrDefaultAsync(ct)
             ?? throw new ConflictException("An administrator must configure distribution first.");
-        var candidates = await db.Cases.Where(x => !x.ExpertClosed).OrderBy(x => x.CreatedAt).ThenBy(x => x.Id)
+        var candidateQuery = db.Cases.Where(x => !x.ExpertClosed);
+        candidateQuery = kind == "translation-create"
+            ? candidateQuery.Where(c => db.Variants.Any(v => v.CaseId == c.Id && v.Text == "") &&
+                !db.Variants.Any(v => v.CaseId == c.Id && v.Text != ""))
+            : candidateQuery.Where(c => db.Variants.Any(v => v.CaseId == c.Id && v.Text != ""));
+        var candidates = await candidateQuery.OrderBy(x => x.CreatedAt).ThenBy(x => x.Id)
             .Take(policy.WorkingSetSize).ToArrayAsync(ct);
         var ids = candidates.Select(x => x.Id).ToArray();
         var assignments = await db.Assignments.Where(x => ids.Contains(x.CaseId)).ToArrayAsync(ct);
@@ -46,7 +51,8 @@ public sealed class ReviewWorkflow(CoreDbContext db, IPermissionChecker permissi
             .OrderBy(x => x.SchoolCount).ThenBy(x => x.ClassCount).ThenBy(x => x.Repeats)
             .ThenBy(x => group is null ? x.CoverageCount : 0).ThenBy(x => x.Case.CreatedAt).ThenBy(x => x.Case.Id).FirstOrDefault();
         if (eligible is null) return null;
-        var variants = await db.Variants.Where(x => x.CaseId == eligible.Case.Id && x.CreatedBy != participant).ToArrayAsync(ct);
+        var variants = await db.Variants.Where(x => x.CaseId == eligible.Case.Id && x.CreatedBy != participant &&
+            (kind == "translation-create" ? x.Text == "" : x.Text != "")).ToArrayAsync(ct);
         var shownVariant = variants.OrderBy(v => assignments.Count(a => a.CaseId == eligible.Case.Id && a.ShownVariantId == v.Id && (a.Completed || a.ExpiresAt > now)))
             .ThenBy(v => v.CreatedAt).ThenBy(v => v.Id).FirstOrDefault();
         if (shownVariant is null) return null;
@@ -63,6 +69,7 @@ public sealed class ReviewWorkflow(CoreDbContext db, IPermissionChecker permissi
         }
         var issued = ReviewAssignment.Issue(participant, eligible.Case, group?.SchoolId, group?.ClassId, policy.Id, now, TimeSpan.FromMinutes(policy.AssignmentMinutes), shownVariant.Id);
         if (kind == "translation-choice") issued.SetChoices(choices);
+        if (kind == "translation-create") issued.SetCreation();
         db.Assignments.Add(issued);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
@@ -137,7 +144,7 @@ public sealed class ReviewWorkflow(CoreDbContext db, IPermissionChecker permissi
         var translationCase = await db.Cases.AsNoTracking().SingleAsync(x => x.Id == assignment.CaseId, ct);
         var fragment = await db.Fragments.AsNoTracking().SingleAsync(x => x.Id == translationCase.FragmentId, ct);
         var variant = await db.Variants.AsNoTracking().SingleAsync(x => x.Id == assignment.ShownVariantId, ct);
-        var ids = assignment.ShownVariants;
+        var ids = assignment.Kind == "translation-create" ? [] : assignment.ShownVariants;
         var options = await db.Variants.Where(x => x.CaseId == assignment.CaseId && ids.Contains(x.Id)).ToArrayAsync(ct);
         return new(assignment.Id, assignment.CaseId, variant.Id, fragment.Text, variant.Text, assignment.ExpiresAt)
         { Kind = assignment.Kind, Options = ids.Select(id => new ReviewOptionResponse(id, options.Single(x => x.Id == id).Text)).ToArray() };

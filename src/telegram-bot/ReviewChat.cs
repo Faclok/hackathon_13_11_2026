@@ -8,7 +8,9 @@ public sealed record ReviewDraft(ReviewView Assignment, bool Custom = false);
 
 public static class ReviewChat
 {
-    public static string Prompt(ReviewView review) => review.Kind == "translation-choice"
+    public static string Prompt(ReviewView review) => review.Kind == "translation-create"
+        ? $"Для этого предложения ещё нет перевода:\n\n{review.Original}\n\nНапишите свой перевод на русский одним сообщением."
+        : review.Kind == "translation-choice"
         ? $"Выберите перевод предложения:\n\n{review.Original}\n\n" +
           string.Join('\n', review.Options.Select((x, i) => $"{i + 1}. {x.Text}")) +
           "\n\nНажмите номер варианта. Чтобы написать свой перевод, нажмите «Свой перевод»."
@@ -18,7 +20,7 @@ public static class ReviewChat
     {
         var choices = review.Kind == "translation-choice"
             ? review.Options.Select((_, i) => (i + 1).ToString()).ToArray()
-            : ["Подтвердить перевод"];
+            : review.Kind == "translation-create" ? [] : ["Подтвердить перевод"];
         return ExerciseChat.Keyboard(choices.Concat(review.AllowCustom ? new[] { "Свой перевод" } : [])
             .Append("Пропустить перевод").Append("Виды заданий"));
     }

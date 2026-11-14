@@ -67,9 +67,10 @@ public sealed class StudentConversation(HttpClient api, IDbContextFactory<BotDbC
                 await ShowExercise(selected);
                 return;
             }
-            if (text is "Выбор перевода" or "Подтверждение перевода")
+            if (text is "Выбор перевода" or "Подтверждение перевода" or "Предложить перевод")
             {
-                using var issued = await api.PostAsJsonAsync(prefix + "/reviews/next?kind=" + (text == "Выбор перевода" ? "translation-choice" : "translation-confirm"), new { }, ct);
+                var reviewKind = text switch { "Выбор перевода" => "translation-choice", "Предложить перевод" => "translation-create", _ => "translation-confirm" };
+                using var issued = await api.PostAsJsonAsync(prefix + "/reviews/next?kind=" + reviewKind, new { }, ct);
                 await Check(issued);
                 if (issued.StatusCode == HttpStatusCode.NoContent) { await Say("Сейчас нет доступных переводов для проверки. Можно пройти учебные упражнения.", ExerciseChat.KindsKeyboard()); return; }
                 var review = (await issued.Content.ReadFromJsonAsync<ReviewView>(ct))!;
@@ -90,17 +91,17 @@ public sealed class StudentConversation(HttpClient api, IDbContextFactory<BotDbC
                     await Say("Напишите свой перевод одним сообщением. /cancel — вернуться в меню.");
                     return;
                 }
-                ReviewAnswer answer;
-                try { answer = ReviewChat.Answer(draft.Assignment, text, draft.Custom); }
+                ReviewAnswer reviewAnswer;
+                try { reviewAnswer = ReviewChat.Answer(draft.Assignment, text, draft.Custom); }
                 catch (FormatException) { await Say("Выберите номер из показанных вариантов или напишите свой перевод.", ReviewChat.Keyboard(draft.Assignment)); return; }
-                using var result = await api.PostAsJsonAsync(prefix + $"/reviews/{draft.Assignment.Id}/response", answer, ct);
+                using var result = await api.PostAsJsonAsync(prefix + $"/reviews/{draft.Assignment.Id}/response", reviewAnswer, ct);
                 if (result.StatusCode == HttpStatusCode.Conflict)
                 {
                     await Reset(); await Say("Состояние задания изменилось. Откройте проверку перевода заново.", ExerciseChat.KindsKeyboard()); return;
                 }
                 await Check(result);
                 await Reset();
-                await Say(answer.Action == "Skip" ? "Перевод пропущен. Выберите следующее задание." : "Ваш ответ сохранён. Выберите следующее задание.", ExerciseChat.KindsKeyboard());
+                await Say(reviewAnswer.Action == "Skip" ? "Перевод пропущен. Выберите следующее задание." : "Ваш ответ сохранён. Выберите следующее задание.", ExerciseChat.KindsKeyboard());
                 return;
             }
             // Redelivery after a crash must keep the original exercise, even if Next already ran.

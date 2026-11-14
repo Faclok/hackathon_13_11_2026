@@ -116,9 +116,14 @@ function renderAssignment() {
   $('.review-actions').hidden = !assignment;
   $('#review-preview-note').hidden = !previewAssignment;
   $('form[data-action="confirm"] button').textContent = assignment?.kind === 'translation-choice' ? 'Отправить выбранный перевод' : 'Перевод верный';
+  $('form[data-action="confirm"]').hidden = assignment?.kind === 'translation-create';
+  $('form[data-action="correct"] button').textContent = assignment?.kind === 'translation-create' ? 'Отправить перевод' : 'Отправить исправление';
+  $('.correction').open = assignment?.kind === 'translation-create';
   if (!assignment) { $('#assignment').append(element('h2', 'Начните с одной фразы'), element('p', 'Нажмите «Получить задание». Здесь появятся оригинал и предложенный перевод.')); return; }
   $('#assignment').append(element('p', 'Оригинал', { className: 'phrase-label' }), element('h2', assignment.original));
-  if (assignment.kind === 'translation-choice') {
+  if (assignment.kind === 'translation-create') {
+    $('#assignment').append(element('p', 'Перевод пока неизвестен. Напишите свой вариант ниже.', { className: 'hint' }));
+  } else if (assignment.kind === 'translation-choice') {
     $('#assignment').append(element('p', 'Выберите один перевод или предложите свой ниже.', { className: 'hint' }));
     const options = element('div', '', { className: 'answer-options' });
     for (const option of assignment.options || []) {
@@ -289,7 +294,12 @@ const actions = {
   'invitation-decline'(_, target) { return respondToInvitation(target.dataset.id, false); },
   async deliver(values) { const data = await request('/api/deliveries', { method: 'POST', headers: { 'Idempotency-Key': values.key }, body: { fragment_id: values.fragmentId, text_ba: values.original, lang_pair: values.languagePair, translation: values.translation, source: { document_id: values.documentId } } }); context({ caseId: data.caseId }); show('delivery-result', data); },
   async receive() { const current = requireActor(); const kind = $('#review-kind').value; const data = await request(`/api/reviews/next?kind=${encodeURIComponent(kind)}`, { method: 'POST' }); previewAssignment = null; state.assignments[current.id] = data; save(); renderAssignment(); if (data) context({ caseId: data.caseId }); show('review-result', data || 'Подходящих проверок пока нет. Загрузите материалы или проверьте ограничения выдачи.'); },
-  'review-preview'() { previewAssignment = structuredClone($('#review-kind').value === 'translation-choice' ? exampleChoice : exampleConfirm); renderAssignment(); show('review-result', { message: 'Открыт пример проверки. Выберите ответ: в базу он не отправится.' }); },
+  'review-preview'() {
+    const kind = $('#review-kind').value;
+    previewAssignment = structuredClone(kind === 'translation-choice' ? exampleChoice : exampleConfirm);
+    if (kind === 'translation-create') Object.assign(previewAssignment, { kind, translation: '', options: [] });
+    renderAssignment(); show('review-result', { message: 'Открыт пример проверки. Выберите ответ: в базу он не отправится.' });
+  },
   confirm() { return submitReview('Confirm'); }, skip() { return submitReview('Skip'); }, correct(values) { return submitReview('Correct', values.correction); },
   async statistics(values) { context({ caseId: values.caseId }); show('review-result', await request(`/api/cases/${values.caseId}/statistics`)); },
   async queue() { const data = await request('/api/expert/cases?offset=0&limit=100'); $('#queue').replaceChildren(); data.forEach((item, index) => { const btn = element('button', `${item.original || 'Перевод ' + (index + 1)} — ответов: ${item.observations}${item.disputed ? ', есть разногласия' : ''}`, { type: 'button' }); btn.dataset.action = 'case-open'; btn.dataset.id = item.caseId; $('#queue').append(btn); }); show('expert-result', data); },
