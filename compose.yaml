@@ -3,7 +3,7 @@ services:
     build: ./deploy/nginx
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/api/health >/dev/null && wget -qO- http://127.0.0.1/api/lms/health >/dev/null"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health/ready >/dev/null && wget -qO- http://127.0.0.1/api/lms/health >/dev/null"]
       start_period: 45s
       interval: 10s
       timeout: 5s
@@ -22,10 +22,12 @@ services:
     restart: unless-stopped
     environment:
       ASPNETCORE_URLS: http://+:8080
-      ConnectionStrings__Default: Host=main-db;Database=main;Username=app;Password=${POSTGRES_PASSWORD}
-      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?set INTERNAL_API_KEY in .env}
+      ConnectionStrings__Core: Host=core-db;Database=core;Username=app;Password=${POSTGRES_PASSWORD}
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:?set JWT_SIGNING_KEY in .env}
+      Bootstrap__Username: ${BOOTSTRAP_USERNAME:-admin}
+      Bootstrap__Password: ${BOOTSTRAP_PASSWORD:?set BOOTSTRAP_PASSWORD in .env}
     depends_on:
-      main-db:
+      core-db:
         condition: service_healthy
 
   lms-api:
@@ -35,7 +37,6 @@ services:
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__Default: Host=lms-db;Database=lms;Username=app;Password=${POSTGRES_PASSWORD}
       MAIN_API_URL: http://main-api:8080
-      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?set INTERNAL_API_KEY in .env}
     depends_on:
       lms-db:
         condition: service_healthy
@@ -44,10 +45,11 @@ services:
 
   telegram-bot:
     build: ./src/telegram-bot
+    profiles: ["legacy-bot"]
     restart: unless-stopped
     environment:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
-      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?set INTERNAL_API_KEY in .env}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-}
       MAIN_API_URL: http://main-api:8080
       ConnectionStrings__Default: Host=bot-db;Database=bot;Username=app;Password=${POSTGRES_PASSWORD}
     depends_on:
@@ -56,15 +58,15 @@ services:
       bot-db:
         condition: service_healthy
 
-  main-db:
+  core-db:
     image: postgres:17-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: main
+      POSTGRES_DB: core
       POSTGRES_USER: app
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
     volumes:
-      - main_data_v2:/var/lib/postgresql/data
+      - core_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD", "pg_isready", "-q"]
       interval: 5s
@@ -102,6 +104,6 @@ services:
       retries: 20
 
 volumes:
-  main_data_v2:
+  core_data:
   lms_data_v2:
   bot_data_v2:

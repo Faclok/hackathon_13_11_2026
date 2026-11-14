@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Башперевод · Вводный курс</title>
+  <style>
+    html,body{margin:0;height:100%;font:14px Arial,sans-serif;background:#f4f6ee}
+    iframe{display:block;width:100%;height:100%;border:0}
+    #error{display:none;padding:16px;color:#7d2525;background:#fff1f1}
+  </style>
+</head>
+<body>
+  <div id="error" role="alert"></div>
+  <iframe id="course" title="Башперевод · Вводный курс" src="https://lms.bashperevod.ru/?scorm=1" allow="fullscreen"></iframe>
+  <script>
+    (() => {
+      const courseOrigin = 'https://lms.bashperevod.ru';
+      const frame = document.getElementById('course');
+      const error = document.getElementById('error');
+      const showError = message => { error.textContent = message; error.style.display = 'block'; };
+      function findApi(start) {
+        let current = start;
+        for (let i = 0; current && i < 15; i++) {
+          try {
+            if (current.API) return current.API;
+            if (current.parent === current) return null;
+            current = current.parent;
+          } catch { return null; }
+        }
+        return null;
+      }
+      const api = findApi(window) || (window.opener && findApi(window.opener));
+      if (!api) {
+        showError('SCORM API не найден. Откройте этот курс из учебной системы.');
+        return;
+      }
+      let active = false;
+      try { active = String(api.LMSInitialize('')) === 'true'; }
+      catch { active = false; }
+      if (!active) {
+        showError('Учебная система не смогла начать SCORM сессию.');
+        return;
+      }
+      const set = (name, value) => String(api.LMSSetValue(name, String(value))) === 'true';
+      window.addEventListener('message', event => {
+        if (!active || event.source !== frame.contentWindow || event.origin !== courseOrigin) return;
+        const data = event.data;
+        if (!data || data.type !== 'BASHPEREVOD_SCORM_PROGRESS' ||
+            !Number.isInteger(data.score) || data.score < 0 || data.score > 100 ||
+            typeof data.completed !== 'boolean') return;
+        try {
+          const oldStatus = api.LMSGetValue('cmi.core.lesson_status');
+          if (oldStatus === 'passed' || oldStatus === 'completed') return;
+          if (!set('cmi.core.score.raw', data.score) ||
+              !set('cmi.core.lesson_status', data.completed ? 'passed' : 'incomplete') ||
+              String(api.LMSCommit('')) !== 'true') {
+            showError('Не удалось записать прогресс в учебную систему.');
+            return;
+          }
+          if (data.completed) {
+            api.LMSFinish('');
+            active = false;
+          }
+        } catch { showError('Не удалось записать прогресс в учебную систему.'); }
+      });
+      window.addEventListener('pagehide', () => {
+        if (!active) return;
+        try { api.LMSCommit(''); api.LMSFinish(''); } catch { /* Browser is closing. */ }
+        active = false;
+      });
+    })();
+  </script>
+</body>
+</html>

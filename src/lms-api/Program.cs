@@ -6,7 +6,6 @@ var connection = builder.Configuration.GetConnectionString("Default") ?? throw n
 builder.Services.AddDbContext<LmsDbContext>(options => options.UseNpgsql(connection,
     postgres => postgres.MigrationsHistoryTable("__EFMigrationsHistory_Lms")));
 builder.Services.AddHttpClient("main", client => client.BaseAddress = new Uri(builder.Configuration["MAIN_API_URL"] ?? "http://main-api:8080"));
-var internalKey = builder.Configuration["INTERNAL_API_KEY"] ?? throw new InvalidOperationException("INTERNAL_API_KEY is required");
 var app = builder.Build();
 await using (var scope = app.Services.CreateAsyncScope())
 {
@@ -31,14 +30,14 @@ app.MapGet("/api/lms/courses/{id:int}/lessons", async (int id, LmsDbContext db) 
 
 app.MapGet("/api/lms/me/progress", async (HttpRequest request, IHttpClientFactory http, LmsDbContext db) =>
 {
-    var user = await Resolve(request, http, internalKey);
+    var user = await Resolve(request, http);
     return user is null ? Results.Unauthorized() : Results.Ok(await db.Progress.AsNoTracking()
         .Where(p => p.UserId == user).OrderBy(p => p.LessonId)
         .Select(p => new { lesson_id = p.LessonId, completed_at = p.CompletedAt }).ToListAsync());
 });
 app.MapPost("/api/lms/lessons/{id:int}/complete", async (int id, HttpRequest request, IHttpClientFactory http, LmsDbContext db) =>
 {
-    var user = await Resolve(request, http, internalKey);
+    var user = await Resolve(request, http);
     if (user is null) return Results.Unauthorized();
     if (!await db.Lessons.AnyAsync(l => l.Id == id)) return Results.NotFound();
     if (!await db.Progress.AnyAsync(p => p.UserId == user && p.LessonId == id))
@@ -51,15 +50,14 @@ app.MapPost("/api/lms/lessons/{id:int}/complete", async (int id, HttpRequest req
 
 app.Run();
 
-static async Task<Guid?> Resolve(HttpRequest request, IHttpClientFactory factory, string key)
+static async Task<Guid?> Resolve(HttpRequest request, IHttpClientFactory factory)
 {
     var bearer = request.Headers.Authorization.ToString();
     if (!bearer.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)) return null;
-    using var message = new HttpRequestMessage(HttpMethod.Get, "/api/internal/resolve-token");
+    using var message = new HttpRequestMessage(HttpMethod.Get, "/api/me");
     message.Headers.TryAddWithoutValidation("Authorization", bearer);
-    message.Headers.Add("X-Internal-Key", key);
     using var response = await factory.CreateClient("main").SendAsync(message);
     if (!response.IsSuccessStatusCode) return null;
     using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-    return doc.RootElement.GetProperty("userId").GetGuid();
+    return doc.RootElement.GetProperty("id").GetGuid();
 }
