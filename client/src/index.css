@@ -1,5 +1,35 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;650;700;750;800&display=swap");
 @import "tailwindcss";
+
+.telegram-card { scroll-margin-top: 24px; }
+.telegram-heading { display: flex; align-items: center; gap: 12px; }
+.telegram-card .telegram-heading h2 { margin: 0 0 4px; }
+.telegram-symbol { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 16px; background: var(--primary-soft); color: var(--primary); flex-shrink: 0; }
+.telegram-heading p, .telegram-description, .telegram-instructions p { font-size: 13px; line-height: 1.6; color: var(--text-muted); }
+.telegram-card .telegram-description { margin: 14px 0 18px; }
+.telegram-instructions { display: grid; gap: 12px; }
+.telegram-code { display: block; padding: 12px; border-radius: 12px; background: var(--primary-soft); overflow-wrap: anywhere; user-select: all; font-size: 12px; }
+.telegram-card .telegram-feedback { margin-top: 12px; font-size: 13px; line-height: 1.6; color: var(--primary-dark); }
+.telegram-card .telegram-error { color: #b13939; }
+.telegram-unlink { display: block; margin: 14px auto 0; padding: 8px 12px; background: transparent; color: var(--text-muted); font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
+.telegram-unlink:disabled { opacity: .5; }
+.learning-flow { margin-top: 16px; }
+.learning-exercise { display: grid; gap: 16px; margin-top: 20px; }
+.learning-exercise h2 { margin-bottom: 0; }
+.learning-source { font-size: 18px; line-height: 1.6; overflow-wrap: anywhere; }
+.learning-options { display: flex; flex-wrap: wrap; gap: 8px; }
+.learning-answer-form { display: grid; gap: 12px; }
+.learning-answer-form textarea { width: 100%; padding: 14px; border: 1px solid var(--border); border-radius: 16px; resize: vertical; }
+.learning-exercise audio { width: 100%; }
+.learning-pairs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.learning-pairs > div { display: grid; gap: 8px; }
+.learning-pairs .button { overflow-wrap: anywhere; white-space: normal; }
+.learning-caption { margin-bottom: 10px; font-size: 13px; color: var(--text-muted); }
+.learning-totals, .learning-history > div { line-height: 1.8; font-size: 13px; }
+.learning-history { margin-top: 20px; }
+.learning-history > div + div { border-top: 1px solid var(--border); margin-top: 10px; padding-top: 10px; }
+.learning-error { color: #b13939; line-height: 1.6; }
+.learning-result { color: var(--primary-dark); font-weight: 650; line-height: 1.6; }
+.learning-flow > .button { margin-top: 16px; }
 
 :root {
   font-family: Inter, Arial, sans-serif;
@@ -23,6 +53,8 @@
 body {
   margin: 0;
   min-width: 320px;
+  padding-top: var(--tg-content-safe-area-inset-top, 0px);
+  padding-bottom: var(--tg-content-safe-area-inset-bottom, 0px);
 }
 button,
 input,
@@ -501,8 +533,8 @@ button:active:not(:disabled),
   left: 50%;
   transform: translateX(-50%);
   width: min(100%, 430px);
-  height: calc(68px + env(safe-area-inset-bottom));
-  padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+  height: calc(68px + max(env(safe-area-inset-bottom), var(--tg-content-safe-area-inset-bottom, 0px)));
+  padding: 10px 10px calc(10px + max(env(safe-area-inset-bottom), var(--tg-content-safe-area-inset-bottom, 0px)));
   display: flex;
   justify-content: space-around;
   gap: 4px;
@@ -557,6 +589,7 @@ button:active:not(:disabled),
   margin-top: 3px;
 }
 .button {
+  font-family: Inter, Arial, sans-serif;
   display: inline-flex;
   align-items: center;
   justify-content: center;

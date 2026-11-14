@@ -1,3 +1,14 @@
+export interface LevelReward {
+  level: number;
+  decorationId: string;
+  rarity: "common" | "rare" | "epic";
+  duplicate: boolean;
+  compensation: number;
+}
+export interface LevelRewardReceipt {
+  profile: User;
+  rewards: LevelReward[];
+}
 export interface User {
   id: string;
   nick: string;

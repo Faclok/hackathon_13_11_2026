@@ -1,16 +1,19 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { apiRequest, ApiError, clearSession, hasSession, loginUsername } from "../api/session";
-import type { BossAnswer, CaseOpening, DailyAnswer, IssueReport, User } from "../types";
+import { apiRequest, ApiError, clearSession, hasSession, loginUsername, loginTelegram } from "../api/session";
+import { isMiniApp } from "../api/telegram";
+import type { BossAnswer, CaseOpening, DailyAnswer, IssueReport, LevelReward, LevelRewardReceipt, User } from "../types";
 import { schoolDay as today, dayNumber } from "../utils/calendar";
 
 interface UserState {
   user: User | null;
   ready: boolean;
+  authError: string;
   lastActiveDay: string | null;
   reports: IssueReport[];
   caseOpening: CaseOpening | null;
   caseHistory: CaseOpening[];
+  levelRewards: LevelReward[];
   bootstrap: () => Promise<void>;
   login: (username: string) => Promise<void>;
   logout: () => void;
@@ -29,26 +32,35 @@ let bootstrapping: Promise<void> | null = null;
 export const useUserStore = create<UserState>()((set, get) => ({
   user: null,
   ready: false,
+  authError: "",
   lastActiveDay: null,
   reports: [],
   caseOpening: null,
   caseHistory: [],
+  levelRewards: [],
   bootstrap: async () => {
     if (get().ready) return;
     bootstrapping ??= (async () => {
+      if (isMiniApp()) {
+        try { await loginTelegram(); }
+        catch (cause) {
+          set({ user: null, ready: true, authError: cause instanceof Error ? cause.message : "Не удалось войти через Telegram." });
+          return;
+        }
+      }
       if (!hasSession()) {
         set({ user: null, ready: true });
         return;
       }
       try {
-        const [user, caseHistory] = await Promise.all([
-          apiRequest<User>("/api/player/profile"),
+        const [receipt, caseHistory] = await Promise.all([
+          apiRequest<LevelRewardReceipt>("/api/player/level-rewards/claim", { method: "POST" }),
           apiRequest<CaseOpening[]>("/api/player/cases/history"),
         ]);
-        set({ user, caseHistory, ready: true });
+        set({ user: receipt.profile, levelRewards: receipt.rewards, caseHistory, ready: true });
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) clearSession();
-        set({ user: null, ready: true });
+        set({ user: null, ready: true, authError: "Не удалось загрузить профиль. Откройте приложение заново." });
       }
     })();
     try { await bootstrapping; } finally { bootstrapping = null; }
@@ -56,11 +68,11 @@ export const useUserStore = create<UserState>()((set, get) => ({
   login: async (username) => {
     await loginUsername(username);
     try {
-      const [user, caseHistory] = await Promise.all([
-        apiRequest<User>("/api/player/profile"),
+      const [receipt, caseHistory] = await Promise.all([
+        apiRequest<LevelRewardReceipt>("/api/player/level-rewards/claim", { method: "POST" }),
         apiRequest<CaseOpening[]>("/api/player/cases/history"),
       ]);
-      set({ user, caseHistory, caseOpening: null, ready: true });
+      set({ user: receipt.profile, levelRewards: receipt.rewards, caseHistory, caseOpening: null, ready: true });
     } catch (error) {
       clearSession();
       throw error;
@@ -68,11 +80,14 @@ export const useUserStore = create<UserState>()((set, get) => ({
   },
   logout: () => {
     clearSession();
-    set({ user: null, caseOpening: null, caseHistory: [], reports: [] });
+    set({ user: null, levelRewards: [], caseOpening: null, caseHistory: [], reports: [] });
   },
   refreshProfile: async () => {
-    const user = await apiRequest<User>("/api/player/profile");
-    set({ user });
+    const receipt = await apiRequest<LevelRewardReceipt>("/api/player/level-rewards/claim", { method: "POST" });
+    set((state) => ({ user: receipt.profile,
+      levelRewards: [...state.levelRewards, ...receipt.rewards].filter((reward, index, all) =>
+        all.findIndex((other) => other.level === reward.level) === index),
+    }));
   },
   // Boss and Learn keep their existing local reward behavior.
   reward: (xp, coins, tasks, trophy) => set((state) => {

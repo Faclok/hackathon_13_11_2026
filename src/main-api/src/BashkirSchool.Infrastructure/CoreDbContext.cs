@@ -140,6 +140,7 @@ public sealed class CoreDbContext(DbContextOptions<CoreDbContext> options) : Ide
         b.Entity<OutboxMessage>().HasIndex(x => x.ResponseId).IsUnique();
         b.Entity<OutboxMessage>().HasIndex(x => x.ProcessedAt);
         b.Entity<PlayerState>().HasKey(x => x.ParticipantId);
+        b.Entity<PlayerState>().Property(x => x.LastRewardedLevel).HasDefaultValue(1);
         b.Entity<PlayerState>().HasOne<Participant>().WithOne().HasForeignKey<PlayerState>(x => x.ParticipantId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<PlayerState>().Property(x => x.OwnedJson).HasDefaultValue("[]");
         b.Entity<PlayerState>().Property(x => x.EquippedItemsJson).HasDefaultValue("[]");

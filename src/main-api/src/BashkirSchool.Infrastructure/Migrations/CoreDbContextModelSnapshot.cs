@@ -1249,6 +1249,11 @@ namespace BashkirSchool.Infrastructure.Migrations
 
             modelBuilder.Entity("BashkirSchool.Infrastructure.PlayerState", b =>
                 {
+                    b.Property<int>("LastRewardedLevel")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
                     b.Property<Guid>("ParticipantId")
                         .HasColumnType("uuid");
 

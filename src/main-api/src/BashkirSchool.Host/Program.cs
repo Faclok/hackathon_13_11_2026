@@ -107,6 +107,8 @@ var api = app.MapGroup("/api").RequireAuthorization();
 api.MapGet("/me", (ClaimsPrincipal user, IndependentAccounts accounts, CancellationToken ct) => accounts.ProfileAsync(Subject(user), ct));
 api.MapGet("/player/profile", (ClaimsPrincipal user, PlayerEconomy economy, CancellationToken ct) =>
     economy.ProfileAsync(Subject(user), ct));
+api.MapPost("/player/level-rewards/claim", (ClaimsPrincipal user, PlayerEconomy economy, CancellationToken ct) =>
+    economy.ClaimLevelRewardsAsync(Subject(user), ct));
 api.MapGet("/player/decorations", () => Results.Ok(RewardCatalog.Items));
 api.MapGet("/player/cases", () => Results.Ok(RewardCatalog.Cases.Select(RewardCatalog.Describe)));
 api.MapGet("/player/cases/history", (ClaimsPrincipal user, PlayerEconomy economy, CancellationToken ct) =>

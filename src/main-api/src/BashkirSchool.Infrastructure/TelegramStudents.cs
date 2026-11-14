@@ -49,10 +49,16 @@ public sealed class TelegramStudents(CoreDbContext db, IPermissionChecker permis
 
     public async Task UnlinkAsync(Guid actor, CancellationToken ct)
     {
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
         var logins = await db.Set<IdentityUserLogin<Guid>>().Where(x => x.UserId == actor && x.LoginProvider == Provider).ToArrayAsync(ct);
         var tokens = await db.Set<IdentityUserToken<Guid>>().Where(x => x.UserId == actor && x.LoginProvider == Provider).ToArrayAsync(ct);
+        var sessionIds = tokens.Where(x => x.Name.StartsWith("session:", StringComparison.Ordinal))
+            .Select(x => Guid.TryParse(x.Name[8..], out var id) ? id : Guid.Empty).ToArray();
+        var sessions = await db.Set<AccountSession>().Where(x => x.AccountId == actor && sessionIds.Contains(x.Id) && x.RevokedAt == null).ToArrayAsync(ct);
+        foreach (var session in sessions) session.RevokedAt = clock.GetUtcNow();
         db.RemoveRange(logins); db.RemoveRange(tokens);
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
     }
 
     public async Task<Guid> ResolveAsync(long telegramId, CancellationToken ct)

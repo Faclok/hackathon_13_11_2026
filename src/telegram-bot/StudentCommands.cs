@@ -20,10 +20,16 @@ public static class StudentCommands
         services.AddMessageCommand<CancelCommand>("/help");
         services.AddMessageCommand<ProfileCommand>("/profile");
         services.AddMessageCommand<DailyCommand>("/daily");
+        services.AddMessageCommand<DailyCommand>("/level");
+        services.AddMessageCommand<BossCommand>("/boss");
+        services.AddMessageCommand<WebsiteCommand>("/rating");
+        services.AddMessageCommand<WebsiteCommand>("/site");
         services.AddMessageCommand<TasksCommand>("/tasks");
         services.AddTextCommand<ProfileCommand>(["Профиль"], false);
-        services.AddTextCommand<DailyCommand>(["Задания на сегодня", "Продолжить урок"], false);
-        services.AddTextCommand<TasksCommand>(["Виды заданий"], false);
+        services.AddTextCommand<DailyCommand>(["Текущий уровень", "Задания на сегодня", "Продолжить урок"], false);
+        services.AddTextCommand<BossCommand>(["Босс"], false);
+        services.AddTextCommand<WebsiteCommand>(["Рейтинг", "Открыть сайт"], false);
+        services.AddTextCommand<TasksCommand>(["Переводы", "Виды заданий"], false);
         services.AddCallbackCommand<NavigationCallback>("nav");
         services.AddCallbackCommand<KindCallback>("kind");
         services.AddCallbackCommand<ReviewCallback>("review");
@@ -45,6 +51,10 @@ public sealed class DailyCommand(StudentConversation conversation) : IMessageCom
 { public Task HandleAsync(Message message, BotContext ctx) => conversation.DailyAsync(ctx); }
 public sealed class TasksCommand(StudentConversation conversation) : IMessageCommand, ITextCommand
 { public Task HandleAsync(Message message, BotContext ctx) => conversation.TasksAsync(ctx); }
+public sealed class BossCommand(StudentConversation conversation) : IMessageCommand, ITextCommand
+{ public Task HandleAsync(Message message, BotContext ctx) => conversation.BossAsync(ctx); }
+public sealed class WebsiteCommand(StudentConversation conversation) : IMessageCommand, ITextCommand
+{ public Task HandleAsync(Message message, BotContext ctx) => conversation.WebsiteAsync(ctx); }
 public sealed class NavigationCallback(StudentConversation conversation) : ICallbackCommand
 { public Task HandleAsync(CallbackQuery query, string[] args, BotContext ctx) => conversation.NavigateAsync(query, args, ctx); }
 public sealed class KindCallback(StudentConversation conversation) : ICallbackCommand

@@ -13,197 +13,310 @@ using TelegramBotKit.Fallbacks;
 public sealed class StudentConversationTests
 {
     [Fact]
-    public async Task ChatResumesAfterRestartAndRedeliveryNeverAnswersTheNextExercise()
+    public async Task CurrentLevelSurvivesRestartAndRedeliveryNeverAnswersNextQuestion()
     {
         using var connection = new SqliteConnection("Data Source=:memory:"); connection.Open();
         var factory = new StateFactory(connection);
         await using (var db = factory.CreateDbContext()) await db.Database.EnsureCreatedAsync();
-        var apiHandler = new LessonApi { WithBoss = true }; var telegramHandler = new TelegramApi();
-        await using (var provider = Build(factory, apiHandler, telegramHandler))
+        var api = new LevelApi(); var telegram = new TelegramApi();
+        await using (var provider = Build(factory, api, telegram))
         {
             var dispatcher = provider.GetRequiredService<IUpdateDispatcher>();
-            await dispatcher.DispatchAsync(Update(1, "/daily"), default);
-            await dispatcher.DispatchAsync(Update(2, "Беренсе"), default);
+            await dispatcher.DispatchAsync(Update(1, "/level"), default);
+            await dispatcher.DispatchAsync(Update(2, "Һаумы"), default);
+            Assert.Contains(telegram.Messages, x => x.Contains("Верно!"));
         }
-        // Reconstruct all application scopes, as after a process restart.
-        await using (var provider = Build(factory, apiHandler, telegramHandler))
+        await using (var provider = Build(factory, api, telegram))
         {
             var dispatcher = provider.GetRequiredService<IUpdateDispatcher>();
-            await dispatcher.DispatchAsync(Update(2, "Беренсе"), default);
-            Assert.Equal(new[] { apiHandler.First }, apiHandler.Submissions);
-            await dispatcher.DispatchAsync(Update(3, "Икенсе"), default);
+            await dispatcher.DispatchAsync(Update(3, "/level"), default);
+            await dispatcher.DispatchAsync(Update(2, "Һаумы"), default);
+            Assert.Single(api.Answers);
+            await dispatcher.DispatchAsync(Update(4, "Икенсе"), default);
         }
-        Assert.Equal(new[] { apiHandler.First, apiHandler.Second }, apiHandler.Submissions);
-        Assert.Contains(telegramHandler.Messages, x => x.Contains("Финальный босс"));
-        Assert.DoesNotContain(telegramHandler.Messages, x => x.Contains("выполнены: 2 из 2"));
-        await using (var provider = Build(factory, apiHandler, telegramHandler))
-        {
-            var dispatcher = provider.GetRequiredService<IUpdateDispatcher>();
-            await dispatcher.DispatchAsync(Update(4, "/daily"), default);
-            await dispatcher.DispatchAsync(Callback(5, $"vote {apiHandler.Boss:N} confirm"), default);
-            await dispatcher.DispatchAsync(Callback(5, $"vote {apiHandler.Boss:N} confirm"), default);
-        }
-        Assert.Equal(1, apiHandler.BossSubmissions);
-        Assert.Contains(telegramHandler.Messages, x => x.Contains("Босс пройден"));
-        Assert.Contains(telegramHandler.Messages, x => x.Contains("выполнены: 2 из 2"));
-        await using var state = factory.CreateDbContext();
-        var final = await state.States.SingleAsync();
-        Assert.Equal("idle", final.State); Assert.Null(final.TaskId);
+        Assert.Equal(2, api.Answers.Count);
+        Assert.NotEqual(api.Answers[0].Question, api.Answers[1].Question);
+        Assert.Contains(telegram.Messages, x => x.Contains("Уровень 7") && x.Contains("1/2"));
+        Assert.Contains(telegram.Messages, x => x.Contains("Уровень пройден"));
+        Assert.DoesNotContain(api.Paths, x => x.Contains("/lesson") || x.Contains("/exercises/"));
     }
 
     [Fact]
-    public async Task GroupMessagesNeverRequestStudentDataOrCreateConversationState()
+    public async Task LostResponseRetriesIdenticalTokenAndAnswerAfterRestart()
     {
         using var connection = new SqliteConnection("Data Source=:memory:"); connection.Open();
         var factory = new StateFactory(connection);
         await using (var db = factory.CreateDbContext()) await db.Database.EnsureCreatedAsync();
-        var api = new LessonApi(); var telegram = new TelegramApi();
-        await using var provider = Build(factory, api, telegram);
-        await provider.GetRequiredService<IUpdateDispatcher>().DispatchAsync(Update(1, "/daily", ChatType.Group), default);
-        Assert.Equal(0, api.Requests); Assert.Empty(telegram.Messages);
-        await using var state = factory.CreateDbContext(); Assert.Empty(await state.States.ToArrayAsync());
+        var api = new LevelApi { LoseResponse = true }; var telegram = new TelegramApi();
+        await using (var provider = Build(factory, api, telegram))
+        {
+            var dispatcher = provider.GetRequiredService<IUpdateDispatcher>();
+            await dispatcher.DispatchAsync(Update(1, "/level"), default);
+            await dispatcher.DispatchAsync(Update(2, "Первоначальный ответ"), default);
+        }
+        await using (var provider = Build(factory, api, telegram))
+        {
+            var dispatcher = provider.GetRequiredService<IUpdateDispatcher>();
+            await dispatcher.DispatchAsync(Update(3, "Другой текст после обрыва"), default);
+            await dispatcher.DispatchAsync(Update(4, "/level"), default);
+            await dispatcher.DispatchAsync(Update(3, "Другой текст после обрыва"), default);
+        }
+        Assert.Single(api.Answers);
+        Assert.Equal(2, api.SubmissionBodies.Count);
+        Assert.Equal(api.SubmissionBodies[0], api.SubmissionBodies[1]);
+        using var retried = JsonDocument.Parse(api.SubmissionBodies[1]);
+        Assert.Equal("Первоначальный ответ", retried.RootElement.GetProperty("answer").GetProperty("text").GetString());
+        await using var state = factory.CreateDbContext();
+        Assert.StartsWith("exercise:", (await state.States.SingleAsync()).State);
     }
 
-    [Theory]
-    [InlineData("Перевод текста", "translation-text", "Һаумы", """{"text":"Һаумы"}""")]
-    [InlineData("Сопоставление слов", "word-match", "1-2 2-1", """{"pairs":[{"leftId":"a","rightId":"y"},{"leftId":"b","rightId":"x"}]}""")]
-    [InlineData("Аудиодиктант", "audio-dictation", "Һаумы", """{"text":"Һаумы"}""")]
-    [InlineData("Перевод аудио", "audio-translation", "Здравствуй", """{"text":"Здравствуй"}""")]
-    [InlineData("Пропущенное слово", "missing-word", "2", """{"optionId":"b"}""")]
-    [InlineData("Сборка предложения", "sentence-order", "2 1", """{"tokenIds":["b","a"]}""")]
-    public async Task EveryExerciseKindCanBeSelectedDisplayedAndCompleted(string label, string kind, string text, string expected)
+    [Fact]
+    public async Task ButtonsFromWrongAttemptCannotAnswerSameQuestionWithNewToken()
     {
         using var connection = new SqliteConnection("Data Source=:memory:"); connection.Open();
         var factory = new StateFactory(connection);
         await using (var db = factory.CreateDbContext()) await db.Database.EnsureCreatedAsync();
-        var api = new IssuedExerciseApi(kind, expected); var telegram = new TelegramApi();
+        var api = new LevelApi { Kind = "missing-word", Wrong = true }; var telegram = new TelegramApi();
         await using var provider = Build(factory, api, telegram);
         var dispatcher = provider.GetRequiredService<IUpdateDispatcher>();
-        await dispatcher.DispatchAsync(Update(1, "Виды заданий"), default);
-        Assert.Contains(label, telegram.Buttons);
-        await dispatcher.DispatchAsync(Callback(2, "kind " + kind), default);
-        Assert.Contains(telegram.Buttons, x => x == "Виды заданий");
-        Assert.Contains(telegram.Messages, x => x.Contains(kind switch
-        {
-            "word-match" => "Сопоставьте слова", "sentence-order" => "Соберите предложение",
-            "missing-word" => "Заполните пропуск", "translation-text" => "Переведите текст", _ => "Прослушайте аудио"
-        }));
-        if (kind.StartsWith("audio-"))
-        {
-            Assert.Equal(new[] { "sendDocument" }, telegram.Uploads);
-            Assert.DoesNotContain(telegram.Messages, x => x.Contains("секретный исходник"));
-        }
-        if (kind == "missing-word") Assert.Contains("мәктәп", telegram.Buttons);
-        await dispatcher.DispatchAsync(Update(3, text), default);
-        Assert.Equal(1, api.Submissions);
-        Assert.Contains(telegram.Messages, x => x.Contains("выполнены: 1 из 1"));
+        await dispatcher.DispatchAsync(Update(1, "/level"), default);
+        await dispatcher.DispatchAsync(Callback(2, $"answer {api.Token:N} g1"), default);
+        await dispatcher.DispatchAsync(Update(3, "/level"), default);
+        await dispatcher.DispatchAsync(Callback(4, $"answer {api.Token:N} g1"), default);
+        Assert.Single(api.Answers);
+        await dispatcher.DispatchAsync(Callback(5, $"answer {api.SecondToken:N} g0"), default);
+        Assert.Equal(2, api.Answers.Count);
+        Assert.Equal(api.Answers[0].Question, api.Answers[1].Question);
+        Assert.NotEqual(api.Answers[0].Token, api.Answers[1].Token);
     }
 
     [Theory]
-    [InlineData("translation-choice", "2", false, "Confirm")]
-    [InlineData("translation-choice", "2", true, "Correct")]
-    [InlineData("translation-confirm", "Подтвердить перевод", false, "Confirm")]
-    [InlineData("translation-confirm", "Приветствую!", true, "Correct")]
-    [InlineData("translation-choice", "Пропустить перевод", false, "Skip")]
-    [InlineData("translation-create", "Здравствуйте!", true, "Correct")]
-    [InlineData("translation-create", "Добрый день!", false, "Correct")]
-    public async Task ReviewModesPreserveIssuedOptionsAndCustomInputAcrossRestart(string kind, string text, bool custom, string action)
+    [InlineData("translation-text", "Һаумы", "{\"text\":\"Һаумы\"}")]
+    [InlineData("audio-dictation", "Һаумы", "{\"text\":\"Һаумы\"}")]
+    [InlineData("audio-translation", "Привет", "{\"text\":\"Привет\"}")]
+    [InlineData("missing-word", "2", "{\"optionId\":\"b\"}")]
+    [InlineData("sentence-order", "2 1", "{\"tokenIds\":[\"b\",\"a\"]}")]
+    [InlineData("word-match", "1-2 2-1", "{\"pairs\":[{\"leftId\":\"a\",\"rightId\":\"y\"},{\"leftId\":\"b\",\"rightId\":\"x\"}]}")]
+    public async Task AllSixLevelKindsUseServerQuestionAndAttemptToken(string kind, string text, string expected)
     {
         using var connection = new SqliteConnection("Data Source=:memory:"); connection.Open();
         var factory = new StateFactory(connection);
         await using (var db = factory.CreateDbContext()) await db.Database.EnsureCreatedAsync();
-        var api = new ReviewApi(kind); var telegram = new TelegramApi();
+        var api = new LevelApi { Kind = kind, Count = 1 }; var telegram = new TelegramApi();
+        await using var provider = Build(factory, api, telegram);
+        var dispatcher = provider.GetRequiredService<IUpdateDispatcher>();
+        await dispatcher.DispatchAsync(Update(1, "/level"), default);
+        await dispatcher.DispatchAsync(Update(2, text), default);
+        var answer = Assert.Single(api.Answers);
+        Assert.Equal(api.Token, answer.Token);
+        Assert.True(JsonElement.DeepEquals(JsonDocument.Parse(expected).RootElement, answer.Answer));
+        Assert.Contains(telegram.Messages, x => x.Contains("Уровень пройден"));
+        if (kind.StartsWith("audio-")) Assert.Equal(new[] { "sendDocument" }, telegram.Uploads);
+    }
+
+    [Theory]
+    [InlineData("sentence-order", "{\"tokenIds\":[\"b\",\"a\"]}")]
+    [InlineData("word-match", "{\"pairs\":[{\"leftId\":\"a\",\"rightId\":\"y\"},{\"leftId\":\"b\",\"rightId\":\"x\"}]}")]
+    [InlineData("missing-word", "{\"optionId\":\"b\"}")]
+    public async Task NativeButtonsBuildAnswersAndRejectStaleCallbacks(string kind, string expected)
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:"); connection.Open();
+        var factory = new StateFactory(connection);
+        await using (var db = factory.CreateDbContext()) await db.Database.EnsureCreatedAsync();
+        var api = new LevelApi { Kind = kind }; var telegram = new TelegramApi();
         await using (var provider = Build(factory, api, telegram))
         {
             var dispatcher = provider.GetRequiredService<IUpdateDispatcher>();
-            await dispatcher.DispatchAsync(Callback(1, "review " + kind), default);
-            Assert.Contains(telegram.Messages, x => x.Contains("Һаумы!") &&
-                (kind == "translation-create" ? x.Contains("ещё нет перевода") : x.Contains("Здравствуй!")));
-            if (kind == "translation-create") Assert.DoesNotContain("Подтвердить перевод", telegram.Buttons);
-            else Assert.Contains(kind == "translation-choice" ? "Привет!" : "Подтвердить перевод", telegram.Buttons);
-            if (custom) await dispatcher.DispatchAsync(Callback(2, $"vote {api.Assignment:N} custom"), default);
+            await dispatcher.DispatchAsync(Update(1, "/level"), default);
+            var first = kind == "sentence-order" ? "t1" : kind == "word-match" ? "l0" : "g1";
+            await dispatcher.DispatchAsync(Callback(2, $"answer {api.Token:N} {first}"), default);
+            await dispatcher.DispatchAsync(Callback(2, $"answer {api.Token:N} {first}"), default);
         }
         await using (var provider = Build(factory, api, telegram))
         {
             var dispatcher = provider.GetRequiredService<IUpdateDispatcher>();
-            var update = custom || kind == "translation-create" ? Update(3, text) : Callback(3, $"vote {api.Assignment:N} " + (action == "Skip" ? "skip" : kind == "translation-choice" ? "v1" : "confirm"));
-            await dispatcher.DispatchAsync(update, default);
-            await dispatcher.DispatchAsync(update, default);
+            var rest = kind == "sentence-order" ? new[] { "t0", "send" } : kind == "word-match" ? new[] { "r1", "l1", "r0", "send" } : [];
+            for (var i = 0; i < rest.Length; i++) await dispatcher.DispatchAsync(Callback(3 + i, $"answer {api.Token:N} {rest[i]}"), default);
+            await dispatcher.DispatchAsync(Update(20, "/level"), default);
+            await dispatcher.DispatchAsync(Callback(21, $"answer {api.Token:N} send"), default);
         }
         var answer = Assert.Single(api.Answers);
-        Assert.Equal(action, answer.GetProperty("action").GetString());
-        Assert.Equal(custom || kind == "translation-create" ? text : null, answer.GetProperty("correction").GetString());
-        Assert.Equal(kind == "translation-choice" && action == "Confirm" ? api.Second.ToString() : null, answer.GetProperty("selectedVariantId").GetString());
-        Assert.Contains(telegram.Messages, x => x.Contains(action == "Skip" ? "Перевод пропущен" : "Ваш ответ сохранён"));
+        Assert.True(JsonElement.DeepEquals(JsonDocument.Parse(expected).RootElement, answer.Answer));
+        Assert.Contains(telegram.Messages, x => x.Contains("предыдущему заданию"));
+    }
+
+    [Fact]
+    public async Task BossHasThreeRealReviewsAndResumesBetweenSteps()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:"); connection.Open();
+        var factory = new StateFactory(connection);
+        await using (var db = factory.CreateDbContext()) await db.Database.EnsureCreatedAsync();
+        var api = new LevelApi(); var telegram = new TelegramApi();
+        await using (var provider = Build(factory, api, telegram))
+        {
+            var dispatcher = provider.GetRequiredService<IUpdateDispatcher>();
+            await dispatcher.DispatchAsync(Update(1, "/boss"), default);
+            await dispatcher.DispatchAsync(Update(2, "Мой перевод"), default);
+        }
+        await using (var provider = Build(factory, api, telegram))
+        {
+            var dispatcher = provider.GetRequiredService<IUpdateDispatcher>();
+            await dispatcher.DispatchAsync(Update(3, "/boss"), default);
+            await dispatcher.DispatchAsync(Callback(4, $"vote {api.Assignments[1]:N} confirm"), default);
+            await dispatcher.DispatchAsync(Update(5, "/boss"), default);
+            await dispatcher.DispatchAsync(Callback(6, $"vote {api.Assignments[2]:N} v1"), default);
+            await dispatcher.DispatchAsync(Callback(6, $"vote {api.Assignments[2]:N} v1"), default);
+        }
+        Assert.Equal(3, api.BossAnswers.Count);
+        Assert.Equal("Мой перевод", api.BossAnswers[0].GetProperty("correction").GetString());
+        Assert.Equal("Confirm", api.BossAnswers[1].GetProperty("action").GetString());
+        Assert.Equal(api.Variant, api.BossAnswers[2].GetProperty("selectedVariantId").GetGuid());
+        Assert.Contains(telegram.Messages, x => x.Contains("Босс пройден"));
         Assert.DoesNotContain(telegram.Messages, x => x.Contains("верный"));
     }
 
-    [Theory]
-    [InlineData("sentence-order", """{"tokenIds":["b","a"]}""")]
-    [InlineData("word-match", """{"pairs":[{"leftId":"a","rightId":"y"},{"leftId":"b","rightId":"x"}]}""")]
-    [InlineData("missing-word", """{"optionId":"b"}""")]
-    public async Task NativeButtonsCompleteExercisesAndRejectOldButtons(string kind, string expected)
+    [Fact]
+    public async Task IncorrectAndEmptyStatesDoNotInventProgress()
     {
         using var connection = new SqliteConnection("Data Source=:memory:"); connection.Open();
         var factory = new StateFactory(connection);
         await using (var db = factory.CreateDbContext()) await db.Database.EnsureCreatedAsync();
-        var api = new IssuedExerciseApi(kind, expected); var telegram = new TelegramApi();
-        string key;
-        await using (var provider = Build(factory, api, telegram))
-        {
-            var dispatcher = provider.GetRequiredService<IUpdateDispatcher>();
-            await dispatcher.DispatchAsync(Callback(1, "kind " + kind), default);
-            key = telegram.Actions.Last(x => x.Data.StartsWith("answer ")).Data.Split(' ')[1];
-            if (kind == "sentence-order")
-            {
-                await dispatcher.DispatchAsync(Callback(2, $"answer {key} t1"), default);
-                await dispatcher.DispatchAsync(Callback(3, $"answer {key} t0"), default);
-                await dispatcher.DispatchAsync(Callback(4, $"answer {key} undo"), default);
-                await dispatcher.DispatchAsync(Callback(4, $"answer {key} undo"), default);
-            }
-            else if (kind == "word-match")
-            {
-                await dispatcher.DispatchAsync(Callback(2, $"answer {key} l0"), default);
-                await dispatcher.DispatchAsync(Callback(3, $"answer {key} r1"), default);
-            }
-        }
-        // Finish using persisted state in a fresh application scope.
-        await using (var provider = Build(factory, api, telegram))
-        {
-            var dispatcher = provider.GetRequiredService<IUpdateDispatcher>();
-            if (kind == "sentence-order") await dispatcher.DispatchAsync(Callback(5, $"answer {key} t0"), default);
-            if (kind == "word-match")
-            {
-                await dispatcher.DispatchAsync(Callback(5, $"answer {key} l1"), default);
-                await dispatcher.DispatchAsync(Callback(6, $"answer {key} r0"), default);
-            }
-            var submit = Callback(7, $"answer {key} " + (kind == "missing-word" ? "g1" : "send"));
-            await dispatcher.DispatchAsync(submit, default);
-            await dispatcher.DispatchAsync(submit, default);
-            await dispatcher.DispatchAsync(Callback(8, $"answer {Guid.NewGuid():N} send"), default);
-        }
-        Assert.Equal(1, api.Submissions);
-        Assert.Contains(telegram.Messages, x => x.Contains("предыдущему заданию"));
-        Assert.True(telegram.Acknowledgements >= 3);
-        Assert.All(telegram.Actions, action => Assert.InRange(System.Text.Encoding.UTF8.GetByteCount(action.Data), 1, 64));
+        var api = new LevelApi { Wrong = true }; var telegram = new TelegramApi();
+        await using var provider = Build(factory, api, telegram);
+        var dispatcher = provider.GetRequiredService<IUpdateDispatcher>();
+        await dispatcher.DispatchAsync(Update(1, "/level"), default);
+        await dispatcher.DispatchAsync(Update(2, "Ошибочный ответ"), default);
+        Assert.Contains(telegram.Messages, x => x.Contains("вернётся в конце"));
+        api.EmptyLevel = true; await dispatcher.DispatchAsync(Update(3, "/level"), default);
+        Assert.Contains(telegram.Messages, x => x.Contains("пока нет материалов"));
+        api.NoBoss = true; await dispatcher.DispatchAsync(Update(4, "/boss"), default);
+        Assert.Contains(telegram.Messages, x => x.Contains("каждые пять"));
+        api.NoBoss = false; api.EmptyBoss = true; await dispatcher.DispatchAsync(Update(5, "/boss"), default);
+        Assert.Contains(telegram.Messages, x => x.Contains("сохранено 0/3"));
+        Assert.Empty(api.BossAnswers);
     }
 
     [Fact]
-    public async Task LibraryRoutesMentionedSlashCommandAndAcknowledgesUnknownCallback()
+    public async Task MenuUsesMiniAppButtonsForRatingAndFullSiteAndGroupsAreIgnored()
     {
         using var connection = new SqliteConnection("Data Source=:memory:"); connection.Open();
         var factory = new StateFactory(connection);
         await using (var db = factory.CreateDbContext()) await db.Database.EnsureCreatedAsync();
-        var api = new LessonApi(); var telegram = new TelegramApi();
+        var api = new LevelApi(); var telegram = new TelegramApi();
         await using var provider = Build(factory, api, telegram);
         var dispatcher = provider.GetRequiredService<IUpdateDispatcher>();
-        await dispatcher.DispatchAsync(Update(1, "/tasks@SchoolBot"), default);
-        Assert.Contains("Выбор перевода", telegram.Buttons);
-        Assert.Equal(0, api.Requests);
-        await dispatcher.DispatchAsync(Callback(2, "removed old-data"), default);
-        Assert.Equal(1, telegram.Acknowledgements);
+        await dispatcher.DispatchAsync(Update(1, "/level", ChatType.Group), default);
+        Assert.Empty(api.Paths); Assert.Empty(telegram.Messages);
+        await dispatcher.DispatchAsync(Update(2, "/start"), default);
+        Assert.Contains("https://bashperevod.ru/leaderboard?miniapp=1", telegram.WebApps);
+        Assert.Contains("https://bashperevod.ru/?miniapp=1", telegram.WebApps);
+        Assert.Empty(telegram.ReplyWebApps);
+        Assert.Contains("Текущий уровень", telegram.Buttons); Assert.Contains("Босс", telegram.Buttons);
+        await dispatcher.DispatchAsync(Update(3, "/profile"), default);
+        Assert.Contains(telegram.Messages, x => x.Contains("Пройдено уровней: 6") && x.Contains("Доступно боссов: 1"));
     }
 
+    private sealed class LevelApi : HttpMessageHandler
+    {
+        public string Kind { get; init; } = "translation-text";
+        public int Count { get; init; } = 2;
+        public bool LoseResponse { get; set; }
+        public bool Wrong { get; init; }
+        public bool EmptyLevel { get; set; }
+        public bool NoBoss { get; set; }
+        public bool EmptyBoss { get; set; }
+        public Guid First { get; } = Guid.NewGuid();
+        private readonly Guid second = Guid.NewGuid();
+        public Guid Token { get; } = Guid.NewGuid();
+        public Guid SecondToken { get; } = Guid.NewGuid();
+        private readonly Guid level = Guid.NewGuid();
+        private readonly Guid boss = Guid.NewGuid();
+        public Guid Variant { get; } = Guid.NewGuid();
+        public Guid[] Assignments { get; } = [Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()];
+        public List<string> Paths { get; } = [];
+        public List<string> SubmissionBodies { get; } = [];
+        public List<(Guid Question, Guid Token, JsonElement Answer)> Answers { get; } = [];
+        public List<JsonElement> BossAnswers { get; } = [];
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            var path = request.RequestUri!.AbsolutePath; Paths.Add(path);
+            if (path.EndsWith("/profile")) return Ok(new { id = Guid.NewGuid(), username = "student" });
+            if (path.EndsWith("/learning/progress")) return Ok(new LearningProgress(6, 0, 1, 15, 2));
+            if (path.EndsWith("/learning/current"))
+            {
+                Assert.Equal(HttpMethod.Post, request.Method);
+                if (EmptyLevel) return new(HttpStatusCode.NoContent);
+                var first = Answers.Count == 0 || Wrong;
+                var prompt = JsonDocument.Parse(Kind switch
+                {
+                    "word-match" => """{"left":[{"id":"a","text":"бер"},{"id":"b","text":"ике"}],"right":[{"id":"x","text":"два"},{"id":"y","text":"один"}]}""",
+                    "missing-word" => """{"before":"Һаумы, ","after":"!","options":[{"id":"a","text":"донъя"},{"id":"b","text":"мәктәп"}],"allowCustom":true}""",
+                    "sentence-order" => """{"tokens":[{"id":"a","text":"донъя!"},{"id":"b","text":"Һаумы,"}]}""",
+                    "audio-dictation" or "audio-translation" => """{"audioUrl":"https://storage.test/audio.wav?signature=test"}""",
+                    _ => """{"text":"Һаумы!"}"""
+                }).RootElement.Clone();
+                return Ok(new LearningLevel(level, 7, Count, Wrong ? 0 : Answers.Count, new(first ? First : second, Answers.Count == 0 ? Token : SecondToken, Kind, 1, prompt)));
+            }
+            if (path.Contains("/learning/levels/") && path.EndsWith("/answer"))
+            {
+                var body = await request.Content!.ReadFromJsonAsync<JsonElement>(ct);
+                SubmissionBodies.Add(body.GetRawText());
+                var token = body.GetProperty("attemptToken").GetGuid();
+                var question = token == Token || Wrong ? First : second;
+                Assert.Equal($"/internal/telegram/101/learning/levels/{level}/questions/{question}/answer", path);
+                if (Answers.All(x => x.Token != token)) Answers.Add((question, token, body.GetProperty("answer").Clone()));
+                if (LoseResponse) { LoseResponse = false; throw new HttpRequestException("response lost after commit"); }
+                return Ok(new LearningAnswer(token, !Wrong, !Wrong && Answers.Count == Count));
+            }
+            if (path.EndsWith("/learning/boss"))
+            {
+                if (NoBoss) return new(HttpStatusCode.NoContent);
+                var index = BossAnswers.Count;
+                var review = EmptyBoss ? null : new ReviewView(Assignments[index], Guid.NewGuid(), Variant, "Һаумы!", "Привет!", DateTimeOffset.UtcNow.AddHours(1),
+                    index == 0 ? "translation-create" : index == 1 ? "translation-confirm" : "translation-choice", [new(Guid.NewGuid(), "Здравствуйте"), new(Variant, "Привет")], true);
+                return Ok(new LearningBoss(boss, 5, 3, index, review));
+            }
+            if (path.Contains("/learning/bosses/") && path.EndsWith("/answer"))
+            {
+                Assert.Equal($"/internal/telegram/101/learning/bosses/{boss}/questions/{Assignments[BossAnswers.Count]}/answer", path);
+                BossAnswers.Add((await request.Content!.ReadFromJsonAsync<JsonElement>(ct)).Clone());
+                return Ok(new BossAnswer(Guid.NewGuid(), false, BossAnswers.Count == 3));
+            }
+            throw new InvalidOperationException("Unexpected route: " + path);
+        }
+        private static HttpResponseMessage Ok(object value) => new(HttpStatusCode.OK) { Content = JsonContent.Create(value) };
+    }
+    private sealed class TelegramApi : HttpMessageHandler
+    {
+        public List<string> Messages { get; } = [];
+        public List<string> Buttons { get; } = [];
+        public List<string> WebApps { get; } = [];
+        public List<string> ReplyWebApps { get; } = [];
+        public List<string> Uploads { get; } = [];
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            if (request.RequestUri!.AbsolutePath.EndsWith("/answerCallbackQuery")) return new(HttpStatusCode.OK) { Content = JsonContent.Create(new { ok = true, result = true }) };
+            if (request.Content is MultipartFormDataContent) Uploads.Add(request.RequestUri.Segments.Last());
+            else
+            {
+                var body = await request.Content!.ReadFromJsonAsync<JsonElement>(ct);
+                Messages.Add(body.GetProperty("text").GetString()!);
+                if (body.TryGetProperty("reply_markup", out var markup))
+                    foreach (var name in new[] { "keyboard", "inline_keyboard" })
+                        if (markup.TryGetProperty(name, out var keyboard))
+                            foreach (var button in keyboard.EnumerateArray().SelectMany(x => x.EnumerateArray()))
+                            {
+                                Buttons.Add(button.GetProperty("text").GetString()!);
+                                if (button.TryGetProperty("web_app", out var app))
+                                {
+                                    WebApps.Add(app.GetProperty("url").GetString()!);
+                                    if (name == "keyboard") ReplyWebApps.Add(app.GetProperty("url").GetString()!);
+                                }
+                            }
+            }
+            return new(HttpStatusCode.OK) { Content = JsonContent.Create(new { ok = true, result = new { message_id = Messages.Count, date = 0, chat = new { id = 101, type = "private" }, text = "sent" } }) };
+        }
+    }
     private static ServiceProvider Build(StateFactory factory, HttpMessageHandler apiHandler, TelegramApi telegramHandler)
     {
         var services = new ServiceCollection(); services.AddLogging();
@@ -231,144 +344,6 @@ public sealed class StudentConversationTests
     private sealed class StateFactory(SqliteConnection connection) : IDbContextFactory<BotDbContext>
     {
         public BotDbContext CreateDbContext() => new(new DbContextOptionsBuilder<BotDbContext>().UseSqlite(connection).Options);
-    }
-
-    private sealed class LessonApi : HttpMessageHandler
-    {
-        public bool WithBoss { get; init; }
-        public Guid Boss { get; } = Guid.NewGuid();
-        public int BossSubmissions { get; private set; }
-        public Guid First { get; } = Guid.NewGuid();
-        public Guid Second { get; } = Guid.NewGuid();
-        public List<Guid> Submissions { get; } = [];
-        public int Requests { get; private set; }
-        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
-        {
-            Requests++;
-            var path = request.RequestUri!.AbsolutePath;
-            if (path.EndsWith("/lesson/boss"))
-            {
-                Assert.Equal(2, Submissions.Count);
-                return new(HttpStatusCode.OK) { Content = JsonContent.Create(new ReviewView(Boss, Guid.NewGuid(), Guid.NewGuid(), "Һаумы", "Hello", DateTimeOffset.UtcNow.AddHours(1), "translation-confirm", [], true)) };
-            }
-            if (path.EndsWith($"/reviews/{Boss}/response"))
-            {
-                var answer = await request.Content!.ReadFromJsonAsync<ReviewAnswer>(ct);
-                Assert.Equal("Confirm", answer!.Action);
-                BossSubmissions++;
-                return new(HttpStatusCode.OK) { Content = JsonContent.Create(new { responseId = Guid.NewGuid(), archived = false }) };
-            }
-            if (request.Method == HttpMethod.Get && path == "/internal/telegram/101/lesson")
-                return new(HttpStatusCode.OK) { Content = JsonContent.Create(new { id = Guid.Empty, date = new DateOnly(2026, 11, 14), bossCompleted = !WithBoss || BossSubmissions > 0, exercises = new[] {
-                    new { id = First, original = "Беренсе", kind = "translation-text", schemaVersion = 1, completed = Submissions.Contains(First), prompt = new { text = "Беренсе" } },
-                    new { id = Second, original = "Икенсе", kind = "translation-text", schemaVersion = 1, completed = Submissions.Contains(Second), prompt = new { text = "Икенсе" } }
-                } }) };
-            if (request.Method == HttpMethod.Post && path.EndsWith("/answer"))
-            {
-                var id = Guid.Parse(path.Split('/')[5]);
-                var body = await request.Content!.ReadFromJsonAsync<JsonElement>(ct);
-                Assert.Equal(id == First ? "Беренсе" : "Икенсе", body.GetProperty("answer").GetProperty("text").GetString());
-                Submissions.Add(id);
-                return new(HttpStatusCode.OK) { Content = JsonContent.Create(new { id = Guid.NewGuid(), recognized = true }) };
-            }
-            throw new InvalidOperationException("Unexpected student API call: " + path);
-        }
-    }
-
-    private sealed class TelegramApi : HttpMessageHandler
-    {
-        public List<string> Messages { get; } = [];
-        public List<string> Buttons { get; } = [];
-        public List<string> Uploads { get; } = [];
-        public List<(string Text, string Data)> Actions { get; } = [];
-        public int Acknowledgements { get; private set; }
-        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
-        {
-            if (request.RequestUri!.AbsolutePath.EndsWith("/answerCallbackQuery"))
-            {
-                Acknowledgements++;
-                return new(HttpStatusCode.OK) { Content = JsonContent.Create(new { ok = true, result = true }) };
-            }
-            if (request.Content is MultipartFormDataContent)
-            {
-                Uploads.Add(request.RequestUri!.Segments.Last());
-                var upload = await request.Content.ReadAsStringAsync(ct);
-                Assert.Contains("exercise.wav", upload); Assert.Contains("RIFF", upload);
-            }
-            else
-            {
-                var body = await request.Content!.ReadFromJsonAsync<JsonElement>(ct);
-                Messages.Add(body.GetProperty("text").GetString()!);
-                if (body.TryGetProperty("reply_markup", out var markup))
-                {
-                    if (markup.TryGetProperty("keyboard", out var keyboard))
-                        Buttons.AddRange(keyboard.EnumerateArray().SelectMany(x => x.EnumerateArray()).Select(x => x.GetProperty("text").GetString()!));
-                    if (markup.TryGetProperty("inline_keyboard", out var inline))
-                        foreach (var button in inline.EnumerateArray().SelectMany(x => x.EnumerateArray()))
-                        {
-                            var label = button.GetProperty("text").GetString()!;
-                            Buttons.Add(label); Actions.Add((label, button.GetProperty("callback_data").GetString()!));
-                        }
-                }
-            }
-            return new(HttpStatusCode.OK) { Content = JsonContent.Create(new { ok = true, result = new { message_id = Messages.Count, date = 0, chat = new { id = 101, type = "private" }, text = "sent" } }) };
-        }
-    }
-
-    private sealed class ReviewApi(string kind) : HttpMessageHandler
-    {
-        public Guid Assignment { get; } = Guid.NewGuid();
-        public Guid Second { get; } = Guid.NewGuid();
-        public List<JsonElement> Answers { get; } = [];
-        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
-        {
-            if (request.RequestUri!.AbsolutePath.EndsWith("/reviews/next"))
-            {
-                Assert.Equal(HttpMethod.Post, request.Method);
-                Assert.Equal("?kind=" + kind, request.RequestUri.Query);
-                return new(HttpStatusCode.OK) { Content = JsonContent.Create(new ReviewView(Assignment, Guid.NewGuid(), Guid.NewGuid(), "Һаумы!", kind == "translation-create" ? "" : "Здравствуй!", DateTimeOffset.UtcNow.AddMinutes(30), kind,
-                    kind == "translation-create" ? [] : [new(Guid.NewGuid(), "Здравствуй!"), new(Second, "Привет!")], true)) };
-            }
-            Assert.Equal($"/internal/telegram/101/reviews/{Assignment}/response", request.RequestUri.AbsolutePath);
-            Answers.Add(await request.Content!.ReadFromJsonAsync<JsonElement>(ct));
-            return new(HttpStatusCode.OK) { Content = JsonContent.Create(new { responseId = Guid.NewGuid(), archived = false }) };
-        }
-    }
-
-    private sealed class IssuedExerciseApi(string kind, string expected) : HttpMessageHandler
-    {
-        public int Submissions { get; private set; }
-        private readonly Guid id = Guid.NewGuid();
-        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
-        {
-            var path = request.RequestUri!.AbsolutePath;
-            if (path.EndsWith("/answer"))
-            {
-                Assert.Equal($"/internal/telegram/101/exercises/{id}/answer", path);
-                var body = await request.Content!.ReadFromJsonAsync<JsonElement>(ct);
-                Assert.True(JsonElement.DeepEquals(JsonDocument.Parse(expected).RootElement, body.GetProperty("answer")));
-                Submissions++;
-                return new(HttpStatusCode.OK) { Content = JsonContent.Create(new { id = Guid.NewGuid(), recognized = true }) };
-            }
-            var prompt = JsonDocument.Parse(kind switch
-            {
-                "word-match" => """{"left":[{"id":"a","text":"бер"},{"id":"b","text":"ике"}],"right":[{"id":"x","text":"два"},{"id":"y","text":"один"}]}""",
-                "missing-word" => """{"before":"Һаумы, ","after":"!","options":[{"id":"a","text":"донъя"},{"id":"b","text":"мәктәп"}],"allowCustom":true}""",
-                "sentence-order" => """{"tokens":[{"id":"a","text":"донъя!"},{"id":"b","text":"Һаумы,"}]}""",
-                "audio-dictation" or "audio-translation" => """{"audioUrl":"https://storage.test/audio.wav?signature=test","audioId":"00000000-0000-0000-0000-000000000001"}""",
-                _ => """{"text":"Һаумы!","sourceLanguage":"ba","targetLanguage":"ru"}"""
-            }).RootElement.Clone();
-            var exercise = new ExerciseView(id, "", Submissions > 0, kind, 1, prompt);
-            if (path.EndsWith("/lesson/exercises"))
-            {
-                Assert.Equal(HttpMethod.Post, request.Method);
-                var body = await request.Content!.ReadFromJsonAsync<JsonElement>(ct);
-                Assert.Equal(kind, body.GetProperty("kind").GetString());
-                return new(HttpStatusCode.OK) { Content = JsonContent.Create(exercise) };
-            }
-            Assert.Equal("/internal/telegram/101/lesson", path);
-            return new(HttpStatusCode.OK) { Content = JsonContent.Create(new { id = Guid.NewGuid(), date = new DateOnly(2026, 11, 14), bossCompleted = true, exercises = new[] { exercise } }) };
-        }
     }
 
     private sealed class AudioStorage : HttpMessageHandler

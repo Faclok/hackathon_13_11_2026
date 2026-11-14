@@ -20,6 +20,7 @@ public sealed class PlayerState
 
     public Guid ParticipantId { get; set; }
     public int Xp { get; set; }
+    public int LastRewardedLevel { get; set; } = 1;
     public int Coins { get; set; }
     public int CaseKeys { get; set; }
     public int BossAnswers { get; set; }
@@ -51,6 +52,8 @@ public sealed record PlayerProfile(Guid Id, string Nick, int Level, int Xp, int 
     public string AvatarUrl { get; init; } = "";
 }
 public sealed record PlayerLeaderboardEntry(PlayerProfile User, int Value, int Rank);
+public sealed record PlayerLevelReward(int Level, string DecorationId, string Rarity, bool Duplicate, int Compensation);
+public sealed record PlayerLevelRewardReceipt(PlayerProfile Profile, PlayerLevelReward[] Rewards);
 
 public sealed class PlayerEconomy(CoreDbContext db, BossAccess access, IPermissionChecker permissions,
     TimeProvider clock, IConfiguration configuration)
@@ -131,6 +134,33 @@ public sealed class PlayerEconomy(CoreDbContext db, BossAccess access, IPermissi
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return await ProfileAsync(actor, ct);
+    }
+
+    public async Task<PlayerLevelRewardReceipt> ClaimLevelRewardsAsync(Guid actor, CancellationToken ct)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+        await CaseWriteLock.Acquire(db, ct);
+        var state = await StateAsync(actor, ct);
+        var owned = ReadIds(state.OwnedJson).ToHashSet();
+        var rewards = new List<PlayerLevelReward>();
+        var currentLevel = state.Xp / 100 + 1;
+        for (var level = Math.Max(2, state.LastRewardedLevel + 1); level <= currentLevel; level++)
+        {
+            var rarity = level % 10 == 0 ? "epic" : level % 5 == 0 ? "rare" : "common";
+            var pool = RewardCatalog.Items.Where(x => x.InCase && !x.IsDefault && x.Rarity == rarity).ToArray();
+            var unowned = pool.Where(x => !owned.Contains(x.Id)).ToArray();
+            var choices = unowned.Length > 0 ? unowned : pool;
+            var winner = choices[System.Security.Cryptography.RandomNumberGenerator.GetInt32(choices.Length)];
+            var duplicate = !owned.Add(winner.Id);
+            var compensation = duplicate ? RewardCatalog.DuplicateCompensation : 0;
+            state.Coins += compensation;
+            state.LastRewardedLevel = level;
+            rewards.Add(new(level, winner.Id, rarity, duplicate, compensation));
+        }
+        state.OwnedJson = WriteIds(owned);
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+        return new(await ProfileAsync(actor, ct), rewards.ToArray());
     }
 
     public async Task<PlayerCaseOpening> OpenCaseAsync(Guid actor, string caseId, CancellationToken ct)

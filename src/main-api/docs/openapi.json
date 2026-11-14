@@ -560,6 +560,66 @@
         }
       }
     },
+    "/auth/telegram-mini-app": {
+      "post": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "summary": "Open a session for a linked account using validated Telegram Mini App launch data.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TelegramMiniAppSignInRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessTokenResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/me/telegram-link": {
       "post": {
         "tags": [
@@ -5922,6 +5982,18 @@
               "null",
               "string"
             ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "TelegramMiniAppSignInRequest": {
+        "required": [
+          "initData"
+        ],
+        "type": "object",
+        "properties": {
+          "initData": {
+            "type": "string"
           }
         },
         "additionalProperties": false

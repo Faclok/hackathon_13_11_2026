@@ -1,4 +1,6 @@
+import { isMiniApp, telegramInitData } from "./telegram";
 const STORAGE_KEY = "bashkir-school-session-v1";
+let miniAppSession: Session | null = null;
 
 interface Session {
   accessToken: string;
@@ -13,6 +15,7 @@ export class ApiError extends Error {
 }
 
 const readSession = (): Session | null => {
+  if (isMiniApp()) return miniAppSession;
   try {
     const value = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
     return value?.accessToken && value?.refreshToken ? value : null;
@@ -22,14 +25,33 @@ const readSession = (): Session | null => {
 };
 
 export const hasSession = () => !!readSession();
-export const clearSession = () => localStorage.removeItem(STORAGE_KEY);
+export const clearSession = () => {
+  if (isMiniApp()) miniAppSession = null;
+  else localStorage.removeItem(STORAGE_KEY);
+};
+const saveSession = (session: Session) => {
+  if (isMiniApp()) miniAppSession = session;
+  else localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+};
+
+export async function loginTelegram() {
+  const initData = await telegramInitData();
+  if (!initData) return;
+  miniAppSession = null;
+  const response = await fetch("/auth/telegram-mini-app", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ initData }),
+  });
+  if (response.status === 404) throw new Error("Сначала привяжите Telegram в профиле на сайте, затем откройте Mini App заново.");
+  if (response.status === 401) throw new Error("Не удалось подтвердить вход через Telegram. Закройте и заново откройте приложение из бота.");
+  miniAppSession = await decode<Session>(response);
+}
 
 async function decode<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const body = await response.json().catch(() => null);
     throw new ApiError(response.status, body?.title ?? "Сервер не ответил на запрос.");
   }
-  return response.json() as Promise<T>;
+  return response.status === 204 ? undefined as T : response.json() as Promise<T>;
 }
 
 export async function loginUsername(username: string) {
@@ -40,7 +62,7 @@ export async function loginUsername(username: string) {
       body: JSON.stringify({ username: username.trim() }),
     }),
   );
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+  saveSession(session);
 }
 
 let refreshing: Promise<Session> | null = null;
@@ -56,7 +78,7 @@ async function refreshSession(session: Session): Promise<Session> {
           body: JSON.stringify({ refreshToken: session.refreshToken }),
         }),
       );
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      saveSession(next);
       return next;
     } catch (error) {
       clearSession();

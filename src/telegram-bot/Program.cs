@@ -94,8 +94,11 @@ try
     await telegram.SetMyCommands([
         new() { Command = "start", Description = "Привязка и главное меню" },
         new() { Command = "profile", Description = "Мой профиль" },
-        new() { Command = "daily", Description = "Продолжить дневной урок" },
-        new() { Command = "tasks", Description = "Выбрать вид задания" },
+        new() { Command = "level", Description = "Текущий уровень" },
+        new() { Command = "boss", Description = "Босс за каждые пять уровней" },
+        new() { Command = "rating", Description = "Рейтинг в Mini App" },
+        new() { Command = "site", Description = "Весь сайт в Mini App" },
+        new() { Command = "tasks", Description = "Проверки переводов" },
         new() { Command = "cancel", Description = "Вернуться в меню" }
     ], cancellationToken: startupTimeout.Token);
     logger.LogInformation("Commands registered; starting host and Telegram polling");

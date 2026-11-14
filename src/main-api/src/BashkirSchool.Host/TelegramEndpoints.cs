@@ -10,6 +10,11 @@ public static class TelegramEndpoints
 {
     public static void MapTelegramEndpoints(this WebApplication app)
     {
+        app.MapPost("/auth/telegram-mini-app", (TelegramMiniAppSignInRequest request, TelegramMiniAppAuth auth, CancellationToken ct) =>
+            auth.SignInAsync(request.InitData, ct))
+            .RequireRateLimiting("registration")
+            .WithSummary("Open a session for a linked account using validated Telegram Mini App launch data.")
+            .Produces<AccessTokenResponse>().ProducesProblem(401).ProducesProblem(404).ProducesProblem(429);
         app.MapPost("/api/me/telegram-link", async (ClaimsPrincipal user, TelegramStudents students, CancellationToken ct) =>
         {
             var link = await students.IssueLinkAsync(Guid.Parse(user.FindFirstValue("sub")!), ct);
@@ -50,3 +55,6 @@ public static class TelegramEndpoints
             await reviews.SubmitAsync(await students.ResolveAsync(telegramId, ct), assignmentId, request, ct));
     }
 }
+
+/// <summary>Raw signed launch data supplied by Telegram.WebApp.initData.</summary>
+public sealed record TelegramMiniAppSignInRequest(string InitData);

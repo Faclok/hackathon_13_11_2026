@@ -3,7 +3,7 @@ public sealed record ReviewView(Guid Id, Guid CaseId, Guid VariantId, string Ori
     DateTimeOffset ExpiresAt, string Kind, ReviewOption[] Options, bool AllowCustom);
 public sealed record ReviewOption(Guid Id, string Text);
 public sealed record ReviewAnswer(string Action, string? Correction = null, Guid? SelectedVariantId = null);
-public sealed record ReviewDraft(ReviewView Assignment, bool Custom = false, bool Boss = false);
+public sealed record ReviewDraft(ReviewView Assignment, bool Custom = false, bool Boss = false, Guid? BossId = null);
 
 public static class ReviewChat
 {

@@ -26,6 +26,7 @@ public static class DependencyInjection
         services.AddScoped<IndependentAccounts>();
         services.AddScoped<IClassInvitations, ClassInvitations>();
         services.AddScoped<TelegramStudents>();
+        services.AddScoped<TelegramMiniAppAuth>();
         services.AddScoped<Sessions>();
         services.AddScoped<SchoolDirectory>();
         services.AddScoped<CaseEvidence>();

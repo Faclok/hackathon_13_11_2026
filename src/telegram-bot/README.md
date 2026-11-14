@@ -1,159 +1,72 @@
-# Telegram-бот ученика
+# Telegram-бот и Mini App
 
-## Диагностика запуска и команд
+Бот использует TelegramBotKit / TelegramBotKit.Hosting 0.4.0-preview.1 и текущие личные уровни ядра. Дневные маршруты `/lesson/*` и ручная выдача учебного вида больше не используются. Веб-интерфейс Mini App — основное приложение `client/src`, не `client/test`.
 
-Консоль показывает путь загруженной конфигурации, включён ли прокси, начало и завершение миграций БД,
-настоящее имя бота из `getMe`, наличие webhook и запуск polling. Для каждого запроса Telegram
-выводятся имя метода, HTTP-код и время выполнения. Токен, адрес запроса целиком и тела сообщений
-в диагностические записи приложения не включаются.
+## Вход и меню
 
-После запуска отправьте `/start` в личный чат с ботом, указанным в строке `actual bot`.
-Последовательность `Update ... received`, `loading conversation state`, `conversation state loaded`,
-`/start handler entered`, `Telegram API sendMessage` показывает прохождение команды.
-Если последняя строка — начало миграций, проверяйте PostgreSQL; если начало запроса Telegram —
-сеть и прокси. HTTP 401 означает неверный токен, HTTP 409 при `getUpdates` — конфликт получения
-обновлений (другой экземпляр бота или webhook). Наличие webhook проверяется без его удаления.
+Первичная привязка начинается на сайте: профиль `/profile#telegram` → «Авторизоваться в Telegram» → ссылка с одноразовым ключом → `/start <code>`. Ключ действует десять минут; новый отменяет прежний. Бот аккаунты не создаёт и пароль не спрашивает. При входе без привязки предлагает профиль сайта. Отвязка на сайте отменяет ожидающий ключ и отзывает созданные через Telegram сессии Mini App; обычная сессия сайта сохраняется.
 
-Уровни логирования задаются в `Logging:LogLevel` файла `appsettings.json`.
-Настройки прокси находятся в `TelegramProxy`; после изменения настроек перезапустите процесс.
-
-Бот использует установленные **TelegramBotKit и TelegramBotKit.Hosting 0.4.0-preview.1**. Запуск построен по [Quick Start](https://github.com/NickFeD/TelegramBotKit/blob/master/docs/quickstart.md) и [примеру ConsolePolling](https://github.com/NickFeD/TelegramBotKit/blob/master/samples/TelegramBotKit.Sample.ConsolePolling/Program.cs): `Host.CreateApplicationBuilder`, `AddTelegramBotKit`, `AddTelegramBotKitPolling`, `RunAsync`.
-
-Команды регистрируются штатными `AddMessageCommand`, `AddTextCommand`, `AddCallbackCommand` и реализуют `IMessageCommand`, `ITextCommand`, `ICallbackCommand`; схема взята из [Commands and routing](https://github.com/NickFeD/TelegramBotKit/blob/master/docs/commands-and-routing.md). `IDefaultMessageHandler` обрабатывает свободные текстовые ответы. Неизвестные callback-запросы получают ответ через `IDefaultCallbackHandler`.
-
-Кнопки создаются через `TelegramBotKit.Keyboards.Keyboard`: `Reply`, `Text`, `Inline`, `Row`, `Callback` по [инструкции Keyboards](https://github.com/NickFeD/TelegramBotKit/blob/master/docs/keyboards.md). Библиотека кодирует callback-аргументы и проверяет ограничение 64 байта. Отправка, редактирование сообщений и подтверждение нажатий идут через `BotContext.Sender`; очередь отправки и повторные попытки включены через `UseQueuedMessageSender`.
-
-Состояние упражнения, выбранные слова/пары и текущая проверка перевода сохраняются в PostgreSQL. Это вариант **State machine**, описанный в [Conversations](https://github.com/NickFeD/TelegramBotKit/blob/master/docs/conversations.md), позволяющий продолжать задания после перезапуска. Получением обновлений, polling offset в памяти и планированием занимается Hosting библиотеки. При аварийной остановке библиотека не обещает сохранять ещё не обработанную очередь обновлений; обработанные ответы и выбор пользователя хранятся приложением. Ручного цикла `GetUpdates` в приложении нет.
-
-## Параметры библиотеки
-
-`Program.cs` читает секцию `TelegramBotKit` стандартным `Bind`. В Compose токен передаётся прежним `TELEGRAM_BOT_TOKEN`; также поддерживается `TelegramBotKit__Token`.
-
-При локальной сборке существующий `appsettings.json` копируется рядом с приложением (`PreserveNewest`) и загружается стандартным Host независимо от рабочей папки IDE. Настройки окружения имеют приоритет. Параметры `MAIN_API_URL`, `INTERNAL_API_KEY`, `STUDENT_PORTAL_URL` можно задавать в этом файле; подключение к базе — в `ConnectionStrings:Default`. При публикации локальный файл не включается: в Compose используются переменные окружения.
-
-| Параметр | Настройка приложения |
+| Команда / кнопка | Действие |
 | --- | --- |
-| `Polling.Limit` | По умолчанию 100; можно задать `TelegramBotKit__Polling__Limit` |
-| `Polling.TimeoutSeconds` | По умолчанию 25; можно задать `TelegramBotKit__Polling__TimeoutSeconds` |
-| `Polling.MaxDegreeOfParallelism` | 1: сообщения и callback одного ученика последовательно изменяют общий сохранённый выбор |
-| `Polling.AllowedUpdates` | `Message`, `CallbackQuery` |
-| `GlobalMaxPerSecond` | 25 |
-| `PerChatMinDelay` | 1 секунда |
-| `MaxRetryAttempts` | 5 |
+| `/level`, «Текущий уровень» | Создать или возобновить личный уровень, показать номер и текущий вопрос |
+| `/boss`, «Босс» | Начать/продолжить три перевода босса, заработанного за каждые пять уровней |
+| `/profile`, «Профиль» | Аккаунт, класс, пройденные уровни, доступные боссы и число попыток/ошибок |
+| `/tasks`, «Переводы» | Отдельные проверки и предложения переводов |
+| «Рейтинг» | Основной `/leaderboard` внутри Mini App |
+| «Открыть сайт» | Весь основной сайт внутри Mini App |
+| `/rating`, `/site` | Inline-кнопки запуска рейтинга и сайта как Mini App |
+| `/cancel`, `/help` | Главное меню; незавершённый серверный уровень/босс сохраняется |
 
-Фильтр личных чатов подключён штатным `UseMiddleware<PrivateStudentChat>()`. См. [Hosting](https://github.com/NickFeD/TelegramBotKit/blob/master/docs/hosting.md) и [Messaging](https://github.com/NickFeD/TelegramBotKit/blob/master/docs/messaging.md).
+`/daily`, старые подписи меню и кнопки выбора вида оставлены как совместимые входы в текущий уровень. Вид текущего учебного вопроса выбирает сервер. Все шесть видов поддержаны: перевод текста, диктант, перевод аудио, пропуск, порядок слов и сопоставление пар. Структурированные ответы собираются Telegram-кнопками; переводы и диктанты отправляются текстом. WAV отправляется документом, MP3/M4A — аудиозаписью.
 
-## Запуск
+Ответы идут в `/internal/telegram/{telegramId}/learning/levels/{levelId}/questions/{questionId}/answer` с `attemptToken`; боссы — в `/learning/bosses/{bossId}/questions/{assignmentId}/answer`. После результата пользователь явно продолжает уровень или босса. Ошибочный вопрос возвращается в конце очереди; бот не выставляет оценку непроверенному переводу босса. При `204` отображается отсутствие материала/доступного босса. Источник правил — [LEVELS.md](../main-api/docs/LEVELS.md).
 
-`/daily` продолжает дневной урок: сначала учебные упражнения, затем финальный «Босс» —
-подтверждение или исправление перевода реального фрагмента. Урок завершён после ответа боссу.
-Если подходящих переводов пока нет, бот предлагает вернуться позже. Прогресс босса сохраняется
-на сервере, а начатое исправление — в состоянии диалога. После перезапуска `/daily` возобновляет задание.
+Черновик кнопочного ответа, идентификатор уровня/босса и токен попытки хранятся в PostgreSQL бота. Перед отправкой сохраняется точный запрос; после сетевой ошибки или перезапуска повторяется он же. Кнопки упражнения привязаны к токену конкретной попытки. Старые кнопки и повторная доставка обработанного ответа не отвечают на следующий вопрос. При конфликте с прохождением на сайте бот предлагает перечитать текущее состояние.
 
-В корневом `.env` задайте:
+## Mini App без повторного входа
+
+Рейтинг и сайт запускаются inline-кнопками `web_app` под сообщением. Для входа нужны launch-данные пользователя, доступные в этом режиме; `KeyboardButton.web_app` для их запуска не используется. Старое reply-меню убирается при открытии главного меню. Сайт отправляет сырое `Telegram.WebApp.initData` в `POST /auth/telegram-mini-app`. Ядро проверяет HMAC-SHA-256 по токену того же бота, уникальность полей, `auth_date` (не старше 5 минут, допустимое опережение 30 секунд), Telegram ID и существующую привязку. `initDataUnsafe` и Telegram username для входа не используются. Валидный непривязанный Telegram получает предложение выполнить привязку на сайте.
+
+После проверки выдаётся обычная обновляемая сессия того же Account. Mini App хранит токены в памяти; сохранённая сессия другого аккаунта в браузере не используется и не перезаписывается. Рейтинг, уровни, босс, профиль и остальные страницы работают через основной API с теми же правами и прогрессом. Токены входа не передаются в URL/чат.
+
+Протокол: [проверка данных Telegram Mini Apps](https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app).
+
+## Настройка
+
+В `.env` Compose:
 
 ```dotenv
 TELEGRAM_BOT_TOKEN=токен-от-BotFather
-TELEGRAM_BOT_USERNAME=имя_бота_без_собачки
-INTERNAL_API_KEY=отдельный-длинный-случайный-секрет
-STUDENT_PORTAL_URL=https://bashperevod.ru/telegram.html
+TELEGRAM_BOT_USERNAME=имя_без_собачки
+INTERNAL_API_KEY=общий-внутренний-ключ
+STUDENT_PORTAL_URL="https://bashperevod.ru/profile#telegram"
+MINI_APP_URL=https://bashperevod.ru
 ```
 
-Если сервер не может подключиться к Telegram, задайте в `.env` доступный извне прокси:
+`MINI_APP_URL` должен указывать на HTTPS-домен основного сайта. Compose передаёт один `TELEGRAM_BOT_TOKEN` боту и ядру (`Telegram__BotToken`). Вне Compose задайте `Telegram:BotToken` ядру отдельно; пустое значение отключает вход Mini App. `Telegram:BotUsername` используется ядром для ссылок привязки. После смены домена обновите `MINI_APP_URL`. Для дополнительной кнопки запуска в профиле бота можно настроить Main Mini App в BotFather; inline-кнопки уже используют URL сайта. Реальное открытие WebView проверяется в Telegram.
 
-```dotenv
-TELEGRAM_HTTPS_PROXY=http://user:password@proxy.example:3128
-```
+Также требуются `POSTGRES_PASSWORD`, `JWT_SIGNING_KEY`, настройки первого администратора и хранилища аудио. Бот получает `MAIN_API_URL`, `INTERNAL_API_KEY`, `ConnectionStrings__Default` (база `bot`). Ядро получает `Telegram__InternalKey`. Публичный прокси не должен открывать `/internal/`. Обрабатываются только личные чаты, Telegram ID берётся из отправителя сообщения.
 
-Поддерживается также `socks5://user:password@host:port`. Прокси получает только контейнер
-`telegram-bot`; внутренний `http://main-api:8080` остаётся прямым. После изменения `.env`
-достаточно `docker compose up -d --no-deps --force-recreate telegram-bot`. Проверяйте
-`docker compose logs --tail=50 telegram-bot`. Если лог сообщает `Telegram bot is disabled`,
-проверьте, что `TELEGRAM_BOT_TOKEN` в `.env` сервера непустой. Не вставляйте токен в логи
-или публичные сообщения.
-
-Также нужны обычные настройки приложения: `POSTGRES_PASSWORD`, `JWT_SIGNING_KEY` и данные администратора первого запуска. Один `INTERNAL_API_KEY` Compose передаёт боту и ядру (`Telegram:InternalKey`). Вне Compose задайте эти настройки обоим процессам самостоятельно, а боту — `MAIN_API_URL` и `ConnectionStrings__Default`.
+Запуск:
 
 ```sh
 docker compose up -d --build
 ```
 
-Compose запускает бот и PostgreSQL с базой `bot` и постоянным томом `bot_data_v2`. Миграции базы бота применяются при старте. Новая миграция добавляет привязку входящего ответа к исходному упражнению: повторная доставка сообщения после перезапуска не отвечает за ученика на следующее упражнение. Старые данные не удаляются. В ядре используются существующие таблицы Identity для одноразовых кодов и привязок; новая миграция ядра для Telegram не требуется.
-
-## Вход и задания
-
-1. Учитель выдаёт ученику действующую учётную запись; самостоятельный участник также может использовать свою учётную запись.
-2. Ученик открывает `/telegram.html` основного сайта и вводит логин и пароль.
-3. Нажимает «Открыть бота в Telegram», затем «Старт». Одноразовая ссылка действует десять минут; новая ссылка отменяет предыдущую. Пароль в Telegram не отправляется.
-4. В меню доступны **Профиль**, **Задания на сегодня**, **Виды заданий**. `/profile` показывает профиль, `/daily` продолжает урок, `/tasks` открывает выбор вида задания, `/cancel` возвращает в меню.
-5. Ответы и прогресс сохраняются в ядре и совпадают с `/api/lessons/today`. Уже выполненное упражнение не выдаётся повторно. После последнего ответа бот показывает завершение дня; если материалов нет — сообщает об этом.
-
-Страница привязки хранит токен только в памяти и отзывает созданную для неё сессию при выходе со страницы. На ней же можно отвязать Telegram; отвязка также аннулирует ожидающую ссылку. Для смены Telegram сначала отвяжите старый аккаунт, затем получите новую ссылку.
-
-Поддерживаются все текущие типы заданий:
-
-| Тип | Ответ в боте |
-| --- | --- |
-| Перевод текста | Текст перевода |
-| Аудиодиктант | Услышанный текст |
-| Перевод аудио | Текст перевода |
-| Пропущенное слово | Кнопка со словом или свой текст |
-| Порядок слов | Нажатия на слова в нужном порядке, затем «Отправить ответ» |
-| Соответствия слов | Выбор слова, затем перевода для каждой пары, затем «Отправить ответ» |
-| Выбор перевода | Кнопка с одним из показанных переводов или «Свой перевод» и текст |
-| Подтверждение перевода | «Подтвердить перевод» или «Свой перевод» и текст |
-
-При сборке слов и пар бот редактирует сообщение и показывает текущий выбор. Последнее действие можно отменить. Устаревшая кнопка другого упражнения не отправляет ответ; повторная доставка не применяет его к следующему заданию. Незавершённый выбор сохраняется при перезапуске. Текстовые форматы `3 1 2` и `1-3 2-1 ...` также поддержаны.
-
-Для аудиозаданий ядро выдаёт подписанную ссылку на готовую запись. При выборе конкретного аудиорежима вызывается штатная выдача ядра, которая подготавливает недостающее аудио. Бот скачивает файл отдельным клиентом без внутреннего ключа API. WAV от Silero загружается в Telegram как файл, MP3/M4A — как аудиозапись: [ограничения sendAudio](https://core.telegram.org/bots/api#sendaudio). URL хранилища должен быть доступен боту. Исходный текст диктанта ученику не показывается.
-
-Бот использует состав урока и дату ядра. Нераспознанный учебный ответ сохраняется как попытка, как и на сайте. Проверка перевода идёт через отдельный процесс reviews: бот сообщает о сохранении мнения, не объявляя популярный вариант доказанно верным. Сервер может вернуть уже начатую проверку другого режима — бот отображает фактически полученный `kind`.
-
-## Доступ
-
-Обрабатываются только личные чаты. Привязка не создаёт аккаунт и не выдаёт новых прав. Ядро на каждом запросе проверяет активность аккаунта, наличие участника и собственные разрешения `profile.read`, `lessons.receive`, `exercises.submit`.
-
-Для сайта: `POST /api/me/telegram-link` (JWT владельца) возвращает `{code, expiresAt, url}`; `DELETE /api/me/telegram-link` отзывает привязку и ожидающий код. Если имя бота не настроено, `url` будет `null`, а страница предложит отправить `/start код` своему боту вручную.
-
-Боту доступны только следующие маршруты с `X-Internal-Key`:
-
-- `POST /internal/telegram/{telegramId}/link` с `{code}`;
-- `GET /internal/telegram/{telegramId}/profile`;
-- `GET /internal/telegram/{telegramId}/lesson`;
-- `POST /internal/telegram/{telegramId}/lesson/exercises` с `{kind, languagePair}`;
-- `POST /internal/telegram/{telegramId}/exercises/{exerciseId}/answer` с `{answer: ...}`.
-- `POST /internal/telegram/{telegramId}/reviews/next?kind=translation-choice` (либо `translation-confirm`);
-- `POST /internal/telegram/{telegramId}/reviews/{assignmentId}/response` с ответом проверки перевода.
-
-Внутренний ключ не является JWT и не открывает административные или экспертные маршруты. При пустом ключе внутренние маршруты закрыты. Публичный nginx не проксирует `/internal/`; обращение к ядру выполняется внутри сети Compose. Telegram ID берётся из отправителя сообщения, автор упражнения определяется ядром по привязке.
+При проблемах подключения задайте `TELEGRAM_HTTPS_PROXY` в `.env`; прокси применяется только к запросам Telegram. В `docker compose logs --tail=50 telegram-bot` проверяйте миграции, `actual bot`, webhook и запуск polling. Команды, callbacks, отправка сообщений и polling используют штатные механизмы TelegramBotKit; ручного цикла GetUpdates нет.
 
 ## Проверка
 
-Из корня репозитория:
+Из корня:
 
 ```sh
-dotnet test src/telegram-bot.tests/TelegramBot.Tests.csproj
+dotnet test src/telegram-bot.tests/TelegramBot.Tests.csproj --no-restore
 ```
 
-Из `src/main-api` (для выбора закреплённого SDK):
+Из `src/main-api`:
 
 ```sh
-dotnet test tests/BashkirSchool.Tests/BashkirSchool.Tests.csproj --filter FullyQualifiedName~TelegramStudentsTests
+dotnet test tests/BashkirSchool.Tests/BashkirSchool.Tests.csproj --no-restore --filter "FullyQualifiedName~TelegramMiniAppTests|FullyQualifiedName~TelegramStudentsTests|FullyQualifiedName~SessionAndDirectoryTests|FullyQualifiedName~LevelFlowTests"
 ```
 
-| Требование | Тест |
-| --- | --- |
-| TelegramBotKit действительно маршрутизирует команды и ответы | `TelegramBotKitDispatchesSlashCommandsAndPlainAnswersToConversation` |
-| Только собственный профиль, без прав администратора | `BotRequiresKeyAndSingleUseLinkAndCannotUseStudentTokenAsBotCredentials` |
-| Одноразовые ссылки, срок действия, отвязка | `ExpiredAndReplacedLinksAreRejectedAndUnlinkRevokesBothBindingAndPendingCode` |
-| Ежедневные задания, сохранение прогресса, запрет чужих ответов, блокировка аккаунта | `DailyAnswersBelongToLinkedStudentAndProgressPersistsAcrossWebsiteAndBot` |
-| Продолжение диалога и защита от повторной доставки | `ChatResumesAfterRestartAndRedeliveryNeverAnswersTheNextExercise` |
-| Личные данные не раскрываются в группах | `GroupMessagesNeverRequestStudentDataOrCreateConversationState` |
-| Текстовые и структурированные ответы всех текущих типов | `TextAnswerPreservesBashkirLettersAndPunctuation`, `NumberedAnswersUseIssuedIdentifiersForGapsOrderAndPairs`, `InvalidOrderDoesNotSubmitAnAnswer`, `InvalidPairsDoNotSubmitAnAnswer` |
-| Выбор и прохождение всех шести видов, загрузка WAV | `EveryExerciseKindCanBeSelectedDisplayedAndCompleted` |
-| Кнопки сборки/сопоставления/пропуска, сохранение выбора, старые и повторные кнопки | `NativeButtonsCompleteExercisesAndRejectOldButtons` |
-| Команды и callback направляются библиотекой | `LibraryRoutesMentionedSlashCommandAndAcknowledgesUnknownCallback` |
-| Кнопки выбора/подтверждения перевода и собственный текст после перезапуска | `ReviewModesPreserveIssuedOptionsAndCustomInputAcrossRestart` |
-| Новые маршруты ядра, чужая выдача и неверный вариант | `BotIssuesRequestedExerciseAndReviewAndOnlyLinkedOwnerCanSubmit` |
-
-Автоматические проверки используют подставной транспорт Telegram и SQLite; живой Telegram и PostgreSQL требуют запуска с настоящими настройками.
+Тесты используют настоящий диспетчер TelegramBotKit, подставной транспорт Telegram/API и SQLite. Они не подтверждают доставку сообщений настоящим Telegram, настройку BotFather и применение миграций PostgreSQL на сервере.

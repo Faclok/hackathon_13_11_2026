@@ -29,11 +29,16 @@ public sealed class RefreshCredential
 
 public sealed class Sessions(CoreDbContext db, IOptions<JwtSettings> settings, TimeProvider clock, IPermissionChecker permissions)
 {
-    public async Task<AccessTokenResponse> OpenAsync(Account account, CancellationToken ct)
+    public async Task<AccessTokenResponse> OpenAsync(Account account, CancellationToken ct, long? telegramId = null)
     {
         var now = clock.GetUtcNow();
         var session = new AccountSession { AccountId = account.Id, AccountVersion = account.SessionVersion, CreatedAt = now, ExpiresAt = now.AddDays(30) };
         db.Add(session);
+        if (telegramId.HasValue) db.Add(new Microsoft.AspNetCore.Identity.IdentityUserToken<Guid>
+        {
+            UserId = account.Id, LoginProvider = "Telegram", Name = "session:" + session.Id,
+            Value = telegramId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
+        });
         var result = Issue(account, session);
         await db.SaveChangesAsync(ct);
         return result;

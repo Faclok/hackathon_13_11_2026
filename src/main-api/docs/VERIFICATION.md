@@ -1,5 +1,31 @@
 # Проверка школьного MVP ядра
 
+## Telegram, уровни и Mini App — 15 ноября 2026
+
+Проверены изменения бота, общего клиента и входа Mini App. Бот и сайт используют `/learning/*`, шесть видов вопросов и три перевода босса. Рейтинг и полный сайт запускаются inline-кнопками Mini App с входом в существующую Telegram-привязку. OpenAPI заново получен из локально запущенного Host; найден `/auth/telegram-mini-app`.
+
+Команды:
+
+- Из корня: `dotnet test src/telegram-bot.tests/TelegramBot.Tests.csproj --no-restore --logger "trx;LogFileName=telegram-bot.trx" --results-directory .data/telegram-results` — **30 пройдено, 0 ошибок, 0 пропусков**.
+- Из `src/main-api`: `dotnet test tests/BashkirSchool.Tests/BashkirSchool.Tests.csproj --no-restore --filter "FullyQualifiedName~TelegramMiniAppTests|FullyQualifiedName~TelegramStudentsTests|FullyQualifiedName~SessionAndDirectoryTests|FullyQualifiedName~LevelFlowTests" --logger "trx;LogFileName=telegram-integration.trx" --results-directory .data/telegram-results` — **30 пройдено, 0 ошибок, 0 пропусков**.
+- `client`: `npm run build` — TypeScript и production-сборка прошли.
+
+| Requirement | Evidence |
+| --- | --- |
+| Текущий уровень, номер и общий серверный прогресс; перезапуск без ответа за следующий вопрос | `CurrentLevelSurvivesRestartAndRedeliveryNeverAnswersNextQuestion`; `SignedLaunchUsesLinkedAccountAndUnlinkRevokesMiniAppButKeepsWebsiteSession` |
+| Шесть учебных форматов и структурированные Telegram-кнопки | `AllSixLevelKindsUseServerQuestionAndAttemptToken`; `NativeButtonsBuildAnswersAndRejectStaleCallbacks` |
+| Сохранение точного ответа после обрыва; старые кнопки той же задачи не используют новый токен | `LostResponseRetriesIdenticalTokenAndAnswerAfterRestart`; `ButtonsFromWrongAttemptCannotAnswerSameQuestionWithNewToken` |
+| Босс из трёх последовательных настоящих проверок; неправильный ответ и отсутствие материала не увеличивают прогресс | `BossHasThreeRealReviewsAndResumesBetweenSteps`; `IncorrectAndEmptyStatesDoNotInventProgress` |
+| Рейтинг и полный сайт через inline `web_app`; группы игнорируются | `MenuUsesMiniAppButtonsForRatingAndFullSiteAndGroupsAreIgnored` |
+| Вход по подписанному Telegram ID, без создания дубликатов и без повторного ввода данных | `SignedLaunchUsesLinkedAccountAndUnlinkRevokesMiniAppButKeepsWebsiteSession`; `ValidUnlinkedLaunchDoesNotRegisterAccountAndMissingTokenDisablesLogin` |
+| Подмена, другой бот, возраст, дубли полей, неверный JSON/ID/hash и блокировка не дают сессию | `InvalidLaunchCannotOpenSession`; `ValidTimestampAtAcceptedBoundaryReachesLinkLookup`; `BlockedLinkedAccountCannotSignIn` |
+| Отвязка отзывает access/refresh Mini App, сохраняя обычную сессию сайта | `SignedLaunchUsesLinkedAccountAndUnlinkRevokesMiniAppButKeepsWebsiteSession` |
+
+Браузерная проверка production-сборки выполнена в headless Edge на ширине 390px с подставными HTTP-ответами и launch-контекстом Telegram: вход рейтинга без формы, изоляция от другого браузерного аккаунта, переходы по сайту без нового входа, шесть видов упражнений, повтор сохранённого ответа после перезагрузки и обрыва, три шага босса, экран непривязанного аккаунта. Горизонтального скролла нет. Результаты и скриншоты находятся в игнорируемом `.data/telegram-results/` корня репозитория. Убрана зависимость загрузки React-приложения от доступности Google Fonts.
+
+Ограничения: настоящий Telegram/WebView, Main Mini App в BotFather и серверный HTTPS-домен не проверялись. В тестах БД — SQLite; применение миграций и конкурирующие запросы на промышленном PostgreSQL этим запуском не подтверждены. NU1900 сообщает недоступность NuGet для проверки уязвимостей, но сборка и тесты завершились успешно.
+
+
 ## Автоматическая подготовка озвучки уровней — 14 ноября 2026
 
 Из `src/main-api` выполнено: `dotnet test tests/BashkirSchool.Tests/BashkirSchool.Tests.csproj --no-restore --filter 'FullyQualifiedName~LevelAudioTests|FullyQualifiedName~LevelFlowTests|FullyQualifiedName~ExerciseWorkflowTests|FullyQualifiedName~MergedPlayerLevelsTests' --verbosity minimal`. Результат: **25 пройдено, 0 ошибок, 2 пропущено**; код выхода 0. Пропущены две проверки миграций на настоящем PostgreSQL без тестового подключения. Шесть новых случаев `LevelAudioTests` прошли. Сборка сообщает NU1900: источник NuGet недоступен для проверки уязвимостей; компиляция и запуск тестов завершились успешно.

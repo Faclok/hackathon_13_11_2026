@@ -2,29 +2,48 @@ using System.Text.Json;
 using Telegram.Bot.Types.ReplyMarkups;
 using TelegramBotKit.Keyboards;
 
-public sealed record ExerciseDraft(ExerciseView Exercise, string[] Selected, int? Left = null, int? LastUpdateId = null);
+public sealed record ExerciseDraft(ExerciseView Exercise, string[] Selected, int? Left = null, int? LastUpdateId = null,
+    Guid? LevelId = null, Guid? AttemptToken = null);
 
 public static class TaskButtons
 {
-    public static ReplyKeyboardMarkup Menu() => Keyboard.Reply([
-        Keyboard.ReplyRow(Keyboard.Text("Профиль"), Keyboard.Text("Задания на сегодня")),
-        Keyboard.ReplyRow(Keyboard.Text("Виды заданий"))
-    ], resizeKeyboard: true);
+    public static InlineKeyboardMarkup Menu(string site = "https://bashperevod.ru") => Keyboard.Inline([
+        Keyboard.Row(Keyboard.Callback("Текущий уровень", "nav", "level"), Keyboard.Callback("Босс", "nav", "boss")),
+        Keyboard.Row(Keyboard.Callback("Профиль", "nav", "profile"), Keyboard.Callback("Переводы", "nav", "kinds")),
+        Keyboard.Row(new InlineKeyboardButton("Рейтинг") { WebApp = new() { Url = AppUrl(site, "/leaderboard") } },
+            new InlineKeyboardButton("Открыть сайт") { WebApp = new() { Url = AppUrl(site, "/") } })
+    ]);
+
+    private static string AppUrl(string site, string path)
+    {
+        var root = new Uri(site);
+        if (root.Scheme != Uri.UriSchemeHttps) throw new InvalidOperationException("MINI_APP_URL must use HTTPS.");
+        return new Uri(root, path + "?miniapp=1").AbsoluteUri;
+    }
+    public static InlineKeyboardMarkup Website(string site) => Keyboard.Inline([
+        Keyboard.Row(new InlineKeyboardButton("Рейтинг") { WebApp = new() { Url = AppUrl(site, "/leaderboard") } }),
+        Keyboard.Row(new InlineKeyboardButton("Открыть весь сайт") { WebApp = new() { Url = AppUrl(site, "/") } })
+    ]);
+    public static InlineKeyboardMarkup Continue(string action, string label = "Продолжить") => Keyboard.Inline([
+        Keyboard.Row(Keyboard.Callback(label, "nav", action)),
+        Keyboard.Row(Keyboard.Callback(action == "boss" ? "Текущий уровень" : "Босс", "nav", action == "boss" ? "level" : "boss"))
+    ]);
 
     public static InlineKeyboardMarkup Kinds() => Keyboard.Inline(
-        ExerciseChat.Kinds.Select(x => Keyboard.Row(Keyboard.Callback(x.Key, "kind", x.Value)))
-            .Concat([
+        new[] {
+                Keyboard.Row(Keyboard.Callback("Текущий уровень", "nav", "level")),
+                Keyboard.Row(Keyboard.Callback("Босс", "nav", "boss")),
                 Keyboard.Row(Keyboard.Callback("Предложить перевод", "review", "translation-create")),
                 Keyboard.Row(Keyboard.Callback("Выбор перевода", "review", "translation-choice")),
                 Keyboard.Row(Keyboard.Callback("Подтверждение перевода", "review", "translation-confirm")),
-                Keyboard.Row(Keyboard.Callback("Продолжить урок", "nav", "daily"))
-            ]));
+                Keyboard.Row(Keyboard.Callback("Продолжить уровень", "nav", "level"))
+            });
 
     public static InlineKeyboardMarkup Exercise(ExerciseDraft draft)
     {
         var e = draft.Exercise;
         var rows = new List<IEnumerable<InlineKeyboardButton>>();
-        InlineKeyboardButton Button(string label, string value) => Keyboard.Callback(label, "answer", e.Id.ToString("N"), value);
+        InlineKeyboardButton Button(string label, string value) => Keyboard.Callback(label, "answer", (draft.AttemptToken ?? e.Id).ToString("N"), value);
         var p = e.Prompt;
         if (e.Kind == "missing-word")
             rows.AddRange(p.GetProperty("options").EnumerateArray().Select((x, i) => Keyboard.Row(Button(x.GetProperty("text").GetString()!, "g" + i))));

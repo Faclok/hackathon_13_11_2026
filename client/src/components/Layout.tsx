@@ -1,7 +1,6 @@
 import { NavLink, Link, Outlet, useLocation } from "react-router-dom";
 import { useEffect } from "react";
 import { useUserStore } from "../store";
-import { canAccessBoss, BOSS_MIN_RANK } from "../utils/ranks";
 import { Ornament, SchoolLogo } from "./Illustrations";
 import { Avatar } from "./Personalization";
 import { Icon } from "./ui";
@@ -14,10 +13,14 @@ const navigation = [
 ];
 export default function Layout() {
   const user = useUserStore((s) => s.user);
-  const { pathname } = useLocation();
+  const { pathname, hash } = useLocation();
   useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [pathname]);
+    if (pathname === "/profile" && hash === "#telegram") {
+      document.getElementById("telegram")?.scrollIntoView();
+    } else {
+      window.scrollTo(0, 0);
+    }
+  }, [pathname, hash]);
   return (
     <div className="school-app">
       <div className="background-pattern">
@@ -47,17 +50,12 @@ export default function Layout() {
             key={to}
             to={to}
             end={to === "/"}
-            title={
-              to === "/boss" && !canAccessBoss(user)
-                ? `Доступ со звания «${BOSS_MIN_RANK[0]}»`
-                : undefined
-            }
             className={({ isActive }) =>
               isActive ? "nav-item active" : "nav-item"
             }
           >
             <Icon
-              name={to === "/boss" && !canAccessBoss(user) ? "lock" : icon}
+              name={icon}
             />
             <span>{label}</span>
           </NavLink>

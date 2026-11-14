@@ -1,13 +1,15 @@
 ﻿import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import TelegramLink from "../components/TelegramLink";
+import TelegramAccess from "../components/TelegramAccess";
+import { isMiniApp } from "../api/telegram";
 import { getLeaderboard } from "../api";
 import { trophies } from "../mocks/data";
+import { decorationCatalog, rarities } from "../mocks/customization";
 import { useUserStore } from "../store";
 import {
   ranks,
-  BOSS_MIN_RANK,
   getCurrentRank,
-  canAccessBoss,
 } from "../utils/ranks";
 import type { Decoration } from "../types";
 import { Mascot, SchoolLogo } from "../components/Illustrations";
@@ -25,9 +27,12 @@ export function Login() {
   const [error, setError] = useState("");
   const user = useUserStore((state) => state.user);
   const navigate = useNavigate();
+  const location = useLocation();
+  const destination = location.state?.from === "/profile#telegram" ? "/profile#telegram" : "/";
   useEffect(() => {
-    if (user) navigate("/", { replace: true });
-  }, [user, navigate]);
+    if (user) navigate(destination, { replace: true });
+  }, [user, navigate, destination]);
+  if (isMiniApp() && !user) return <TelegramAccess />;
   return (
     <div className="school-app login-app">
       <Link to="/" className="login-logo">
@@ -44,7 +49,7 @@ export function Login() {
             setError("");
             try {
               await useUserStore.getState().login(nick);
-              navigate("/", { replace: true });
+              navigate(destination, { replace: true });
             } catch (cause) {
               setError(cause instanceof Error ? cause.message : "Не удалось войти.");
             } finally {
@@ -205,6 +210,7 @@ export function Leaderboard() {
 
 export function Profile() {
   const user = useUserStore((s) => s.user)!;
+  const levelRewards = useUserStore((s) => s.levelRewards);
   const navigate = useNavigate();
   const currentRank = getCurrentRank(user);
   const [itemInfo, setItemInfo] = useState<Decoration | null>(null);
@@ -235,6 +241,20 @@ export function Profile() {
             Изменить оформление <Icon name="arrow" size={13} />
           </Link>
         </div>
+      </section>
+      <section className="surface profile-section">
+        <h2>Скины за уровни</h2>
+        <p>За каждый новый уровень — обычный скин. На каждом 5-м уровне — редкий вместо обычного, на каждом 10-м — эпический.</p>
+        <p>Легендарные скины за уровни не выдаются. Сначала выдаются скины, которых у тебя ещё нет; если собрана вся редкость, дубликат приносит 5 монет.</p>
+        <p>Следующая награда: уровень {user.level + 1} · {rarities[(user.level + 1) % 10 === 0 ? "epic" : (user.level + 1) % 5 === 0 ? "rare" : "common"].label} скин.</p>
+        {levelRewards.length > 0 && <div role="status">
+          <h3>Получено за уровни</h3>
+          {levelRewards.map((reward) => <p key={reward.level}>
+            Уровень {reward.level}: {decorationCatalog.find((item) => item.id === reward.decorationId)?.title ?? reward.decorationId}
+            {reward.duplicate ? ` · дубликат, +${reward.compensation} монет` : " · добавлен в инвентарь"}
+          </p>)}
+        </div>}
+        <Link to="/inventory" className="customize-link">Открыть инвентарь <Icon name="arrow" size={13} /></Link>
       </section>
       {itemInfo && (
         <Modal title={itemInfo.title} onClose={() => setItemInfo(null)}>
@@ -271,6 +291,7 @@ export function Profile() {
           <p>Твоя языковая пара</p>
         </div>
       </div>
+      <TelegramLink />
       <section className="surface profile-section">
         <h2>Твои звания</h2>
         <div className="rank-list">
@@ -297,11 +318,6 @@ export function Profile() {
                 <small>
                   {tasks} задач{streak > 0 && ` · серия ${streak} дней`}
                 </small>
-                {name === BOSS_MIN_RANK[0] && (
-                  <small className="rank-unlocks-boss">
-                    Открывает Босс-испытание
-                  </small>
-                )}
                 {user.tasksSolved < tasks && (
                   <ProgressBar
                     value={Math.min(user.tasksSolved, tasks)}
@@ -314,16 +330,14 @@ export function Profile() {
         </div>
       </section>
       <Link
-        to={canAccessBoss(user) ? "/boss" : "/learn"}
+        to="/boss"
         className="surface profile-boss-link"
       >
-        <Icon name={canAccessBoss(user) ? "swords" : "lock"} />
+        <Icon name="swords" />
         <span>
           <strong>Босс-испытание</strong>
           <small>
-            {canAccessBoss(user)
-              ? "Твоё звание открывает рейтинговые переводы"
-              : `Доступ со звания «${BOSS_MIN_RANK[0]}»`}
+            За каждые пять пройденных уровней
           </small>
         </span>
         <Icon name="arrow" size={17} />
