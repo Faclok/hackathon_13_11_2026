@@ -16,26 +16,27 @@ public sealed class ExerciseWorkflowTests
     [Fact]
     public async Task WordPairsAreImportedIdempotentlyIssuedPrivatelyAndAnsweredOnlyByOwner()
     {
-        using var f = new CoreFactory(); using var admin = await f.Bootstrap(); var student = await f.Student(admin); var other = await f.Student(admin, "2");
+        using var f = new CoreFactory(learningKind: "word-match"); using var admin = await f.Bootstrap(); var student = await f.Student(admin); var other = await f.Student(admin, "2");
+        await LearningContent(admin);
         using var producer = await f.Producer(admin);
         var entries = new[] { new VocabularyItemRequest("бер", "один"), new("ике", "два"), new("өс", "три"), new("дүрт", "четыре"), new("биш", "пять") };
         var input = new DeliverVocabularyRequest("ba-ru", entries);
         Assert.Equal(HttpStatusCode.Forbidden, (await student.Client.PostAsJsonAsync("/api/vocabulary", input)).StatusCode);
         var first = await Post<VocabularyDeliveryResponse>(producer, "/api/vocabulary", input);
         Assert.Equal(first.Ids, (await Post<VocabularyDeliveryResponse>(producer, "/api/vocabulary", input)).Ids);
-        var exercise = await Post<ExerciseResponse>(student.Client, "/api/lessons/today/exercises", new IssueExerciseRequest("word-match"));
-        var again = await Post<ExerciseResponse>(student.Client, "/api/lessons/today/exercises", new IssueExerciseRequest("word-match"));
+        var level = await CurrentLevel(student.Client); var exercise = level.Question;
+        var again = (await CurrentLevel(student.Client)).Question;
         Assert.Equal(exercise.Id, again.Id); Assert.Equal(exercise.Prompt.GetRawText(), again.Prompt.GetRawText());
         Assert.False(exercise.Prompt.TryGetProperty("pairs", out _));
         var prompt = ExerciseJson.Read<WordMatchPrompt>(exercise.Prompt);
         var pairs = prompt.Left.Select(l => new WordPairAnswer(l.Id, prompt.Right.Single(r => r.Text == entries.Single(e => e.Word == l.Text).Translation).Id)).ToArray();
-        var answer = new SubmitExerciseAnswerRequest(ExerciseJson.Element(new WordMatchAnswer(pairs)));
-        Assert.Equal(HttpStatusCode.NotFound, (await other.Client.PostAsJsonAsync($"/api/exercises/{exercise.Id}/answer", answer)).StatusCode);
-        var result = await Post<AttemptResponse>(student.Client, $"/api/exercises/{exercise.Id}/answer", answer);
+        var answer = new AnswerLevelRequest(exercise.AttemptToken, ExerciseJson.Element(new WordMatchAnswer(pairs)));
+        Assert.Equal(HttpStatusCode.NotFound, (await other.Client.PostAsJsonAsync(LevelAnswerUrl(level), answer)).StatusCode);
+        var result = await Post<LevelAnswerResponse>(student.Client, LevelAnswerUrl(level), answer);
         Assert.True(result.Recognized);
-        Assert.Equal(result.Id, (await Post<AttemptResponse>(student.Client, $"/api/exercises/{exercise.Id}/answer", answer)).Id);
+        Assert.Equal(result, await Post<LevelAnswerResponse>(student.Client, LevelAnswerUrl(level), answer));
         using var scope = f.Services.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<CoreDbContext>();
-        Assert.Equal(5, await db.Set<VocabularyEntry>().CountAsync()); Assert.Single(await db.Set<ExerciseAttempt>().ToArrayAsync());
+        Assert.Equal(5, await db.Set<VocabularyEntry>().CountAsync()); Assert.Single(await db.Set<LevelAnswer>().ToArrayAsync());
         Assert.False(await db.Judgments.AnyAsync());
         Assert.All(await db.Participants.ToArrayAsync(), p => Assert.Equal((0, 0), (p.Correct, p.Total)));
     }
@@ -95,28 +96,38 @@ public sealed class ExerciseWorkflowTests
         Assert.Single(await db.Judgments.ToArrayAsync());
     }
 
-    [Fact]
-    public async Task GapAndOrderSnapshotsSurviveRepeatedRequestsAndValidateAnswers()
+    [Theory]
+    [InlineData("missing-word")]
+    [InlineData("sentence-order")]
+    public async Task GapAndOrderSnapshotsSurviveRepeatedRequestsAndValidateAnswers(string kind)
     {
-        using var f = new CoreFactory(); using var admin = await f.Bootstrap(); var student = await f.Student(admin);
-        using var producer = await f.Producer(admin); var delivery = await Sentence(producer, "sentence", "Мин мәктәпкә барам.");
-        var gap = await Post<ExerciseResponse>(student.Client, "/api/lessons/today/exercises", new IssueExerciseRequest("missing-word", delivery.CaseId));
-        var same = await Post<ExerciseResponse>(student.Client, "/api/lessons/today/exercises", new IssueExerciseRequest("missing-word", delivery.CaseId));
-        Assert.Equal(gap.Id, same.Id); Assert.Equal(gap.Prompt.GetRawText(), same.Prompt.GetRawText()); Assert.Equal("", gap.Original);
-        var prompt = ExerciseJson.Read<GapExercisePrompt>(gap.Prompt);
-        var correct = prompt.Options.Single(x => prompt.Before + x.Text + prompt.After == "Мин мәктәпкә барам.");
-        Assert.True((await Post<AttemptResponse>(student.Client, $"/api/exercises/{gap.Id}/answer", new SubmitExerciseAnswerRequest(ExerciseJson.Element(new GapExerciseAnswer(OptionId: correct.Id))))).Recognized);
-        var order = await Post<ExerciseResponse>(student.Client, "/api/lessons/today/exercises", new IssueExerciseRequest("sentence-order", delivery.CaseId));
-        var tokens = ExerciseJson.Read<SentenceOrderPrompt>(order.Prompt).Tokens;
-        var ids = new[] { "Мин", "мәктәпкә", "барам." }.Select(text => tokens.Single(x => x.Text == text).Id).ToArray();
-        Assert.True((await Post<AttemptResponse>(student.Client, $"/api/exercises/{order.Id}/answer", new SubmitExerciseAnswerRequest(ExerciseJson.Element(new SentenceOrderAnswer(ids))))).Recognized);
-        Assert.Equal(HttpStatusCode.BadRequest, (await student.Client.PostAsJsonAsync("/api/lessons/today/exercises", new IssueExerciseRequest("unsupported"))).StatusCode);
+        using var f = new CoreFactory(learningKind: kind); using var admin = await f.Bootstrap(); var student = await f.Student(admin);
+        await LearningContent(admin, "Мин мәктәпкә барам.", "Я иду в школу.");
+        var level = await CurrentLevel(student.Client); var question = level.Question;
+        var same = (await CurrentLevel(student.Client)).Question;
+        Assert.Equal(question.Id, same.Id); Assert.Equal(question.Prompt.GetRawText(), same.Prompt.GetRawText());
+        Assert.False(question.Prompt.TryGetProperty("original", out _));
+        object answer;
+        if (kind == "missing-word")
+        {
+            var prompt = ExerciseJson.Read<GapExercisePrompt>(question.Prompt);
+            var correct = prompt.Options.Single(x => prompt.Before + x.Text + prompt.After == "Мин мәктәпкә барам.");
+            answer = new GapExerciseAnswer(OptionId: correct.Id);
+        }
+        else
+        {
+            var tokens = ExerciseJson.Read<SentenceOrderPrompt>(question.Prompt).Tokens;
+            answer = new SentenceOrderAnswer(new[] { "Мин", "мәктәпкә", "барам." }.Select(text => tokens.Single(x => x.Text == text).Id).ToArray());
+        }
+        Assert.True((await AnswerLevel(student.Client, level, answer)).Recognized);
     }
 
-    [Fact]
-    public async Task AudioIsLazyDeduplicatedAndTranslationWaitsForAnAcceptedRendering()
+    [Theory]
+    [InlineData("audio-dictation")]
+    [InlineData("audio-translation")]
+    public async Task AudioIsLazyDeduplicatedAndTranslationWaitsForAnAcceptedRendering(string kind)
     {
-        using var f = new CoreFactory(); var fake = new FakeAudio();
+        using var f = new CoreFactory(learningKind: kind); var fake = new FakeAudio();
         using var customized = f.WithWebHostBuilder(b => b.ConfigureServices(s =>
         {
             s.RemoveAll<ISpeechSynthesizer>(); s.RemoveAll<IAudioStorage>();
@@ -137,13 +148,11 @@ public sealed class ExerciseWorkflowTests
         using var producer = customized.CreateClient(); await Login(producer, producerAccount.Username);
         var delivery = await Sentence(producer, "audio", "Мин мәктәпкә барам.");
         Assert.Equal(0, fake.Syntheses);
-        Assert.Equal(HttpStatusCode.NoContent, (await student.PostAsJsonAsync("/api/lessons/today/exercises", new IssueExerciseRequest("audio-translation", delivery.CaseId))).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await student.PostAsJsonAsync("/api/learning/current", new { })).StatusCode);
         Assert.Equal(0, fake.Syntheses);
-        var dictation = await Post<ExerciseResponse>(student, "/api/lessons/today/exercises", new IssueExerciseRequest("audio-dictation", delivery.CaseId));
-        Assert.Equal(1, fake.Syntheses); Assert.Equal(1, fake.Uploads); Assert.Equal("", dictation.Original);
-        var prompt = ExerciseJson.Read<AudioExercisePrompt>(dictation.Prompt);
-        Assert.StartsWith("https://audio.test/", prompt.AudioUrl);
-        Assert.Equal(dictation.Id, (await Post<ExerciseResponse>(student, "/api/lessons/today/exercises", new IssueExerciseRequest("audio-dictation", delivery.CaseId))).Id);
+        await Post<AudioAssetResponse>(student, $"/api/cases/{delivery.CaseId}/audio", new { });
+        Assert.Equal(1, fake.Syntheses); Assert.Equal(1, fake.Uploads);
+        Assert.Equal(HttpStatusCode.NoContent, (await student.PostAsJsonAsync("/api/learning/current", new { })).StatusCode);
         var duplicate = await Sentence(producer, "same-audio", "Мин мәктәпкә барам.");
         await Post<AudioAssetResponse>(student, $"/api/cases/{duplicate.CaseId}/audio", new { });
         Assert.Equal(1, fake.Syntheses); Assert.Equal(1, fake.Uploads);
@@ -154,9 +163,11 @@ public sealed class ExerciseWorkflowTests
             var resolution = ResolutionRevision.Create(c.Id, 1, ResolutionKind.Community, delivery.VariantId, [delivery.VariantId], [], policy.Id, null, "{}", null, f.Clock.Now);
             c.Apply(resolution); db.Add(resolution); await db.SaveChangesAsync();
         }
-        var translation = await Post<ExerciseResponse>(student, "/api/lessons/today/exercises", new IssueExerciseRequest("audio-translation", delivery.CaseId));
-        Assert.True((await Post<AttemptResponse>(student, $"/api/exercises/{translation.Id}/answer", new SubmitExerciseAnswerRequest(ExerciseJson.Element(new TextExerciseAnswer("Я иду в школу."))))).Recognized);
-        Assert.True((await Post<AttemptResponse>(student, $"/api/exercises/{dictation.Id}/answer", new SubmitExerciseAnswerRequest(ExerciseJson.Element(new TextExerciseAnswer("Мин мәктәпкә барам."))))).Recognized);
+        var level = await CurrentLevel(student);
+        Assert.Equal(kind, level.Question.Kind);
+        var prompt = ExerciseJson.Read<AudioExercisePrompt>(level.Question.Prompt);
+        Assert.StartsWith("https://audio.test/", prompt.AudioUrl);
+        Assert.False(level.Question.Prompt.TryGetProperty("original", out _));
         Assert.Equal(1, fake.Syntheses);
         using (var scope = customized.Services.CreateScope())
         {
@@ -165,7 +176,9 @@ public sealed class ExerciseWorkflowTests
             var pending = ResolutionRevision.Create(c.Id, 2, ResolutionKind.Pending, null, [], [], policy.Id, null, "{}", null, f.Clock.Now);
             c.Apply(pending); db.Add(pending); await db.SaveChangesAsync();
         }
-        Assert.Equal(translation.Id, (await Post<ExerciseResponse>(student, "/api/lessons/today/exercises", new IssueExerciseRequest("audio-translation", delivery.CaseId))).Id);
+        Assert.Equal(level.Id, (await CurrentLevel(student)).Id);
+        var expected = kind == "audio-dictation" ? "Мин мәктәпкә барам." : "Я иду в школу.";
+        Assert.True((await AnswerLevel(student, level, new TextExerciseAnswer(expected))).Recognized);
         var failing = await Sentence(producer, "failure", "Башҡа һөйләм."); fake.FailUpload = true;
         Assert.Equal(HttpStatusCode.InternalServerError, (await student.PostAsJsonAsync($"/api/cases/{failing.CaseId}/audio", new { })).StatusCode);
         using (var scope = customized.Services.CreateScope())

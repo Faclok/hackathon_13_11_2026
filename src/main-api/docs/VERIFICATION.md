@@ -1,5 +1,51 @@
 # Проверка школьного MVP ядра
 
+## Удаление дневного сценария — 14 ноября 2026
+
+Текущий итог: **94 пройдено, 0 ошибок, 9 пропущено**. `retirement-final.trx` проверен отдельно: total=103, executed=passed=94, failed=0, девять `NotExecuted` — 8 проверок PostgreSQL без настроенного сервера и 1 настоящий Silero без модели/Python. Ниже сохранены исторические результаты до очистки.
+
+Команды из `src/main-api`: `dotnet build BashkirSchool.slnx --no-restore --no-incremental -v:q` (0 предупреждений/ошибок); `dotnet test tests/BashkirSchool.Tests/BashkirSchool.Tests.csproj --no-restore --logger 'trx;LogFileName=retirement-final.trx' --results-directory ../../.data/level-results -v:q`.
+
+| Requirement | Evidence |
+| --- | --- |
+| Дневные маршруты и DTO удалены; через прежние ответы нельзя обойти текущий уровень | `OnlyLevelLearningRoutesRemainAndOldRoutesCannotBypassProgress` |
+| Дневные сущности удалены из модели, миграция не удаляет таблицы/данные | `RetiredEntitiesLeaveTheRuntimeModelWithoutDroppingHistoricalTables` |
+| Проверка словарных упражнений перенесена на текущий уровень | `WordPairsAreImportedIdempotentlyIssuedPrivatelyAndAnsweredOnlyByOwner` |
+| Пропуск слова и сборка предложения сохраняют условия и проверяются в уровне | `GapAndOrderSnapshotsSurviveRepeatedRequestsAndValidateAnswers` — оба вида |
+| Диктант и перевод аудио используют готовую запись и сохраняют ключ при смене решения | `AudioIsLazyDeduplicatedAndTranslationWaitsForAnAcceptedRendering` — оба вида |
+| Владение и общий прогресс сайта/бота проверяются через новые маршруты | `LevelAnswersBelongToLinkedStudentAndProgressPersistsAcrossWebsiteAndBot` |
+
+Прежние сценарии `DailyBossTests` удалены как проверки отменённого поведения; актуальное прохождение боссов покрывает `LevelFlowTests`. Проверка архива `RetirementPreservesDailyLearningArchiveWithoutRuntimeEntities` требует PostgreSQL и в текущем запуске пропущена. Схема миграции сверена с моделью и сгенерированным SQL; применение на настоящей БД в этом запуске не проверено. Сохранённый OpenAPI заново получен с локального Host: дневные пути/DTO отсутствуют, `/learning/*` присутствуют.
+
+## Историческая проверка уровней до очистки — 14 ноября 2026
+
+Итог текущего запуска: **95 пройдено, 0 ошибок, 9 пропущено** (8 проверок настоящего PostgreSQL без `BASHKIR_TEST_POSTGRES`, 1 проверка настоящего Silero без модели/Python). Новые `LevelFlowTests`: **9 пройдено, 0 ошибок, 0 пропусков**. TRX `levels-final.trx` разобран отдельно: total=104, executed=passed=95, failed=0; девять результатов `NotExecuted` соответствуют перечисленным внешним проверкам. Приведённые ниже более ранние запуски являются историческими.
+
+Команды из `src/main-api`:
+
+```powershell
+dotnet build BashkirSchool.slnx --no-restore --no-incremental -v:q
+dotnet test tests/BashkirSchool.Tests/BashkirSchool.Tests.csproj --no-build --logger 'trx;LogFileName=levels-final.trx' --results-directory ../../.data/level-results -v:q
+```
+
+Сборка: 0 предупреждений, 0 ошибок. OpenAPI заново получен с локально запущенного Host без подключения к БД; наличие новых публичных и внутренних маршрутов проверено. Миграция проверена по модели и сгенерированному SQL; её применение и параллельные запросы на настоящем PostgreSQL в этом запуске не проверялись. Сайт и реализация Telegram-бота не менялись.
+
+| Requirement | Evidence |
+| --- | --- |
+| 3–6 вопросов, ошибки в конце очереди, завершение только после всех правильных, статистика и повтор HTTP | `MistakesMoveToTailUntilEveryQuestionIsCorrectAndRetriesAreIdempotent` |
+| Только текущий вопрос, владение, сохранение между датами и каналами, независимый прогресс | `CurrentQuestionIsPrivateOwnedPersistentAndIndependentOfOtherPlayers` |
+| Учёба только с Community/Expert; Pending возвращается в проверки, выданный учебный ключ сохраняется | `EmptyAndUnresolvedCorpusCannotCreateLearningButCommunityAndExpertCan` |
+| До пятого уровня босса нет; после пяти — три разных реальных проверки, откладывание и накопление | `EveryFiveLevelsEarnAnOptionalBossWithThreeDistinctRealReviews` |
+| Недостаток материала, пропуск и истечение не завершают босса | `BossResumesWhenMaterialArrivesAndSkipsDoNotCompleteIt` |
+| Ввод первого перевода, восстановление по сохранённому ответу другого канала, разные фрагменты даже после интервала повтора | `BossCreationAnswersReconcileAcrossChannelsAndNeverRepeatACompletedFragment` |
+| Несколько исторических активных выдач при возврате в Pending не вызывают ошибку или новую выдачу | `RegainedPendingStateWithAnotherLiveAssignmentResumesWithoutDuplicateIssuance` |
+| Неверный JSON/токен не меняет прогресс; HTTP-схема и авторизация отражены в OpenAPI | `InvalidAnswersCannotAdvanceProgressAndLevelContractsDescribeActualRoutes` |
+| Модель соответствует миграции, новые таблицы и ограничения добавляются без удаления старых данных | `LevelMigrationMatchesModelAndKeepsLegacyLearningData` |
+
+Статическая проверка тестов: ожидаемые переводы заданы независимо от генератора ключей; проверяются конкретные номера, идентификаторы, счётчики и записи голосов, а также запреты доступа и отсутствие приватных ключей. Реальные мутации исходников и сбор покрытия не выполнялись.
+
+## Историческая проверка первого MVP
+
 14 ноября 2026. Итог: **51 тест пройден, 0 ошибок, 0 пропусков**. TRX проверен отдельно: total=executed=passed=51, failed=notExecuted=0.
 
 Команда: `dotnet test BashkirSchool.slnx --no-restore --logger "trx;LogFileName=core.trx" --results-directory TestResults`. Для PostgreSQL задан `BASHKIR_TEST_POSTGRES` на переносимый PostgreSQL 18.7, localhost:55432, отдельный тестовый кластер. Служба/Compose/Aspire не используются.

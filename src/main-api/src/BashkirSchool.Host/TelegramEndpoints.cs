@@ -4,6 +4,7 @@ using System.Text;
 using BashkirSchool.Application;
 using BashkirSchool.Infrastructure;
 using Microsoft.EntityFrameworkCore;
+using BashkirSchool.Host;
 
 public static class TelegramEndpoints
 {
@@ -29,6 +30,9 @@ public static class TelegramEndpoints
         });
         bot.MapPost("/link", async (long telegramId, CompleteTelegramLinkRequest request, TelegramStudents students, CancellationToken ct) =>
         { await students.LinkAsync(telegramId, request.Code, ct); return TypedResults.NoContent(); });
+        bot.MapGroup("/learning").MapLevelRoutes((context, ct) =>
+            context.RequestServices.GetRequiredService<TelegramStudents>().ResolveAsync(
+                long.Parse(context.Request.RouteValues["telegramId"]!.ToString()!), ct));
         bot.MapGet("/profile", async (long telegramId, TelegramStudents students, IndependentAccounts accounts, CoreDbContext db, CancellationToken ct) =>
         {
             var profile = await accounts.ProfileAsync(await students.ResolveAsync(telegramId, ct), ct);
@@ -36,18 +40,6 @@ public static class TelegramEndpoints
             var studyClass = await db.Classes.Where(x => x.Id == profile.ClassId).Select(x => x.Name).SingleOrDefaultAsync(ct);
             return new TelegramProfileResponse(profile.Id, profile.Username, profile.SchoolId, profile.ClassId, school, studyClass);
         });
-        bot.MapGet("/lesson", async (long telegramId, TelegramStudents students, LearningWorkflow learning, CancellationToken ct) =>
-            await learning.TodayAsync(await students.ResolveAsync(telegramId, ct), ct));
-        bot.MapPost("/lesson/boss", async (long telegramId, TelegramStudents students, LearningWorkflow learning, IReviewWorkflow reviews, CancellationToken ct) =>
-        {
-            var boss = await learning.StartBossAsync(await students.ResolveAsync(telegramId, ct), reviews, ct);
-            return boss is null ? Results.NoContent() : Results.Ok(boss);
-        }).Produces<AssignmentResponse>().Produces(StatusCodes.Status204NoContent);
-        bot.MapPost("/lesson/exercises", async (long telegramId, IssueExerciseRequest request, TelegramStudents students, LearningWorkflow learning, CancellationToken ct) =>
-        {
-            var exercise = await learning.IssueAsync(await students.ResolveAsync(telegramId, ct), request, ct);
-            return exercise is null ? Results.NoContent() : Results.Ok(exercise);
-        }).Produces<ExerciseResponse>().Produces(StatusCodes.Status204NoContent);
         bot.MapPost("/reviews/next", async (long telegramId, string? kind, TelegramStudents students, IReviewWorkflow reviews, CancellationToken ct) =>
         {
             var assignment = await reviews.ReceiveAsync(await students.ResolveAsync(telegramId, ct), kind ?? "translation-choice", ct);
@@ -56,8 +48,5 @@ public static class TelegramEndpoints
         bot.MapPost("/reviews/{assignmentId:guid}/response", async (long telegramId, Guid assignmentId, SubmitReviewRequest request,
             TelegramStudents students, IReviewWorkflow reviews, CancellationToken ct) =>
             await reviews.SubmitAsync(await students.ResolveAsync(telegramId, ct), assignmentId, request, ct));
-        bot.MapPost("/exercises/{exerciseId:guid}/answer", async (long telegramId, Guid exerciseId, SubmitExerciseAnswerRequest request,
-            TelegramStudents students, LearningWorkflow learning, CancellationToken ct) =>
-            await learning.AnswerAsync(await students.ResolveAsync(telegramId, ct), exerciseId, request, ct));
     }
 }

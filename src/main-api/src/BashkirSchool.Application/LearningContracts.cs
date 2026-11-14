@@ -1,28 +1,5 @@
-using System.Text.Json;
-
 namespace BashkirSchool.Application;
 
-/// <summary>An exercise prompt; accepted answers remain private to the server.</summary>
-public sealed record ExerciseResponse(Guid Id, string Original, bool Completed)
-{
-    public string Kind { get; init; } = "translation-text";
-    public int SchemaVersion { get; init; } = 1;
-    public JsonElement Prompt { get; init; }
-}
-/// <summary>A stable daily lesson and its progress.</summary>
-public sealed record LessonResponse(Guid Id, DateOnly Date, IReadOnlyList<ExerciseResponse> Exercises)
-{
-    public bool BossCompleted { get; init; }
-}
-/// <summary>A literal translation attempt evaluated against the issued material revision.</summary>
-public sealed record SubmitAttemptRequest(string Answer);
-/// <summary>Recognition by the issued answer key; unrecognized text is not a verdict about linguistic correctness.</summary>
-public sealed record AttemptResponse(Guid Id, bool Recognized);
-
-/// <summary>Requests a supported exercise; no answer key or author is accepted.</summary>
-public sealed record IssueExerciseRequest(string Kind, Guid? CaseId = null, string LanguagePair = "ba-ru");
-/// <summary>Kind-specific answer object, validated by the issued handler and schema version.</summary>
-public sealed record SubmitExerciseAnswerRequest(JsonElement Answer);
 public sealed record ExerciseKindResponse(string Kind, int SchemaVersion);
 public sealed record ExerciseItem(string Id, string Text);
 public sealed record WordPairAnswer(string LeftId, string RightId);

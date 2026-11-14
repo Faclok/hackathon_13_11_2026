@@ -10,6 +10,374 @@
     }
   ],
   "paths": {
+    "/api/learning/current": {
+      "post": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "summary": "Issue or resume the current personal level, exposing only its current question.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LevelResponse"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or session revoked."
+          },
+          "403": {
+            "description": "Permission or resource scope denied."
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/learning/levels/{levelId}/questions/{questionId}/answer": {
+      "post": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "summary": "Answer the current question; wrong answers return to the end of the queue.",
+        "parameters": [
+          {
+            "name": "levelId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "questionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerLevelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LevelAnswerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or session revoked."
+          },
+          "403": {
+            "description": "Permission or resource scope denied."
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/learning/progress": {
+      "get": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LevelProgressResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or session revoked."
+          },
+          "403": {
+            "description": "Permission or resource scope denied."
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/learning/statistics": {
+      "get": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LevelStatisticsResponse"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or session revoked."
+          },
+          "403": {
+            "description": "Permission or resource scope denied."
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/learning/boss": {
+      "post": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "summary": "Start or resume an optional three-translation boss earned every five completed levels.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LevelBossResponse"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or session revoked."
+          },
+          "403": {
+            "description": "Permission or resource scope denied."
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/learning/bosses/{bossId}/questions/{assignmentId}/answer": {
+      "post": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "parameters": [
+          {
+            "name": "bossId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "assignmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitReviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LevelBossAnswerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or session revoked."
+          },
+          "403": {
+            "description": "Permission or resource scope denied."
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/health/live": {
       "get": {
         "tags": [
@@ -938,6 +1306,74 @@
         ]
       }
     },
+    "/api/expert/preferences": {
+      "get": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpertPreferencesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or session revoked."
+          },
+          "403": {
+            "description": "Permission or resource scope denied."
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExpertPreferencesResponse"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpertPreferencesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or session revoked."
+          },
+          "403": {
+            "description": "Permission or resource scope denied."
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/expert/cases/{caseId}/claim": {
       "post": {
         "tags": [
@@ -1264,87 +1700,6 @@
         ]
       }
     },
-    "/api/lessons/today": {
-      "get": {
-        "tags": [
-          "BashkirSchool.Host"
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LessonResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication required or session revoked."
-          },
-          "403": {
-            "description": "Permission or resource scope denied."
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      }
-    },
-    "/api/exercises/{exerciseId}/attempt": {
-      "post": {
-        "tags": [
-          "BashkirSchool.Host"
-        ],
-        "parameters": [
-          {
-            "name": "exerciseId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SubmitAttemptRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AttemptResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication required or session revoked."
-          },
-          "403": {
-            "description": "Permission or resource scope denied."
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      }
-    },
     "/api/exercises/kinds": {
       "get": {
         "tags": [
@@ -1362,154 +1717,6 @@
                   "items": {
                     "$ref": "#/components/schemas/ExerciseKindResponse"
                   }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication required or session revoked."
-          },
-          "403": {
-            "description": "Permission or resource scope denied."
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      }
-    },
-    "/api/lessons/today/exercises": {
-      "post": {
-        "tags": [
-          "BashkirSchool.Host"
-        ],
-        "summary": "Issue or resume today's exercise of a requested kind; audio is prepared lazily.",
-        "operationId": "IssueExercise",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/IssueExerciseRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ExerciseResponse"
-                }
-              }
-            }
-          },
-          "204": {
-            "description": "No Content"
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication required or session revoked."
-          },
-          "403": {
-            "description": "Permission or resource scope denied."
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      }
-    },
-    "/api/exercises/{exerciseId}/answer": {
-      "post": {
-        "tags": [
-          "BashkirSchool.Host"
-        ],
-        "summary": "Submit a kind-specific answer without exposing the private answer key.",
-        "operationId": "SubmitExerciseAnswer",
-        "parameters": [
-          {
-            "name": "exerciseId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SubmitExerciseAnswerRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AttemptResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -1876,6 +2083,156 @@
         ]
       }
     },
+    "/api/expert/imports": {
+      "post": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExpertDatasetRow"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpertDatasetReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or session revoked."
+          },
+          "403": {
+            "description": "Permission or resource scope denied."
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/expert/untranslated": {
+      "get": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UntranslatedFragment"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or session revoked."
+          },
+          "403": {
+            "description": "Permission or resource scope denied."
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/expert/fragments/{fragmentId}/translation": {
+      "post": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "parameters": [
+          {
+            "name": "fragmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifiedFragmentTranslation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpertDatasetReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or session revoked."
+          },
+          "403": {
+            "description": "Permission or resource scope denied."
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/reviews/next": {
       "post": {
         "tags": [
@@ -2075,38 +2432,7 @@
         }
       }
     },
-    "/internal/telegram/{telegramId}/lesson": {
-      "get": {
-        "tags": [
-          "BashkirSchool.Host"
-        ],
-        "parameters": [
-          {
-            "name": "telegramId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "pattern": "^-?(?:0|[1-9]\\d*)$",
-              "type": "integer",
-              "format": "int64"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LessonResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/internal/telegram/{telegramId}/exercises/{exerciseId}/answer": {
+    "/internal/telegram/{telegramId}/reviews/next": {
       "post": {
         "tags": [
           "BashkirSchool.Host"
@@ -2123,7 +2449,48 @@
             }
           },
           {
-            "name": "exerciseId",
+            "name": "kind",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssignmentResponse"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/internal/telegram/{telegramId}/reviews/{assignmentId}/response": {
+      "post": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "parameters": [
+          {
+            "name": "telegramId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "assignmentId",
             "in": "path",
             "required": true,
             "schema": {
@@ -2136,7 +2503,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SubmitExerciseAnswerRequest"
+                "$ref": "#/components/schemas/SubmitReviewRequest"
               }
             }
           },
@@ -2148,7 +2515,309 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AttemptResponse"
+                  "$ref": "#/components/schemas/ReviewReceipt"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/telegram/{telegramId}/learning/current": {
+      "post": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "summary": "Issue or resume the current personal level, exposing only its current question.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LevelResponse"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/telegram/{telegramId}/learning/levels/{levelId}/questions/{questionId}/answer": {
+      "post": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "summary": "Answer the current question; wrong answers return to the end of the queue.",
+        "parameters": [
+          {
+            "name": "levelId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "questionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerLevelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LevelAnswerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/telegram/{telegramId}/learning/progress": {
+      "get": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LevelProgressResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/telegram/{telegramId}/learning/statistics": {
+      "get": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LevelStatisticsResponse"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/telegram/{telegramId}/learning/boss": {
+      "post": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "summary": "Start or resume an optional three-translation boss earned every five completed levels.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LevelBossResponse"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/telegram/{telegramId}/learning/bosses/{bossId}/questions/{assignmentId}/answer": {
+      "post": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "parameters": [
+          {
+            "name": "bossId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "assignmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitReviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LevelBossAnswerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -2455,47 +3124,7 @@
         ]
       }
     },
-    "/api/expert/imports": {
-      "post": {
-        "tags": [
-          "BashkirSchool.Host"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ExpertDatasetRow"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ExpertDatasetReceipt"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication required or session revoked."
-          },
-          "403": {
-            "description": "Permission or resource scope denied."
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      }
-    },
-    "/api/expert/untranslated": {
+    "/api/lms-source/translations": {
       "get": {
         "tags": [
           "BashkirSchool.Host"
@@ -2505,9 +3134,10 @@
             "name": "offset",
             "in": "query",
             "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
               "type": [
-                "null",
-                "integer"
+                "integer",
+                "string"
               ],
               "format": "int32"
             }
@@ -2516,27 +3146,25 @@
             "name": "limit",
             "in": "query",
             "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
               "type": [
-                "null",
-                "integer"
+                "integer",
+                "string"
               ],
               "format": "int32"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/UntranslatedFragment"
-                  }
-                }
-              }
-            }
+            "description": "OK"
           },
           "401": {
             "description": "Authentication required or session revoked."
@@ -2552,14 +3180,114 @@
         ]
       }
     },
-    "/api/expert/fragments/{fragmentId}/translation": {
+    "/api/lms-source/participants/lookup": {
+      "get": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "parameters": [
+          {
+            "name": "username",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Authentication required or session revoked."
+          },
+          "403": {
+            "description": "Permission or resource scope denied."
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/lms-source/translations/{caseId}": {
+      "get": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Authentication required or session revoked."
+          },
+          "403": {
+            "description": "Permission or resource scope denied."
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/lms-source/teacher/translations": {
+      "post": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeacherCandidateInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Authentication required or session revoked."
+          },
+          "403": {
+            "description": "Permission or resource scope denied."
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/lms-source/translations/{caseId}/expert-request": {
       "post": {
         "tags": [
           "BashkirSchool.Host"
         ],
         "parameters": [
           {
-            "name": "fragmentId",
+            "name": "caseId",
             "in": "path",
             "required": true,
             "schema": {
@@ -2572,7 +3300,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/VerifiedFragmentTranslation"
+                "$ref": "#/components/schemas/ExpertRequestInput"
               }
             }
           },
@@ -2580,14 +3308,7 @@
         },
         "responses": {
           "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ExpertDatasetReceipt"
-                }
-              }
-            }
+            "description": "OK"
           },
           "401": {
             "description": "Authentication required or session revoked."
@@ -2710,6 +3431,23 @@
         },
         "additionalProperties": false
       },
+      "AnswerLevelRequest": {
+        "required": [
+          "attemptToken",
+          "answer"
+        ],
+        "type": "object",
+        "properties": {
+          "attemptToken": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "answer": {
+            "$ref": "#/components/schemas/JsonElement"
+          }
+        },
+        "additionalProperties": false
+      },
       "AssignAccessRequest": {
         "required": [
           "profile"
@@ -2779,23 +3517,6 @@
             }
           },
           "allowCustom": {
-            "type": "boolean"
-          }
-        },
-        "additionalProperties": false
-      },
-      "AttemptResponse": {
-        "required": [
-          "id",
-          "recognized"
-        ],
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "recognized": {
             "type": "boolean"
           }
         },
@@ -3150,7 +3871,7 @@
               "string"
             ],
             "format": "int32",
-            "default": 100
+            "default": 300
           },
           "supportThreshold": {
             "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
@@ -3159,7 +3880,7 @@
               "string"
             ],
             "format": "double",
-            "default": 0.8
+            "default": 0.51
           },
           "minimumSchools": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
@@ -3274,41 +3995,6 @@
         },
         "additionalProperties": false
       },
-      "ExerciseResponse": {
-        "required": [
-          "id",
-          "original",
-          "completed"
-        ],
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "original": {
-            "type": "string"
-          },
-          "completed": {
-            "type": "boolean"
-          },
-          "kind": {
-            "type": "string"
-          },
-          "schemaVersion": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "int32"
-          },
-          "prompt": {
-            "$ref": "#/components/schemas/JsonElement"
-          }
-        },
-        "additionalProperties": false
-      },
       "ExpertCaseResponse": {
         "required": [
           "caseId",
@@ -3369,6 +4055,12 @@
           "fragmentId": {
             "type": "string",
             "format": "uuid"
+          },
+          "teacherNote": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         },
         "additionalProperties": false
@@ -3379,7 +4071,8 @@
           "taken",
           "completed",
           "requiredParticipants",
-          "supportThreshold"
+          "supportThreshold",
+          "totalCompleted"
         ],
         "type": "object",
         "properties": {
@@ -3422,6 +4115,108 @@
               "string"
             ],
             "format": "double"
+          },
+          "totalCompleted": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ExpertDatasetReceipt": {
+        "required": [
+          "fragmentId",
+          "caseId",
+          "variantId",
+          "status"
+        ],
+        "type": "object",
+        "properties": {
+          "fragmentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "caseId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "variantId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ExpertDatasetRow": {
+        "required": [
+          "fragment_id",
+          "text_ba",
+          "lang_pair",
+          "translation",
+          "expertVerified",
+          "source"
+        ],
+        "type": "object",
+        "properties": {
+          "fragment_id": {
+            "type": "string"
+          },
+          "text_ba": {
+            "type": "string"
+          },
+          "lang_pair": {
+            "type": "string"
+          },
+          "translation": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "expertVerified": {
+            "type": "boolean"
+          },
+          "source": {
+            "$ref": "#/components/schemas/SourceReference"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ExpertPreferencesResponse": {
+        "required": [
+          "requiredParticipants",
+          "supportThreshold"
+        ],
+        "type": "object",
+        "properties": {
+          "requiredParticipants": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "supportThreshold": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
           }
         },
         "additionalProperties": false
@@ -3434,7 +4229,8 @@
           "disputed",
           "observations",
           "leadingSupport",
-          "createdAt"
+          "createdAt",
+          "teacherRequested"
         ],
         "type": "object",
         "properties": {
@@ -3477,8 +4273,23 @@
             "type": "string",
             "format": "date-time"
           },
+          "teacherRequested": {
+            "type": "boolean"
+          },
           "untranslated": {
             "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ExpertRequestInput": {
+        "required": [
+          "note"
+        ],
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string"
           }
         },
         "additionalProperties": false
@@ -3598,35 +4409,56 @@
         },
         "additionalProperties": false
       },
-      "IssueExerciseRequest": {
+      "JsonElement": { },
+      "LevelAnswerResponse": {
         "required": [
-          "kind"
+          "attemptToken",
+          "recognized",
+          "levelCompleted"
         ],
         "type": "object",
         "properties": {
-          "kind": {
-            "type": "string"
-          },
-          "caseId": {
-            "type": [
-              "null",
-              "string"
-            ],
+          "attemptToken": {
+            "type": "string",
             "format": "uuid"
           },
-          "languagePair": {
-            "type": "string",
-            "default": "ba-ru"
+          "recognized": {
+            "type": "boolean"
+          },
+          "levelCompleted": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false
       },
-      "JsonElement": { },
-      "LessonResponse": {
+      "LevelBossAnswerResponse": {
+        "required": [
+          "responseId",
+          "archived",
+          "bossCompleted"
+        ],
+        "type": "object",
+        "properties": {
+          "responseId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "archived": {
+            "type": "boolean"
+          },
+          "bossCompleted": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "LevelBossResponse": {
         "required": [
           "id",
-          "date",
-          "exercises"
+          "checkpoint",
+          "questionCount",
+          "completedCount",
+          "question"
         ],
         "type": "object",
         "properties": {
@@ -3634,15 +4466,237 @@
             "type": "string",
             "format": "uuid"
           },
-          "date": {
-            "type": "string",
-            "format": "date"
+          "checkpoint": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
-          "exercises": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ExerciseResponse"
-            }
+          "questionCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "completedCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "question": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AssignmentResponse"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "LevelProgressResponse": {
+        "required": [
+          "completedLevels",
+          "completedBosses",
+          "availableBosses",
+          "attempts",
+          "mistakes"
+        ],
+        "type": "object",
+        "properties": {
+          "completedLevels": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "completedBosses": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "availableBosses": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "attempts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "mistakes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "LevelQuestionResponse": {
+        "required": [
+          "id",
+          "attemptToken",
+          "kind",
+          "schemaVersion",
+          "prompt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "attemptToken": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "schemaVersion": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "prompt": {
+            "$ref": "#/components/schemas/JsonElement"
+          }
+        },
+        "additionalProperties": false
+      },
+      "LevelResponse": {
+        "required": [
+          "id",
+          "number",
+          "questionCount",
+          "correctCount",
+          "question"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "number": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "questionCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "correctCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "question": {
+            "$ref": "#/components/schemas/LevelQuestionResponse"
+          }
+        },
+        "additionalProperties": false
+      },
+      "LevelStatisticsResponse": {
+        "required": [
+          "number",
+          "questionCount",
+          "correctCount",
+          "attempts",
+          "mistakes",
+          "startedAt",
+          "completedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "number": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "questionCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "correctCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "attempts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "mistakes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
           }
         },
         "additionalProperties": false
@@ -4080,30 +5134,6 @@
         },
         "additionalProperties": false
       },
-      "SubmitAttemptRequest": {
-        "required": [
-          "answer"
-        ],
-        "type": "object",
-        "properties": {
-          "answer": {
-            "type": "string"
-          }
-        },
-        "additionalProperties": false
-      },
-      "SubmitExerciseAnswerRequest": {
-        "required": [
-          "answer"
-        ],
-        "type": "object",
-        "properties": {
-          "answer": {
-            "$ref": "#/components/schemas/JsonElement"
-          }
-        },
-        "additionalProperties": false
-      },
       "SubmitReviewRequest": {
         "required": [
           "action"
@@ -4125,6 +5155,31 @@
               "string"
             ],
             "format": "uuid"
+          }
+        },
+        "additionalProperties": false
+      },
+      "TeacherCandidateInput": {
+        "required": [
+          "externalId",
+          "sourceText",
+          "translationText",
+          "languagePair"
+        ],
+        "type": "object",
+        "properties": {
+          "externalId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sourceText": {
+            "type": "string"
+          },
+          "translationText": {
+            "type": "string"
+          },
+          "languagePair": {
+            "type": "string"
           }
         },
         "additionalProperties": false
@@ -4199,6 +5254,35 @@
         },
         "additionalProperties": false
       },
+      "UntranslatedFragment": {
+        "required": [
+          "fragmentId",
+          "externalId",
+          "textBa",
+          "languagePair",
+          "source"
+        ],
+        "type": "object",
+        "properties": {
+          "fragmentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "externalId": {
+            "type": "string"
+          },
+          "textBa": {
+            "type": "string"
+          },
+          "languagePair": {
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/SourceReference"
+          }
+        },
+        "additionalProperties": false
+      },
       "VariantEvidence": {
         "required": [
           "id",
@@ -4267,6 +5351,18 @@
         },
         "additionalProperties": false
       },
+      "VerifiedFragmentTranslation": {
+        "required": [
+          "translation"
+        ],
+        "type": "object",
+        "properties": {
+          "translation": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
       "VocabularyDeliveryResponse": {
         "required": [
           "ids"
@@ -4293,112 +5389,6 @@
           "word": {
             "type": "string"
           },
-          "translation": {
-            "type": "string"
-          }
-        },
-        "additionalProperties": false
-      },
-      "ExpertDatasetRow": {
-        "required": [
-          "fragment_id",
-          "text_ba",
-          "lang_pair",
-          "expertVerified",
-          "source"
-        ],
-        "type": "object",
-        "properties": {
-          "fragment_id": {
-            "type": "string"
-          },
-          "text_ba": {
-            "type": "string"
-          },
-          "lang_pair": {
-            "type": "string"
-          },
-          "translation": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "expertVerified": {
-            "type": "boolean"
-          },
-          "source": {
-            "$ref": "#/components/schemas/SourceReference"
-          }
-        },
-        "additionalProperties": false
-      },
-      "ExpertDatasetReceipt": {
-        "required": [
-          "fragmentId",
-          "status"
-        ],
-        "type": "object",
-        "properties": {
-          "fragmentId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "caseId": {
-            "type": [
-              "null",
-              "string"
-            ],
-            "format": "uuid"
-          },
-          "variantId": {
-            "type": [
-              "null",
-              "string"
-            ],
-            "format": "uuid"
-          },
-          "status": {
-            "type": "string"
-          }
-        },
-        "additionalProperties": false
-      },
-      "UntranslatedFragment": {
-        "required": [
-          "fragmentId",
-          "externalId",
-          "textBa",
-          "languagePair",
-          "source"
-        ],
-        "type": "object",
-        "properties": {
-          "fragmentId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "externalId": {
-            "type": "string"
-          },
-          "textBa": {
-            "type": "string"
-          },
-          "languagePair": {
-            "type": "string"
-          },
-          "source": {
-            "$ref": "#/components/schemas/SourceReference"
-          }
-        },
-        "additionalProperties": false
-      },
-      "VerifiedFragmentTranslation": {
-        "required": [
-          "translation"
-        ],
-        "type": "object",
-        "properties": {
           "translation": {
             "type": "string"
           }

@@ -22,7 +22,7 @@ public sealed class ManualClock : TimeProvider
     public override DateTimeOffset GetUtcNow() => Now;
 }
 
-public sealed class CoreFactory(int registrationLimit = 10, string? telegramKey = null, string? lmsKey = null) : WebApplicationFactory<Program>
+public sealed class CoreFactory(int registrationLimit = 10, string? telegramKey = null, string? lmsKey = null, string? learningKind = null) : WebApplicationFactory<Program>
 {
     public const string Password = "School.Test.Password123!";
     private readonly SqliteConnection connection = new("Data Source=:memory:");
@@ -37,6 +37,8 @@ public sealed class CoreFactory(int registrationLimit = 10, string? telegramKey 
         if (telegramKey is not null) builder.UseSetting("Telegram:InternalKey", telegramKey);
         if (lmsKey is not null) builder.UseSetting("Lms:InternalKey", lmsKey);
         builder.UseSetting("Database:InitializeOnStartup", "false");
+        if (learningKind is not null)
+            for (var i = 0; i < 6; i++) builder.UseSetting($"Learning:Kinds:{i}", learningKind);
         builder.UseSetting("Processing:BackgroundEnabled", "false");
         builder.UseSetting("Registration:PermitLimit", registrationLimit.ToString());
         builder.UseSetting("Jwt:Issuer", "school-tests");
@@ -78,6 +80,13 @@ public sealed class CoreFactory(int registrationLimit = 10, string? telegramKey 
         if (!response.IsSuccessStatusCode) throw new Xunit.Sdk.XunitException($"{url}: {(int)response.StatusCode} {await response.Content.ReadAsStringAsync()}");
         return (await response.Content.ReadFromJsonAsync<T>(Json))!;
     }
+
+    public static Task<LevelResponse> CurrentLevel(HttpClient client) => Post<LevelResponse>(client, "/api/learning/current", new { });
+    public static string LevelAnswerUrl(LevelResponse level) => $"/api/learning/levels/{level.Id}/questions/{level.Question.Id}/answer";
+    public static Task<LevelAnswerResponse> AnswerLevel(HttpClient client, LevelResponse level, object answer) =>
+        Post<LevelAnswerResponse>(client, LevelAnswerUrl(level), new AnswerLevelRequest(level.Question.AttemptToken, ExerciseJson.Element(answer)));
+    public static Task<ExpertDatasetReceipt> LearningContent(HttpClient admin, string text = "Һаумы", string translation = "Hello") =>
+        Post<ExpertDatasetReceipt>(admin, "/api/expert/imports", new ExpertDatasetRow("test-learning", text, "ba-ru", translation, true, new SourceReference("test")));
 
     public async Task<(HttpClient Client, Guid Id, Guid ClassId)> Student(HttpClient admin, string suffix = "1")
     {

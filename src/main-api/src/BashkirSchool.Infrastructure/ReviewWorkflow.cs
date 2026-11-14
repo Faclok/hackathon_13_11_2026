@@ -10,24 +10,33 @@ public sealed class ReviewWorkflow(CoreDbContext db, IPermissionChecker permissi
         => await ReceiveAsync(participant, "translation-confirm", ct);
 
     public async Task<AssignmentResponse?> ReceiveAsync(Guid participant, string kind, CancellationToken ct)
+        => await ReceiveAsync(participant, kind, [], ct);
+
+    public async Task<AssignmentResponse?> ReceiveAsync(Guid participant, string kind, IReadOnlyCollection<Guid> excludedCaseIds, CancellationToken ct)
     {
-        if (kind is not ("translation-confirm" or "translation-choice" or "translation-create")) throw new DomainException("Unknown review kind.");
+        if (kind is not ("translation-confirm" or "translation-choice" or "translation-create" or "translation-auto")) throw new DomainException("Unknown review kind.");
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
         // One small application's allocator serializes reservations; no external lock service is needed.
         if (db.Database.IsNpgsql()) await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(71830421)", ct);
         await Require(participant, "reviews.receive", ct);
         var now = clock.GetUtcNow();
-        var active = await db.Assignments.SingleOrDefaultAsync(x => x.ParticipantId == participant && !x.Completed && x.ExpiresAt > now, ct);
+        var unresolved = db.Cases.Where(c => !c.ExpertClosed && (c.ResolutionId == null ||
+            db.Resolutions.Any(r => r.Id == c.ResolutionId && r.Kind == ResolutionKind.Pending)));
+        var excluded = excludedCaseIds.ToArray();
+        unresolved = unresolved.Where(c => !excluded.Contains(c.Id));
+        var active = await db.Assignments.Where(x => x.ParticipantId == participant && !x.Completed && x.ExpiresAt > now &&
+            unresolved.Any(c => c.Id == x.CaseId)).OrderByDescending(x => x.IssuedAt).ThenBy(x => x.Id).FirstOrDefaultAsync(ct);
         if (active is not null) return await View(active, ct);
         var group = await (from e in db.Enrollments where e.ParticipantId == participant
                            join c in db.Classes on e.ClassId equals c.Id
                            select new { ClassId = c.Id, c.SchoolId }).SingleOrDefaultAsync(ct);
         var policy = await db.Policies.OrderByDescending(x => x.Version).FirstOrDefaultAsync(ct)
             ?? throw new ConflictException("An administrator must configure distribution first.");
-        var candidateQuery = db.Cases.Where(x => !x.ExpertClosed);
+        var candidateQuery = unresolved;
         candidateQuery = kind == "translation-create"
             ? candidateQuery.Where(c => db.Variants.Any(v => v.CaseId == c.Id && v.Text == "") &&
                 !db.Variants.Any(v => v.CaseId == c.Id && v.Text != ""))
+            : kind == "translation-auto" ? candidateQuery
             : candidateQuery.Where(c => db.Variants.Any(v => v.CaseId == c.Id && v.Text != ""));
         var candidates = await candidateQuery.OrderBy(x => x.CreatedAt).ThenBy(x => x.Id)
             .Take(policy.WorkingSetSize).ToArrayAsync(ct);
@@ -51,6 +60,9 @@ public sealed class ReviewWorkflow(CoreDbContext db, IPermissionChecker permissi
             .OrderBy(x => x.SchoolCount).ThenBy(x => x.ClassCount).ThenBy(x => x.Repeats)
             .ThenBy(x => group is null ? x.CoverageCount : 0).ThenBy(x => x.Case.CreatedAt).ThenBy(x => x.Case.Id).FirstOrDefault();
         if (eligible is null) return null;
+        if (kind == "translation-auto")
+            kind = await db.Variants.AnyAsync(v => v.CaseId == eligible.Case.Id && v.Text != "", ct)
+                ? "translation-confirm" : "translation-create";
         var variants = await db.Variants.Where(x => x.CaseId == eligible.Case.Id && x.CreatedBy != participant &&
             (kind == "translation-create" ? x.Text == "" : x.Text != "")).ToArrayAsync(ct);
         var shownVariant = variants.OrderBy(v => assignments.Count(a => a.CaseId == eligible.Case.Id && a.ShownVariantId == v.Id && (a.Completed || a.ExpiresAt > now)))

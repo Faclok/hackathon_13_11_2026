@@ -32,7 +32,7 @@ public static class DependencyInjection
         services.AddScoped<ExpertReviews>();
         services.AddScoped<TranslationExport>();
         services.AddScoped<ResolutionProcessor>();
-        services.AddScoped<LearningWorkflow>();
+        services.AddScoped<LevelWorkflow>();
         services.AddScoped<LearningMaterials>();
         services.AddScoped<AudioPreparation>();
         services.AddSingleton<IExerciseHandler, TranslationTextHandler>();
