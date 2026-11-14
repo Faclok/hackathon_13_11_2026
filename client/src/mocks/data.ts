@@ -19,7 +19,18 @@ export const demoUser: User = {
   tasksSolved: 700,
   accuracy: 96,
   trophyIds: ["first", "learner", "week", "kurai", "epic", "month", "master"],
-  ownedDecorationIds: ["mint", "green", "honey", "hat"],
+  ownedDecorationIds: [
+    "mint",
+    "green",
+    "honey",
+    "hat",
+    "hat_none",
+    "frame_none",
+    "bg_default",
+    "pet_none",
+  ],
+  caseKeys: 0,
+  equippedItemIds: ["honey", "hat"],
   backgroundId: "mint",
   frameId: "green",
   langPair: "ba-ru",
@@ -442,6 +453,12 @@ export const leaderboardUsers: User[] = [
   backgroundId: ["steppe", "yurt", "mountain", "ornament"][i % 4],
   frameId: i % 2 ? "gold" : "green",
   ownedDecorationIds:
+    i % 3 === 0
+      ? ["honey", "hat", "kurai"]
+      : i % 3 === 1
+        ? ["kurai", "kubyz"]
+        : ["honey"],
+  equippedItemIds:
     i % 3 === 0
       ? ["honey", "hat", "kurai"]
       : i % 3 === 1

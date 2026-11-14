@@ -13,14 +13,9 @@ import Home from "./pages/Home";
 import Learn from "./pages/Learn";
 import Lesson, { LessonResult } from "./pages/Lesson";
 import Boss from "./pages/Boss";
-import {
-  Leaderboard,
-  Login,
-  NotFound,
-  Profile,
-  Shop,
-  Wheel,
-} from "./pages/Community";
+import Inventory from "./pages/Inventory";
+import Cases from "./pages/Cases";
+import { Leaderboard, Login, NotFound, Profile } from "./pages/Community";
 import "./index.css";
 
 function AuthGuard() {
@@ -61,8 +56,12 @@ export default function App() {
               <Route path="boss" element={<Boss />} />
               <Route path="leaderboard" element={<Leaderboard />} />
               <Route path="profile" element={<Profile />} />
-              <Route path="shop" element={<Shop />} />
-              <Route path="wheel" element={<Wheel />} />
+              <Route path="inventory" element={<Inventory />} />
+              <Route
+                path="shop"
+                element={<Navigate to="/inventory" replace />}
+              />
+              <Route path="wheel" element={<Cases />} />
               <Route path="*" element={<NotFound />} />
             </Route>
           </Route>
