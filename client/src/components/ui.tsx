@@ -41,6 +41,12 @@ const paths: Record<string, ReactNode> = {
       <path d="M4 7h16l1 14H3L4 7Zm4 1V6a4 4 0 0 1 8 0v2" />
     </>
   ),
+  key: (
+    <>
+      <circle cx="8" cy="8" r="5" />
+      <path d="m11.5 11.5 9 9m-3-3 3-3m-6 0 3-3" />
+    </>
+  ),
   wheel: (
     <>
       <circle cx="12" cy="12" r="9" />
@@ -125,10 +131,14 @@ export function Modal({
   title,
   children,
   onClose,
+  dismissible = true,
+  className = "",
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
+  dismissible?: boolean;
+  className?: string;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -143,17 +153,26 @@ export function Modal({
   return (
     <dialog
       ref={dialog}
-      className="modal"
-      onCancel={onClose}
+      className={`modal ${className}`}
+      onCancel={(event) => {
+        event.preventDefault();
+        if (dismissible) onClose();
+      }}
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (dismissible && e.target === e.currentTarget) onClose();
       }}
     >
       <div className="modal-top">
         <h2>{title}</h2>
-        <button className="icon-button" onClick={onClose} aria-label="Закрыть">
-          ×
-        </button>
+        {dismissible && (
+          <button
+            className="icon-button"
+            onClick={onClose}
+            aria-label="Закрыть"
+          >
+            ×
+          </button>
+        )}
       </div>
       {children}
     </dialog>

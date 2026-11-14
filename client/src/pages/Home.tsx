@@ -23,17 +23,17 @@ const quickActions = [
     color: "yellow",
   },
   {
-    to: "/shop",
+    to: "/inventory",
     icon: "bag",
-    title: "Магазин",
-    detail: "Добавь свой характер",
+    title: "Инвентарь",
+    detail: "Твои находки и украшения",
     color: "purple",
   },
   {
     to: "/wheel",
     icon: "wheel",
     title: "Барабан",
-    detail: "Навстречу удаче",
+    detail: "Испытай удачу",
     color: "blue",
   },
 ];

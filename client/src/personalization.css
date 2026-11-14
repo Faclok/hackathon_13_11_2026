@@ -337,3 +337,125 @@ button.floating-item:hover {
 .shop-preview .floating-item:nth-child(n + 3) {
   display: none;
 }
+
+.avatar-hat {
+  position: absolute;
+  top: -28%;
+  left: -12%;
+  width: 124%;
+  height: 64%;
+  z-index: 4;
+  pointer-events: none;
+}
+.avatar-hat svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 2px 2px #26361d30);
+}
+.player-avatar.frame-frame_neon_leaf {
+  background: #79d49b;
+  box-shadow:
+    0 0 0 2px #d3f4df,
+    0 0 10px #4ade8077;
+}
+.player-avatar.frame-frame_fire_streak {
+  background: linear-gradient(135deg, #fbe39a, #ef7e41);
+  box-shadow:
+    0 0 0 2px #fff0d2,
+    0 0 10px #fb923c77;
+}
+.player-avatar.frame-frame_kurai_gold {
+  background: linear-gradient(135deg, #fff0a1, #d6a62f);
+  box-shadow:
+    0 0 0 2px #fff5d1,
+    0 0 12px #fcd34d88;
+}
+.player-avatar.frame-frame_ural_gems {
+  background: conic-gradient(#c0f5fa, #71afcc, #d7faff, #71afcc, #c0f5fa);
+  box-shadow:
+    0 0 0 3px #b4e6ef,
+    0 0 13px #67e8f977;
+}
+.custom-background .personal-ornaments {
+  opacity: 0.13;
+  color: #fff;
+}
+.personal-card:has(> .custom-background) > .personal-content {
+  color: #fff;
+}
+.personal-card:has(> .custom-background) .personal-content > p,
+.personal-card:has(> .custom-background) .personal-content .xp-caption,
+.personal-card:has(> .custom-background) .personal-content .podium-label {
+  color: #edf7e5;
+}
+.personal-card:has(> .custom-background) .podium-value {
+  color: #fff;
+}
+.personal-card:has(> .custom-background)
+  .personal-content
+  > a:not(.customize-link) {
+  color: #edf7e5;
+}
+.personal-card:has(> .custom-background) .equipped-pet small {
+  color: #f3faea;
+}
+.equipped-pet {
+  position: absolute;
+  right: 20px;
+  bottom: 24px;
+  width: 52px;
+  background: transparent;
+  text-align: center;
+}
+button.equipped-pet {
+  pointer-events: auto;
+}
+.equipped-pet > span {
+  display: block;
+  font-size: 36px;
+  line-height: 42px;
+  filter: drop-shadow(0 3px 3px #26361d19);
+}
+.equipped-pet > small {
+  display: block;
+  margin-top: 3px;
+  color: #728a60;
+  font-size: 8px;
+}
+.podium-card .equipped-pet {
+  right: 5px;
+  bottom: 78px;
+  width: 33px;
+}
+.podium-card .equipped-pet > span {
+  font-size: 25px;
+  line-height: 30px;
+}
+.podium-card .equipped-pet > small {
+  font-size: 7px;
+}
+.shop-preview .equipped-pet {
+  right: 14px;
+  bottom: 7px;
+  width: 28px;
+}
+.shop-preview .equipped-pet > span {
+  font-size: 24px;
+  line-height: 28px;
+}
+.shop-preview .equipped-pet > small {
+  display: none;
+}
+.shop-preview:has(.equipped-pet) .floating-item:nth-child(2) {
+  right: 10px;
+  bottom: 45px;
+}
+.pet-preview-name {
+  display: block;
+  font-size: 10px;
+  margin-top: 8px;
+  text-align: center;
+  color: #7b916b;
+  line-height: 16px;
+}
