@@ -23,8 +23,10 @@ public sealed class ExerciseMigrationTests
         var variant = TranslationVariant.Create(translationCase.Id, "Здравствуйте", true, translationCase.ShownVariantId);
         var policy = new DistributionPolicy { ChangedBy = account.Id, Version = 1 };
         var resolution = ResolutionRevision.Create(translationCase.Id, 1, ResolutionKind.Community, variant.Id, [variant.Id], [], policy.Id, null, "{}", null, DateTimeOffset.UtcNow);
-        db.AddRange(account, participant, lesson, fragment, translationCase, variant, policy, resolution);
+        db.AddRange(account, participant, fragment, translationCase, variant, policy, resolution);
         await db.SaveChangesAsync();
+        // This fixture targets the historical schema, before later lesson columns exist.
+        await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO \"DailyLesson\" (\"Id\", \"ParticipantId\", \"Date\") VALUES ({lesson.Id}, {lesson.ParticipantId}, {lesson.Date})");
         var exerciseId = Guid.NewGuid(); var key = "[\"Здравствуйте\"]";
         await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO \"Exercise\" (\"Id\", \"LessonId\", \"CaseId\", \"ResolutionId\", \"Original\", \"AcceptedTextsJson\") VALUES ({exerciseId}, {lesson.Id}, {translationCase.Id}, {resolution.Id}, {fragment.Text}, {key})");
         await migrator.MigrateAsync(); db.ChangeTracker.Clear();

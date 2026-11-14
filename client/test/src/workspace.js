@@ -172,6 +172,39 @@ function renderLesson(data, preview = false) {
   const completed = data.exercises.filter(exercise => exercise.completed).length;
   $('#exercises').replaceChildren(element('p', `${preview ? 'Пример урока' : 'Дата: ' + data.date}. Выполнено ${completed} из ${data.exercises.length}.`, { className: 'lesson-progress' }));
   for (const exercise of data.exercises) $('#exercises').append(renderExercise(exercise, { preview, actorId: state.active }));
+  const boss = element('section', '', { className: 'exercise-card' });
+  boss.append(element('h3', 'Финальный босс — проверка перевода'));
+  if (data.bossCompleted) {
+    boss.append(element('p', 'Босс пройден. Ежедневные задания завершены.'));
+  } else {
+    boss.append(element('p', completed < data.exercises.length
+      ? 'Сначала выполните учебные упражнения. Последнее задание — подтвердить или исправить перевод реального фрагмента.'
+      : 'Упражнения выполнены. Подтвердите или исправьте перевод, чтобы завершить дневной урок.'));
+    const start = element('button', 'Открыть или продолжить босса', { type: 'button', disabled: preview || completed < data.exercises.length });
+    start.dataset.action = 'lesson-boss';
+    boss.append(start, element('div', '', { id: 'daily-boss-body' }));
+  }
+  $('#exercises').append(boss);
+}
+function renderDailyBoss(assignment) {
+  const target = $('#daily-boss-body'); target.replaceChildren();
+  target.append(element('h3', assignment.original), element('p', assignment.translation));
+  const confirm = element('form'); confirm.dataset.action = 'daily-boss-answer'; confirm.dataset.actor = state.active;
+  confirm.append(element('input', '', { type: 'hidden', name: 'assignmentId', value: assignment.id }),
+    element('input', '', { type: 'hidden', name: 'action', value: 'Confirm' }));
+  if (assignment.kind === 'translation-choice') {
+    const options = element('select', '', { name: 'selectedVariantId', required: true });
+    for (const option of assignment.options || []) options.append(element('option', option.text, { value: option.id }));
+    confirm.append(options);
+  }
+  confirm.append(element('button', 'Подтвердить перевод', { type: 'submit' }));
+  const correct = element('form'); correct.dataset.action = 'daily-boss-answer'; correct.dataset.actor = state.active;
+  const label = element('label', 'Ваш перевод');
+  label.append(element('textarea', '', { name: 'correction', required: true, rows: 3, maxLength: 1000 }));
+  correct.append(element('input', '', { type: 'hidden', name: 'assignmentId', value: assignment.id }),
+    element('input', '', { type: 'hidden', name: 'action', value: 'Correct' }), label,
+    element('button', 'Отправить исправление', { type: 'submit' }));
+  target.append(confirm, correct);
 }
 async function lmsLessons(id) {
   courseId = id;
@@ -299,6 +332,28 @@ const actions = {
   async resolve(values) { const view = requireCase(); const primary = [], additional = [], rejected = []; $('#variants').querySelectorAll('select').forEach(item => { if (item.value === 'primary') primary.push(item.name); else if (item.value === 'additional') additional.push(item.name); else if (item.value === 'rejected') rejected.push(item.name); }); if (primary.length !== 1 || additional.length > 4) throw new Error('Выберите ровно один основной и не более четырёх дополнительных вариантов.'); await request(`/api/expert/cases/${view.caseId}/resolution`, { method: 'POST', body: { expectedRevision: view.revision, primaryVariantId: primary[0], additionalVariantIds: additional, rejectedVariantIds: rejected, comment: values.comment || null } }); await readCase(view.caseId); },
   async history(values) { show('expert-result', await request(`/api/expert/cases/${values.caseId}/history`)); },
   lesson,
+  async 'lesson-boss'() {
+    requireActor();
+    const assignment = await request('/api/lessons/today/boss', { method: 'POST' });
+    if (!assignment) {
+      await lesson();
+      show('learning-result', 'Если босс ещё не пройден, подходящих переводов сейчас нет. Вернитесь позже.');
+      return;
+    }
+    renderDailyBoss(assignment);
+  },
+  async 'daily-boss-answer'(values, form) {
+    requireActor();
+    if (form.dataset.actor !== state.active) throw new Error('Обновите урок под текущим участником.');
+    const body = { action: values.action };
+    if (values.action === 'Correct') {
+      if (!values.correction?.trim()) throw new Error('Введите свой перевод.');
+      body.correction = values.correction.trim();
+    }
+    if (values.selectedVariantId) body.selectedVariantId = values.selectedVariantId;
+    await request(`/api/reviews/${values.assignmentId}/response`, { method: 'POST', body });
+    await lesson();
+  },
   'lesson-preview'() { const data = structuredClone(exampleLesson); renderLesson(data, true); show('learning-result', { message: 'Открыты примеры всех шести учебных видов. Ответ можно собрать и посмотреть без входа и без записи в базу.' }); },
   async 'exercise-issue'(values) {
     const body = { kind: values.kind, languagePair: values.languagePair, ...(values.caseId.trim() ? { caseId: values.caseId.trim() } : {}) };
