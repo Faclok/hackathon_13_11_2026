@@ -23,23 +23,25 @@
                                                     ├─ /api/lms/* → LMS API
                                                     └─ /api/*     → основной API
 Telegram Bot API ↔ Telegram бот → основной API
-основной API + LMS API → PostgreSQL
+основной API → main-db (PostgreSQL)
+LMS API → lms-db (PostgreSQL)
+Telegram бот → bot-db (PostgreSQL)
 ```
 
 Служебные `/api/internal/*` доступны только внутри сети Compose: внешний Nginx отвечает 404, а основной API дополнительно проверяет секретный заголовок.
-Оба API работают с PostgreSQL через EF Core и отдельные `DbContext`. Telegram бот не подключается к базе: он вызывает основной API.
+Все три C# сервиса работают со своей базой через EF Core. LMS узнаёт пользователя через защищённый вызов основного API, не читая его таблицы. Бот хранит состояние диалога и позицию опроса Telegram в собственной базе.
 
 ## Развёртывание через Coolify
 
-В текущей установке Coolify серверный прокси — **Traefik**. Веб-сервису этого проекта не нужен собственный Caddy и не нужно публиковать порты 80/443. Основной `compose.yaml` содержит только сервисы приложения; Nginx слушает порт 80 **внутри** Docker сети. Конфигурация Nginx и SQL инициализация включены в Docker образы, поэтому Coolify не зависит от bind mounts исходников.
+В текущей установке Coolify серверный прокси — **Traefik**. Веб-сервису этого проекта не нужен собственный Caddy и не нужно публиковать порты 80/443. Основной `compose.yaml` содержит только сервисы приложения; Nginx слушает порт 80 **внутри** Docker сети. Каждому C# сервису выделены отдельный PostgreSQL контейнер и постоянный том. Таблицы создаются миграциями EF Core при запуске сервисов.
 
 1. Направьте DNS `A` запись `bashperevod.ru` на тот же публичный IP, что и `vinokurov-it.ru`. Если есть `AAAA`, она должна указывать на рабочий IPv6 этого сервера; иначе удалите её. `www` добавляйте только при наличии отдельной DNS записи.
 2. В Coolify выберите Git репозиторий `Faclok/hackathon_13_11_2026`, ветку `main`, стратегию **Docker Compose**, путь `/compose.yaml`.
-3. В Environment Variables задайте `POSTGRES_DB`, `POSTGRES_USER`, случайный `POSTGRES_PASSWORD` и отдельный случайный `INTERNAL_API_KEY`. Для генерации двух секретов можно дважды выполнить `openssl rand -hex 32`. `TELEGRAM_BOT_TOKEN` нужен только для работающего Telegram бота; при пустом значении контейнер остаётся в режиме ожидания.
+3. В Environment Variables задайте `POSTGRES_USER`, случайный `POSTGRES_PASSWORD` и отдельный случайный `INTERNAL_API_KEY`. Для генерации двух секретов можно дважды выполнить `openssl rand -hex 32`. `TELEGRAM_BOT_TOKEN` нужен только для работающего Telegram бота; при пустом значении контейнер остаётся в режиме ожидания. Три контейнера PostgreSQL используют раздельные базы и тома.
 4. В Domains назначьте **сервису `nginx`** адрес `https://bashperevod.ru`, внутренний порт **80**. Удалите старую запись `https://bashperevod.ru:8088` у сервиса `caddy`: `8088` был портом хоста в прежней конфигурации, а не внутренним портом Nginx. Запись `www.bashperevod.ru` удалите, если она пока не нужна или не имеет DNS записи.
 5. После обновления исходников выполните Deploy. Проверьте логи сборки и адреса `https://bashperevod.ru/api/health` и `https://bashperevod.ru/api/lms/health`. Работающий маршрут `vinokurov-it.ru` не меняйте.
 
-Ранее деплой в Coolify останавливался при монтировании `deploy/nginx/default.conf` с хоста. Образы в текущей версии устраняют эту зависимость. Первый старт PostgreSQL исполняет `db/001_init.sql` и создаёт таблицы и демонстрационные записи. При уже существующем томе init скрипт повторно не запускается. Не удаляйте постоянный том `postgres_data` при обновлении.
+Ранее деплой в Coolify останавливался при монтировании `deploy/nginx/default.conf` с хоста. Образы в текущей версии устраняют эту зависимость. Первый старт новых баз создаёт таблицы миграциями EF Core и добавляет демонстрационные записи. Старый общий том `postgres_data` не удаляется автоматически, но новые сервисы его не используют. Если там есть пользовательские данные, перенесите их до продуктивного использования новой схемы.
 
 ### Развёртывание без Coolify
 
@@ -82,12 +84,14 @@ docker compose -f compose.yaml -f compose.standalone.yaml up -d --build
 ```bash
 git pull
 docker compose -f compose.yaml -f compose.host-caddy.yaml up -d --build
-docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > backup.sql
+docker compose exec -T main-db sh -c 'pg_dump -U "$POSTGRES_USER" main' > main-backup.sql
+docker compose exec -T lms-db sh -c 'pg_dump -U "$POSTGRES_USER" lms' > lms-backup.sql
+docker compose exec -T bot-db sh -c 'pg_dump -U "$POSTGRES_USER" bot' > bot-backup.sql
 ```
 
 Если вы использовали другое дополнение Compose, при обновлении повторите тот же набор `-f` файлов.
 
-В Coolify обновляйте приложение через Deploy из Git и настраивайте резервное копирование постоянного тома PostgreSQL. Перед изменением схемы существующей базы сделайте резервную копию. Существующая схема и демонстрационные данные создаются `db/001_init.sql` при первом старте тома. Миграции EF Core `Baseline` только фиксируют эту схему в двух отдельных таблицах истории; оба API применяют последующие миграции при запуске. Для новой миграции используйте `dotnet ef migrations add <Имя> --project src/main-api --context AppDbContext` либо аналогичную команду для `src/lms-api` и `LmsDbContext`.
+В Coolify обновляйте приложение через Deploy из Git и настраивайте резервные копии всех трёх томов PostgreSQL. Перед изменением схемы сделайте резервную копию. Все три C# сервиса применяют собственные миграции EF Core при запуске. Для новой миграции используйте `dotnet ef migrations add <Имя> --project src/main-api --context AppDbContext`; для LMS и бота укажите соответственно `src/lms-api` / `LmsDbContext` или `src/telegram-bot` / `BotDbContext`.
 
 ## Как проверить сценарий
 
@@ -130,7 +134,7 @@ curl -X POST https://bashperevod.ru/api/tasks/<id>/submission \
   -d '{"action":"confirm"}'
 ```
 
-Исходники разложены по `client/`, `src/main-api/`, `src/lms-api/`, `src/telegram-bot/`; схема базы — `db/001_init.sql`; конфигурация прокси — `deploy/`.
+Исходники разложены по `client/`, `src/main-api/`, `src/lms-api/`, `src/telegram-bot/`; миграции лежат в `Migrations/` каждого C# сервиса, старая общая схема сохранена в `db/legacy_shared_schema.sql`; конфигурация прокси — `deploy/`.
 
 ## Локальная проверка сборки
 

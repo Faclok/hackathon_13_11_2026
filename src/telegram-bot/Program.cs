@@ -1,5 +1,17 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+
+var factory = new BotDbContextFactory();
+await using var cursorDb = factory.CreateDbContext([]);
+await cursorDb.Database.MigrateAsync();
+var cursor = await cursorDb.Cursors.FirstOrDefaultAsync(c => c.Id == 1);
+if (cursor is null)
+{
+    cursor = new BotCursor();
+    cursorDb.Cursors.Add(cursor);
+    await cursorDb.SaveChangesAsync();
+}
 
 var token = Environment.GetEnvironmentVariable("TELEGRAM_BOT_TOKEN");
 if (string.IsNullOrWhiteSpace(token))
@@ -13,7 +25,7 @@ var mainUrl = Environment.GetEnvironmentVariable("MAIN_API_URL") ?? "http://main
 using var telegram = new HttpClient { BaseAddress = new Uri($"https://api.telegram.org/bot{token}/"), Timeout = TimeSpan.FromSeconds(40) };
 using var api = new HttpClient { BaseAddress = new Uri(mainUrl), Timeout = TimeSpan.FromSeconds(20) };
 api.DefaultRequestHeaders.Add("X-Internal-Key", key);
-long offset = 0;
+long offset = cursor.NextOffset;
 
 while (true)
 {
@@ -24,16 +36,22 @@ while (true)
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         foreach (var update in doc.RootElement.GetProperty("result").EnumerateArray())
         {
-            offset = update.GetProperty("update_id").GetInt64() + 1;
-            if (!update.TryGetProperty("message", out var message) || !message.TryGetProperty("text", out var textValue)) continue;
-            var text = textValue.GetString()?.Trim() ?? "";
-            var chatId = message.GetProperty("chat").GetProperty("id").GetInt64();
-            var from = message.GetProperty("from");
-            var userId = from.GetProperty("id").GetInt64();
-            var name = from.TryGetProperty("first_name", out var first) ? first.GetString() ?? "Участник" : "Участник";
-            if (message.GetProperty("chat").GetProperty("type").GetString() != "private") continue;
-            var reply = await Handle(userId, text, name);
-            await telegram.PostAsJsonAsync("sendMessage", new { chat_id = chatId, text = reply });
+            var nextOffset = update.GetProperty("update_id").GetInt64() + 1;
+            if (update.TryGetProperty("message", out var message) && message.TryGetProperty("text", out var textValue)
+                && message.GetProperty("chat").GetProperty("type").GetString() == "private")
+            {
+                var text = textValue.GetString()?.Trim() ?? "";
+                var chatId = message.GetProperty("chat").GetProperty("id").GetInt64();
+                var from = message.GetProperty("from");
+                var userId = from.GetProperty("id").GetInt64();
+                var name = from.TryGetProperty("first_name", out var first) ? first.GetString() ?? "Участник" : "Участник";
+                var reply = await Handle(userId, text, name);
+                using var sent = await telegram.PostAsJsonAsync("sendMessage", new { chat_id = chatId, text = reply });
+                sent.EnsureSuccessStatusCode();
+            }
+            offset = nextOffset;
+            cursor.NextOffset = offset;
+            await cursorDb.SaveChangesAsync();
         }
     }
     catch (Exception ex)
@@ -45,15 +63,25 @@ while (true)
 
 async Task<string> Handle(long id, string text, string name)
 {
+    await using var db = factory.CreateDbContext([]);
+    var state = await db.States.FirstOrDefaultAsync(s => s.TelegramId == id);
     var prefix = $"/api/internal/telegram/{id}";
     if (text.StartsWith("/start", StringComparison.OrdinalIgnoreCase))
     {
         using var result = await api.PostAsJsonAsync(prefix + "/start", new { name });
-        return result.IsSuccessStatusCode ? "Һаумыһығыҙ! Выберите /task для задания дня, /score для баллов или /cancel для отмены." : "Не удалось зарегистрироваться. Попробуйте позже.";
+        if (!result.IsSuccessStatusCode) return "Не удалось зарегистрироваться. Попробуйте позже.";
+        if (state is null) { state = new BotState { TelegramId = id }; db.States.Add(state); }
+        state.State = "idle"; state.TaskId = null; state.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return "Һаумыһығыҙ! Выберите /task для задания дня, /score для баллов или /cancel для отмены.";
     }
     if (text.StartsWith("/cancel", StringComparison.OrdinalIgnoreCase))
     {
-        await api.PostAsJsonAsync(prefix + "/cancel", new { });
+        if (state is not null)
+        {
+            state.State = "idle"; state.TaskId = null; state.UpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+        }
         return "Диалог отменён. Вернуться к заданию: /task";
     }
     if (text.StartsWith("/task", StringComparison.OrdinalIgnoreCase))
@@ -63,6 +91,9 @@ async Task<string> Handle(long id, string text, string name)
         if (!result.IsSuccessStatusCode) return "Задание пока недоступно.";
         using var data = JsonDocument.Parse(await result.Content.ReadAsStringAsync());
         var task = data.RootElement;
+        if (state is null) { state = new BotState { TelegramId = id }; db.States.Add(state); }
+        state.State = "awaiting_answer"; state.TaskId = task.GetProperty("id").GetGuid(); state.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
         var submitted = task.TryGetProperty("submitted_text", out var answer) && answer.ValueKind == JsonValueKind.String ? $"\nВаш ответ: {answer.GetString()}" : "";
         return $"Переведите с башкирского на русский:\n\n{task.GetProperty("text_ba").GetString()}\n\nПредложенный перевод: {task.GetProperty("candidate").GetString()}\nИсточник: {task.GetProperty("source_title").GetString()}{submitted}\n\nОтветьте «да», чтобы подтвердить, или отправьте свой перевод. /cancel — отмена.";
     }
@@ -74,9 +105,14 @@ async Task<string> Handle(long id, string text, string name)
         return $"{data.RootElement.GetProperty("display_name").GetString()}, у вас {data.RootElement.GetProperty("points").GetInt32()} баллов.";
     }
     if (text.StartsWith('/')) return "Команды: /start, /task, /score, /cancel.";
-    using (var result = await api.PostAsJsonAsync(prefix + "/submit", new { action = text.Equals("да", StringComparison.OrdinalIgnoreCase) ? "confirm" : "correct", answerText = text }))
+    if (state?.State != "awaiting_answer" || state.TaskId is not Guid taskId)
+        return "Сначала отправьте /task, затем «да» или свой перевод.";
+    using (var result = await api.PostAsJsonAsync(prefix + "/submit", new {
+        taskId, action = text.Equals("да", StringComparison.OrdinalIgnoreCase) ? "confirm" : "correct", answerText = text }))
     {
-        if (!result.IsSuccessStatusCode) return "Сначала отправьте /task, затем «да» или свой перевод.";
+        if (!result.IsSuccessStatusCode) return "Не удалось сохранить ответ. Попробуйте /task ещё раз.";
+        state.State = "idle"; state.TaskId = null; state.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
         using var data = JsonDocument.Parse(await result.Content.ReadAsStringAsync());
         var status = data.RootElement.GetProperty("status").GetString();
         return $"Ответ сохранён. +10 баллов. Статус перевода: {status switch { "confirmed" => "подтверждён", "disputed" => "есть разногласия", _ => "ожидает другие ответы" }}. Следующее задание появится завтра.";

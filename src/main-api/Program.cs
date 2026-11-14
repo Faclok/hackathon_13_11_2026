@@ -9,7 +9,11 @@ builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connect
     postgres => postgres.MigrationsHistoryTable("__EFMigrationsHistory_Main")));
 var app = builder.Build();
 await using (var scope = app.Services.CreateAsyncScope())
-    await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.MigrateAsync();
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await db.Database.MigrateAsync();
+    await DemoSeed.Apply(db);
+}
 
 app.MapGet("/api/health", async (AppDbContext db) =>
     await db.Database.CanConnectAsync() ? Results.Ok(new { status = "ok" }) : Results.StatusCode(503));
@@ -115,9 +119,6 @@ app.MapPost("/api/internal/telegram/{telegramId:long}/start", async (long telegr
     var user = await db.Users.FirstOrDefaultAsync(u => u.TelegramId == telegramId);
     if (user is null) { user = new AppUser { TelegramId = telegramId, DisplayName = name }; db.Users.Add(user); }
     else user.DisplayName = name;
-    var state = await db.BotStates.FirstOrDefaultAsync(s => s.TelegramId == telegramId);
-    if (state is null) db.BotStates.Add(new BotState { TelegramId = telegramId, State = "idle" });
-    else { state.State = "idle"; state.TaskId = null; state.UpdatedAt = DateTime.UtcNow; }
     await db.SaveChangesAsync();
     return Results.Ok(new { id = user.Id, display_name = user.DisplayName });
 });
@@ -129,10 +130,6 @@ app.MapGet("/api/internal/telegram/{telegramId:long}/task", async (long telegram
     if (user is null) return Results.NotFound();
     var task = await Tasks.Today(db, user.Id);
     if (task is null) return Results.NotFound();
-    var state = await db.BotStates.FirstOrDefaultAsync(s => s.TelegramId == telegramId);
-    if (state is null) { state = new BotState { TelegramId = telegramId }; db.BotStates.Add(state); }
-    state.State = "awaiting_answer"; state.TaskId = (Guid)task["id"]!; state.UpdatedAt = DateTime.UtcNow;
-    await db.SaveChangesAsync();
     return Results.Ok(task);
 });
 
@@ -140,25 +137,14 @@ app.MapPost("/api/internal/telegram/{telegramId:long}/submit", async (long teleg
 {
     if (!Internal.Valid(request, internalKey)) return Results.Unauthorized();
     var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.TelegramId == telegramId);
-    var state = await db.BotStates.FirstOrDefaultAsync(s => s.TelegramId == telegramId);
-    if (user is null || state is null || state.State != "awaiting_answer" || state.TaskId is not Guid taskId)
+    if (user is null || input.TaskId is not Guid taskId)
         return Results.BadRequest(new { error = "Сначала запросите задание командой /task." });
-    var result = await Tasks.Submit(db, user.Id, taskId, input);
-    if (result is IStatusCodeHttpResult { StatusCode: 200 })
-    {
-        state.State = "idle"; state.TaskId = null; state.UpdatedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync();
-    }
-    return result;
+    return await Tasks.Submit(db, user.Id, taskId, input);
 });
 
 app.MapPost("/api/internal/telegram/{telegramId:long}/cancel", async (long telegramId, HttpRequest request, AppDbContext db) =>
 {
     if (!Internal.Valid(request, internalKey)) return Results.Unauthorized();
-    var state = await db.BotStates.FirstOrDefaultAsync(s => s.TelegramId == telegramId);
-    if (state is null) db.BotStates.Add(new BotState { TelegramId = telegramId, State = "idle" });
-    else { state.State = "idle"; state.TaskId = null; state.UpdatedAt = DateTime.UtcNow; }
-    await db.SaveChangesAsync();
     return Results.Ok();
 });
 
@@ -175,5 +161,5 @@ app.Run();
 
 record Credentials(string? Username, string? Password, string? DisplayName);
 record Login(string? Username, string? Password);
-record Submission(string? Action, string? AnswerText);
+record Submission(string? Action, string? AnswerText, Guid? TaskId = null);
 record TelegramStart(string? Name);

@@ -70,37 +70,6 @@ namespace MainApi.Migrations
                     b.ToTable("app_users", (string)null);
                 });
 
-            modelBuilder.Entity("BotState", b =>
-                {
-                    b.Property<long>("TelegramId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasColumnName("telegram_id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("TelegramId"));
-
-                    b.Property<string>("State")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("idle")
-                        .HasColumnName("state");
-
-                    b.Property<Guid?>("TaskId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("task_id");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at")
-                        .HasDefaultValueSql("now()");
-
-                    b.HasKey("TelegramId");
-
-                    b.ToTable("bot_states", (string)null);
-                });
-
             modelBuilder.Entity("ConsensusDecision", b =>
                 {
                     b.Property<Guid>("FragmentId")

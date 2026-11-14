@@ -9,7 +9,11 @@ builder.Services.AddHttpClient("main", client => client.BaseAddress = new Uri(bu
 var internalKey = builder.Configuration["INTERNAL_API_KEY"] ?? throw new InvalidOperationException("INTERNAL_API_KEY is required");
 var app = builder.Build();
 await using (var scope = app.Services.CreateAsyncScope())
-    await scope.ServiceProvider.GetRequiredService<LmsDbContext>().Database.MigrateAsync();
+{
+    var db = scope.ServiceProvider.GetRequiredService<LmsDbContext>();
+    await db.Database.MigrateAsync();
+    await DemoSeed.Apply(db);
+}
 
 app.MapGet("/api/lms/health", async (LmsDbContext db) =>
     await db.Database.CanConnectAsync() ? Results.Ok(new { status = "ok" }) : Results.StatusCode(503));

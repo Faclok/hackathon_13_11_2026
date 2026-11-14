@@ -11,8 +11,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace LmsApi.Migrations
 {
     [DbContext(typeof(LmsDbContext))]
-    [Migration("20261114083008_Baseline")]
-    partial class Baseline
+    [Migration("20261114083846_InitialLms")]
+    partial class InitialLms
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)

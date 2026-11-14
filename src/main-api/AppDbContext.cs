@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata;
 
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
@@ -12,7 +11,6 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<UserSubmission> Submissions => Set<UserSubmission>();
     public DbSet<ConsensusDecision> Decisions => Set<ConsensusDecision>();
     public DbSet<PointEvent> PointEvents => Set<PointEvent>();
-    public DbSet<BotState> BotStates => Set<BotState>();
 
     protected override void OnModelCreating(ModelBuilder model)
     {
@@ -88,12 +86,6 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.HasIndex(x => x.SubmissionId).IsUnique();
             e.HasOne<AppUser>().WithMany().HasForeignKey(x => x.UserId);
             e.HasOne<UserSubmission>().WithMany().HasForeignKey(x => x.SubmissionId);
-        });
-        model.Entity<BotState>(e =>
-        {
-            e.ToTable("bot_states"); e.HasKey(x => x.TelegramId);
-            e.Property(x => x.State).HasDefaultValue("idle");
-            e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
         });
         foreach (var entity in model.Model.GetEntityTypes())
             foreach (var property in entity.GetProperties())
@@ -181,11 +173,4 @@ public sealed class PointEvent
     public Guid SubmissionId { get; set; }
     public int Points { get; set; }
     public DateTime CreatedAt { get; set; }
-}
-public sealed class BotState
-{
-    public long TelegramId { get; set; }
-    public string State { get; set; } = "idle";
-    public Guid? TaskId { get; set; }
-    public DateTime UpdatedAt { get; set; }
 }

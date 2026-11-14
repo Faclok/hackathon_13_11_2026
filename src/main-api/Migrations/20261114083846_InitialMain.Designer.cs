@@ -11,8 +11,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MainApi.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20261114083008_Baseline")]
-    partial class Baseline
+    [Migration("20261114083846_InitialMain")]
+    partial class InitialMain
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -71,37 +71,6 @@ namespace MainApi.Migrations
                         .IsUnique();
 
                     b.ToTable("app_users", (string)null);
-                });
-
-            modelBuilder.Entity("BotState", b =>
-                {
-                    b.Property<long>("TelegramId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasColumnName("telegram_id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("TelegramId"));
-
-                    b.Property<string>("State")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("idle")
-                        .HasColumnName("state");
-
-                    b.Property<Guid?>("TaskId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("task_id");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at")
-                        .HasDefaultValueSql("now()");
-
-                    b.HasKey("TelegramId");
-
-                    b.ToTable("bot_states", (string)null);
                 });
 
             modelBuilder.Entity("ConsensusDecision", b =>
