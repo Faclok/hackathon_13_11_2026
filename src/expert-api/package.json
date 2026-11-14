@@ -1,0 +1,6 @@
+{
+  "name": "bashperevod-expert-api",
+  "private": true,
+  "type": "module",
+  "scripts": { "start": "node server.js" }
+}

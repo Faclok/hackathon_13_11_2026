@@ -3,7 +3,7 @@ services:
     build: ./deploy/nginx
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health/ready >/dev/null && wget -qO- http://127.0.0.1/api/lms/health >/dev/null"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null"]
       start_period: 45s
       interval: 10s
       timeout: 5s
@@ -12,10 +12,25 @@ services:
       - client
       - main-api
       - lms-api
+      - expert-api
+      - expert-client
 
   client:
     build: ./client
     restart: unless-stopped
+
+  expert-client:
+    build: ./expert-client
+    restart: unless-stopped
+
+  expert-api:
+    build: ./src/expert-api
+    restart: unless-stopped
+    environment:
+      MAIN_API_URL: http://main-api:8080
+    depends_on:
+      main-api:
+        condition: service_started
 
   main-api:
     build: ./src/main-api
