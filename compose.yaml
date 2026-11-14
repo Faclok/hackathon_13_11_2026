@@ -49,6 +49,14 @@ services:
       Telegram__InternalKey: ${INTERNAL_API_KEY:-}
       Lms__InternalKey: ${INTERNAL_API_KEY:-}
       Telegram__BotUsername: ${TELEGRAM_BOT_USERNAME:-}
+      AudioStorage__Endpoint: https://s3.bashperevod.ru
+      AudioStorage__Bucket: school-audio
+      AudioStorage__Region: garage
+      AudioStorage__AccessKey: ${AUDIO_S3_ACCESS_KEY:-}
+      AudioStorage__SecretKey: ${AUDIO_S3_SECRET_KEY:-}
+      AudioStorage__LinkMinutes: 30
+    volumes:
+      - silero_models:/app/models
     depends_on:
       core-db:
         condition: service_healthy
@@ -133,3 +141,4 @@ volumes:
   core_data:
   lms_data_v2:
   bot_data_v2:
+  silero_models:
