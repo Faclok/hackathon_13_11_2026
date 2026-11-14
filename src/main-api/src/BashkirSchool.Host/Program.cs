@@ -179,6 +179,13 @@ api.MapGet("/policies/distribution", async (ClaimsPrincipal user, IPermissionChe
 api.MapPost("/deliveries", async (ClaimsPrincipal user, [FromHeader(Name = "Idempotency-Key")] string key,
     DeliverContentRequest request, IContentIntake intake, CancellationToken ct) =>
     TypedResults.Ok(await intake.DeliverAsync(Subject(user), key, request, ct)));
+api.MapPost("/expert/imports", (ClaimsPrincipal user, ExpertDatasetRow request, ExpertDatasetIntake intake, CancellationToken ct) =>
+    intake.ImportAsync(Subject(user), request, ct));
+api.MapGet("/expert/untranslated", (ClaimsPrincipal user, int? offset, int? limit, ExpertDatasetIntake intake, CancellationToken ct) =>
+    intake.UntranslatedAsync(Subject(user), offset ?? 0, limit ?? 100, ct));
+api.MapPost("/expert/fragments/{fragmentId:guid}/translation", (ClaimsPrincipal user, Guid fragmentId,
+    VerifiedFragmentTranslation request, ExpertDatasetIntake intake, CancellationToken ct) =>
+    intake.TranslateAsync(Subject(user), fragmentId, request, ct));
 api.MapPost("/reviews/next", async (ClaimsPrincipal user, string? kind, IReviewWorkflow reviews, CancellationToken ct) =>
 {
     var assignment = await reviews.ReceiveAsync(Subject(user), kind ?? "translation-confirm", ct);

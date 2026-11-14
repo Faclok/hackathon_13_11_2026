@@ -20,6 +20,7 @@ public static class DependencyInjection
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<IPermissionChecker, PermissionChecker>();
         services.AddScoped<IContentIntake, ContentIntake>();
+        services.AddScoped<ExpertDatasetIntake>();
         services.AddScoped<IReviewWorkflow, ReviewWorkflow>();
         services.AddScoped<SchoolAccounts>();
         services.AddScoped<IndependentAccounts>();

@@ -6,8 +6,9 @@ const uuid = '[0-9a-fA-F-]{36}';
 const routes = [
   ['POST', /^\/auth\/(sign-in|refresh)$/],
   ['GET', /^\/api\/me$/],
-  ['POST', /^\/api\/deliveries$/],
-  ['PUT', new RegExp(`^/api/accounts/${uuid}/access$`)],
+  ['POST', /^\/api\/expert\/imports$/],
+  ['GET', /^\/api\/expert\/untranslated$/],
+  ['POST', new RegExp(`^/api/expert/fragments/${uuid}/translation$`)],
   ['GET', /^\/api\/expert\/(dashboard|work|cases)$/],
   ['GET', /^\/api\/expert\/preferences$/],
   ['PUT', /^\/api\/expert\/preferences$/],

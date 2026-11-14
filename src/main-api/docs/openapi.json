@@ -2454,6 +2454,154 @@
           }
         ]
       }
+    },
+    "/api/expert/imports": {
+      "post": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExpertDatasetRow"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpertDatasetReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or session revoked."
+          },
+          "403": {
+            "description": "Permission or resource scope denied."
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/expert/untranslated": {
+      "get": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": [
+                "null",
+                "integer"
+              ],
+              "format": "int32"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": [
+                "null",
+                "integer"
+              ],
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UntranslatedFragment"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or session revoked."
+          },
+          "403": {
+            "description": "Permission or resource scope denied."
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/expert/fragments/{fragmentId}/translation": {
+      "post": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "parameters": [
+          {
+            "name": "fragmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifiedFragmentTranslation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpertDatasetReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or session revoked."
+          },
+          "403": {
+            "description": "Permission or resource scope denied."
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -4138,6 +4286,112 @@
           "word": {
             "type": "string"
           },
+          "translation": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ExpertDatasetRow": {
+        "required": [
+          "fragment_id",
+          "text_ba",
+          "lang_pair",
+          "expertVerified",
+          "source"
+        ],
+        "type": "object",
+        "properties": {
+          "fragment_id": {
+            "type": "string"
+          },
+          "text_ba": {
+            "type": "string"
+          },
+          "lang_pair": {
+            "type": "string"
+          },
+          "translation": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "expertVerified": {
+            "type": "boolean"
+          },
+          "source": {
+            "$ref": "#/components/schemas/SourceReference"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ExpertDatasetReceipt": {
+        "required": [
+          "fragmentId",
+          "status"
+        ],
+        "type": "object",
+        "properties": {
+          "fragmentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "caseId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "variantId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "UntranslatedFragment": {
+        "required": [
+          "fragmentId",
+          "externalId",
+          "textBa",
+          "languagePair",
+          "source"
+        ],
+        "type": "object",
+        "properties": {
+          "fragmentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "externalId": {
+            "type": "string"
+          },
+          "textBa": {
+            "type": "string"
+          },
+          "languagePair": {
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/SourceReference"
+          }
+        },
+        "additionalProperties": false
+      },
+      "VerifiedFragmentTranslation": {
+        "required": [
+          "translation"
+        ],
+        "type": "object",
+        "properties": {
           "translation": {
             "type": "string"
           }
