@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
@@ -10,7 +11,7 @@ using TelegramBotKit;
 using TelegramBotKit.Fallbacks;
 using TelegramBotKit.Messaging;
 
-public sealed class StudentConversation(HttpClient api, IDbContextFactory<BotDbContext> factory, ExerciseAudio audio, IConfiguration? configuration = null) : IDefaultMessageHandler
+public sealed class StudentConversation(HttpClient api, IDbContextFactory<BotDbContext> factory, ExerciseAudio audio, IConfiguration? configuration = null, ILogger<StudentConversation>? logger = null) : IDefaultMessageHandler
 {
     private string Portal => configuration?["STUDENT_PORTAL_URL"] ?? Environment.GetEnvironmentVariable("STUDENT_PORTAL_URL") ?? "https://bashperevod.ru/telegram.html";
     private BotContext context = null!;
@@ -23,6 +24,7 @@ public sealed class StudentConversation(HttpClient api, IDbContextFactory<BotDbC
 
     public Task StartAsync(Message message, BotContext ctx) => Run(ctx, async () =>
     {
+        logger?.LogInformation("Update {UpdateId}: /start handler entered", ctx.Update.Id);
         var parts = (message.Text ?? "").Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length == 2)
         {
@@ -143,15 +145,17 @@ public sealed class StudentConversation(HttpClient api, IDbContextFactory<BotDbC
         if (message?.Chat.Type != ChatType.Private || user is null || user.IsBot || user.Id != message.Chat.Id) return;
         context = ctx; chatId = message.Chat.Id; userId = user.Id;
         if (ctx.Update.CallbackQuery is { } callback) await ctx.Sender.AnswerCallback(callback.Id, new AnswerCallback(), Ct);
+        logger?.LogInformation("Update {UpdateId}: loading conversation state from database", ctx.Update.Id);
         await using var currentDb = await factory.CreateDbContextAsync(Ct);
         db = currentDb;
         state = await db.States.SingleOrDefaultAsync(x => x.TelegramId == userId, Ct) ?? new() { TelegramId = userId };
+        logger?.LogInformation("Update {UpdateId}: conversation state loaded", ctx.Update.Id);
         if (db.Entry(state).State == EntityState.Detached) db.States.Add(state);
         try { await action(); }
-        catch (StudentApiException ex) { await Reset(); await Say(ex.Message, TaskButtons.Kinds()); }
-        catch (FormatException) { await Say("Проверьте выбор. Используйте кнопки текущего задания или откройте /tasks."); }
-        catch (HttpRequestException) { await Say("Сервис временно недоступен. Повторите действие чуть позже."); }
-        catch (TaskCanceledException) when (!Ct.IsCancellationRequested) { await Say("Сервис не успел ответить. Повторите действие чуть позже."); }
+        catch (StudentApiException ex) { logger?.LogWarning("Update {UpdateId}: student API rejected the action", ctx.Update.Id); await Reset(); await Say(ex.Message, TaskButtons.Kinds()); }
+        catch (FormatException) { logger?.LogWarning("Update {UpdateId}: invalid answer format", ctx.Update.Id); await Say("Проверьте выбор. Используйте кнопки текущего задания или откройте /tasks."); }
+        catch (HttpRequestException ex) { logger?.LogWarning("Update {UpdateId}: HTTP request failed: {Failure}; status: {Status}", ctx.Update.Id, BotDiagnosticErrors.Describe(ex), ex.StatusCode); await Say("Сервис временно недоступен. Повторите действие чуть позже."); }
+        catch (TaskCanceledException) when (!Ct.IsCancellationRequested) { logger?.LogWarning("Update {UpdateId}: request timed out", ctx.Update.Id); await Say("Сервис не успел ответить. Повторите действие чуть позже."); }
     }
 
     private async Task SubmitExercise(ExerciseView exercise, object answer)
