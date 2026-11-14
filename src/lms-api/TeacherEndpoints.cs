@@ -361,6 +361,8 @@ public static class TeacherEndpoints
             using var contribution = await MainPost(request, factory, $"/api/lms-source/translations/{caseId}/student-answer", new { taskId, text = answer, boss = input.Boss });
             if (!contribution.IsSuccessStatusCode) return Results.StatusCode(502);
             bool bossCompleted = false;
+            var coinsAwarded = 0;
+            var xpAwarded = 0;
             if (input.Boss)
             {
                 using var contributionJson = JsonDocument.Parse(await contribution.Content.ReadAsStringAsync());
@@ -371,13 +373,15 @@ public static class TeacherEndpoints
                 if (!attached.IsSuccessStatusCode) return Results.StatusCode(502);
                 using var attachedJson = JsonDocument.Parse(await attached.Content.ReadAsStringAsync());
                 bossCompleted = attachedJson.RootElement.GetProperty("bossCompleted").GetBoolean();
+                coinsAwarded = attachedJson.RootElement.GetProperty("coinsAwarded").GetInt32();
+                xpAwarded = attachedJson.RootElement.GetProperty("xpAwarded").GetInt32();
             }
             var submission = await db.TaskSubmissions.SingleOrDefaultAsync(x => x.TaskId == taskId && x.UserId == user.Id);
             if (submission is null) { submission = new TaskSubmission { TaskId = taskId, UserId = user.Id }; db.TaskSubmissions.Add(submission); }
             submission.Answer = answer; submission.SubmittedAt = DateTimeOffset.UtcNow;
             submission.TeacherCorrect = null; submission.TeacherComment = ""; submission.ReviewedAt = null;
             await db.SaveChangesAsync();
-            return Results.Ok(new { submission, bossCompleted });
+            return Results.Ok(new { submission, bossCompleted, coinsAwarded, xpAwarded });
         });
     }
 

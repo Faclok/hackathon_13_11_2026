@@ -60,10 +60,16 @@ public sealed record PlayerProfile(Guid Id, string Nick, int Level, int Xp, int 
     public string AvatarUrl { get; init; } = "";
     public string? FirstName { get; init; }
     public string? LastName { get; init; }
+    public int XpIntoLevel { get; init; }
+    public int XpForNextLevel { get; init; }
+    public string? NextLevelRewardRarity { get; init; }
 }
 public sealed record PlayerLeaderboardEntry(PlayerProfile User, int Value, int Rank);
-public sealed record PlayerLevelReward(int Level, string DecorationId, string Rarity, bool Duplicate, int Compensation);
-public sealed record PlayerLevelRewardReceipt(PlayerProfile Profile, PlayerLevelReward[] Rewards);
+public sealed record PlayerLevelReward(int Level, string? DecorationId, string? Rarity, bool Duplicate, int Compensation);
+public sealed record PlayerLevelRewardReceipt(PlayerProfile Profile, PlayerLevelReward[] Rewards)
+{
+    public PlayerRewardNoticeInfo[] Notices { get; init; } = [];
+}
 
 public sealed class PlayerEconomy(CoreDbContext db, BossAccess access, IPermissionChecker permissions,
     TimeProvider clock, IConfiguration configuration)
@@ -105,10 +111,16 @@ public sealed class PlayerEconomy(CoreDbContext db, BossAccess access, IPermissi
         var accuracy = participant.Total == 0 ? 0 : (int)Math.Round((decimal)participant.Correct / participant.Total * 100m);
         var completedLevels = await db.Set<LearningLevel>().LongCountAsync(x => x.ParticipantId == actor && x.CompletedAt != null, ct);
         var startedBosses = await db.Set<LevelBoss>().LongCountAsync(x => x.ParticipantId == actor, ct);
-        return new(actor, nick, state.Xp / 100 + 1, state.Xp, state.Coins, progress.Streak, progress.TasksSolved,
+        var playerProgress = PlayerProgression.At(state.Xp);
+        var nextRarity = PlayerProgression.RewardRarity(playerProgress.Level + 1);
+        var owned = ReadIds(state.OwnedJson).ToHashSet();
+        if (!RewardCatalog.Items.Any(x => x.InCase && !x.IsDefault && x.Rarity == nextRarity && !owned.Contains(x.Id))) nextRarity = null;
+        return new(actor, nick, playerProgress.Level, state.Xp, state.Coins, progress.Streak, progress.TasksSolved,
             accuracy, trophies.ToArray(), ReadIds(state.OwnedJson), state.BackgroundId, state.FrameId,
             state.HatId, state.PetId, state.CaseKeys, ReadIds(state.EquippedItemsJson))
-        { FirstName = account.FirstName, LastName = account.LastName, Swords = Math.Max(0, completedLevels / 5 - startedBosses) };
+        { FirstName = account.FirstName, LastName = account.LastName, Swords = Math.Max(0, completedLevels / 5 - startedBosses),
+            XpIntoLevel = playerProgress.XpIntoLevel, XpForNextLevel = playerProgress.XpForNextLevel,
+            NextLevelRewardRarity = nextRarity };
     }
 
     public async Task RewardReviewAsync(Guid actor, bool boss, CancellationToken ct)
@@ -118,10 +130,10 @@ public sealed class PlayerEconomy(CoreDbContext db, BossAccess access, IPermissi
         {
             state.BossAnswers++;
             state.Coins += 1;
+            state.Xp += PlayerProgression.BossAnswerXp;
             if (!state.BossRewarded && state.BossAnswers >= 3)
             {
                 state.BossRewarded = true;
-                state.Xp += 100;
             }
         }
         else
@@ -158,24 +170,35 @@ public sealed class PlayerEconomy(CoreDbContext db, BossAccess access, IPermissi
         var state = await StateAsync(actor, ct);
         var owned = ReadIds(state.OwnedJson).ToHashSet();
         var rewards = new List<PlayerLevelReward>();
-        var currentLevel = state.Xp / 100 + 1;
+        var currentLevel = PlayerProgression.At(state.Xp).Level;
         for (var level = Math.Max(2, state.LastRewardedLevel + 1); level <= currentLevel; level++)
         {
-            var rarity = level % 10 == 0 ? "epic" : level % 5 == 0 ? "rare" : "common";
+            var rarity = PlayerProgression.RewardRarity(level);
             var pool = RewardCatalog.Items.Where(x => x.InCase && !x.IsDefault && x.Rarity == rarity).ToArray();
             var unowned = pool.Where(x => !owned.Contains(x.Id)).ToArray();
-            var choices = unowned.Length > 0 ? unowned : pool;
-            var winner = choices[System.Security.Cryptography.RandomNumberGenerator.GetInt32(choices.Length)];
-            var duplicate = !owned.Add(winner.Id);
-            var compensation = duplicate ? RewardCatalog.DuplicateCompensation : 0;
+            var winner = unowned.Length > 0
+                ? unowned[System.Security.Cryptography.RandomNumberGenerator.GetInt32(unowned.Length)] : null;
+            if (winner is not null) owned.Add(winner.Id);
+            var compensation = winner is null ? PlayerProgression.LevelCoins : 0;
             state.Coins += compensation;
             state.LastRewardedLevel = level;
-            rewards.Add(new(level, winner.Id, rarity, duplicate, compensation));
+            rewards.Add(new(level, winner?.Id, rarity, false, compensation));
         }
         state.OwnedJson = WriteIds(owned);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
-        return new(await ProfileAsync(actor, ct), rewards.ToArray());
+        var notices = await db.Set<PlayerRewardNotice>().AsNoTracking()
+            .Where(x => x.ParticipantId == actor && !x.Seen).OrderBy(x => x.CreatedAt).ThenBy(x => x.Id)
+            .Take(100).Select(x => new PlayerRewardNoticeInfo(x.Id, x.Coins, x.Xp, x.CreatedAt)).ToArrayAsync(ct);
+        return new(await ProfileAsync(actor, ct), rewards.ToArray()) { Notices = notices };
+    }
+
+    public async Task AcknowledgeRewardsAsync(Guid actor, Guid[] ids, CancellationToken ct)
+    {
+        if (ids.Length > 100) throw new DomainException("At most 100 reward notifications can be acknowledged.");
+        await StateAsync(actor, ct);
+        await db.Set<PlayerRewardNotice>().Where(x => x.ParticipantId == actor && ids.Contains(x.Id))
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Seen, true), ct);
     }
 
     public async Task<PlayerCaseOpening> OpenCaseAsync(Guid actor, string caseId, CancellationToken ct)

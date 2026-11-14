@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 155" width="900" height="465" fill="none">
+  <title>Крылья Акбузата — фантазийный головной убор</title>
+  <defs><linearGradient id="ivory" x1="99" y1="27" x2="193" y2="137" gradientUnits="userSpaceOnUse"><stop stop-color="#fff7df"/><stop offset="1" stop-color="#d8d8bf"/></linearGradient></defs>
+  <path d="M74 129c0-57 29-103 76-112 47 9 76 55 76 112Z" fill="url(#ivory)" stroke="#c1a264" stroke-width="4"/>
+  <path d="M150 22v101m-40-77q-17 32-18 75m98-75q17 32 18 75" stroke="#c6b784" stroke-width="3"/>
+  <path d="M96 120C58 113 25 81 17 24c18 24 37 32 63 35-5 15-4 29 16 61Zm108 0c38-7 71-39 79-96-18 24-37 32-63 35 5 15 4 29-16 61Z" fill="#f4eed8" stroke="#c1b47e" stroke-width="3" stroke-linejoin="round"/>
+  <path d="m30 47 48 50m-39-27 40 36m-28-11 31 18m188-66-48 50m39-27-40 36m28-11-31 18" stroke="#c9c7aa" stroke-width="4" stroke-linecap="round"/>
+  <path d="M78 120q72 14 144 0v19q-72 15-144 0Z" fill="#c9ac69" stroke="#a88b50" stroke-width="3"/>
+  <path d="m150 106 13 19-13 20-13-20Z" fill="#608c73" stroke="#f2dfaa" stroke-width="3"/>
+  <path d="m107 129 10 3m66-3 10-3" stroke="#fff0c4" stroke-width="4" stroke-linecap="round"/>
+</svg>

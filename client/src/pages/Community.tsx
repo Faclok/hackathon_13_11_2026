@@ -5,7 +5,7 @@ import TelegramAccess from "../components/TelegramAccess";
 import { isMiniApp } from "../api/telegram";
 import { getLeaderboard } from "../api";
 import { trophies } from "../mocks/data";
-import { decorationCatalog, rarities } from "../mocks/customization";
+import { rarities } from "../mocks/customization";
 import { useUserStore } from "../store";
 import {
   ranks,
@@ -218,7 +218,6 @@ export function Leaderboard() {
 
 export function Profile() {
   const user = useUserStore((s) => s.user)!;
-  const levelRewards = useUserStore((s) => s.levelRewards);
   const navigate = useNavigate();
   const [firstName, setFirstName] = useState(user.firstName ?? "");
   const [lastName, setLastName] = useState(user.lastName ?? "");
@@ -287,28 +286,15 @@ export function Profile() {
           </span>
           <div className="xp-caption">
             <span>Уровень {user.level}</span>
-            <span>{user.xp % 100} / 100 XP</span>
+            <span>{user.xpIntoLevel} / {user.xpForNextLevel} XP</span>
           </div>
-          <ProgressBar value={user.xp % 100} max={100} />
+          <ProgressBar value={user.xpIntoLevel} max={user.xpForNextLevel} />
+          <p className="learning-hint">За уровень {user.level + 1}: {user.nextLevelRewardRarity ? `${rarities[user.nextLevelRewardRarity].label} скин` : "5 монет"}</p>
           {profileComplete && <button type="button" className="customize-link profile-edit-link" aria-expanded={editingProfile} onClick={() => { setEditingProfile(true); requestAnimationFrame(() => document.getElementById("profile-name-form")?.scrollIntoView({ behavior: "smooth", block: "start" })); }}>Изменить имя и фамилию <Icon name="arrow" size={13} /></button>}
           <Link to="/inventory" className="customize-link">
             Изменить оформление <Icon name="arrow" size={13} />
           </Link>
         </div>
-      </section>
-      <section className="surface profile-section">
-        <h2>Скины за уровни</h2>
-        <p>За каждый новый уровень — обычный скин. На каждом 5-м уровне — редкий вместо обычного, на каждом 10-м — эпический.</p>
-        <p>Легендарные скины за уровни не выдаются. Сначала выдаются скины, которых у тебя ещё нет; если собрана вся редкость, дубликат приносит 5 монет.</p>
-        <p>Следующая награда: уровень {user.level + 1} · {rarities[(user.level + 1) % 10 === 0 ? "epic" : (user.level + 1) % 5 === 0 ? "rare" : "common"].label} скин.</p>
-        {levelRewards.length > 0 && <div role="status">
-          <h3>Получено за уровни</h3>
-          {levelRewards.map((reward) => <p key={reward.level}>
-            Уровень {reward.level}: {decorationCatalog.find((item) => item.id === reward.decorationId)?.title ?? reward.decorationId}
-            {reward.duplicate ? ` · дубликат, +${reward.compensation} монет` : " · добавлен в инвентарь"}
-          </p>)}
-        </div>}
-        <Link to="/inventory" className="customize-link">Открыть инвентарь <Icon name="arrow" size={13} /></Link>
       </section>
       {itemInfo && (
         <Modal title={itemInfo.title} onClose={() => setItemInfo(null)}>

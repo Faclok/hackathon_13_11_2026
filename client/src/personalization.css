@@ -348,11 +348,31 @@ button.floating-item:hover {
   z-index: 4;
   pointer-events: none;
 }
-.avatar-hat svg {
+.avatar-hat svg,
+.avatar-hat img {
   width: 100%;
   height: 100%;
   overflow: visible;
   filter: drop-shadow(0 2px 2px #26361d30);
+}
+.avatar-hat img {
+  display: block;
+  object-fit: contain;
+}
+.player-avatar.has-artwork-frame {
+  background: transparent;
+}
+.avatar-frame {
+  position: absolute;
+  inset: -8%;
+  z-index: 3;
+  pointer-events: none;
+}
+.avatar-frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 .player-avatar.frame-frame_neon_leaf {
   background: #79d49b;

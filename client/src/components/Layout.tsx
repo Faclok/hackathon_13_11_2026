@@ -5,6 +5,7 @@ import { Ornament, SchoolLogo } from "./Illustrations";
 import { displayName } from "../utils/displayName";
 import { Avatar } from "./Personalization";
 import { Icon } from "./ui";
+import RewardNotifications from "./RewardNotifications";
 const navigation = [
   ["/", "home", "Главная"],
   ["/learn", "book", "Учить"],
@@ -24,6 +25,19 @@ const pageTitles: Record<string, string> = {
 export default function Layout() {
   const user = useUserStore((s) => s.user);
   const { pathname, hash } = useLocation();
+  useEffect(() => {
+    let refreshing = false;
+    const refresh = async () => {
+      if (document.hidden || refreshing || !useUserStore.getState().user) return;
+      refreshing = true;
+      try { await useUserStore.getState().refreshProfile(); } catch { /* Retry on the next refresh. */ }
+      finally { refreshing = false; }
+    };
+    const timer = window.setInterval(() => { void refresh(); }, 60000);
+    window.addEventListener("focus", refresh);
+    void refresh();
+    return () => { window.clearInterval(timer); window.removeEventListener("focus", refresh); };
+  }, [pathname]);
   useEffect(() => {
     document.title = `${pageTitles[pathname] ?? "Страница не найдена"} — Башкирская языковая школа`;
     if (pathname === "/profile" && hash === "#telegram") {
@@ -53,6 +67,7 @@ export default function Layout() {
         </Link>
       </header>
       <main className="page-content">
+        <RewardNotifications />
         <Outlet />
       </main>
       <nav className="bottom-nav" aria-label="Основная навигация">

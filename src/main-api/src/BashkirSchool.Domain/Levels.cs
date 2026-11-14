@@ -27,6 +27,8 @@ public sealed class LevelQuestion
 
 public sealed class LevelAnswer
 {
+    public int CoinsAwarded { get; set; }
+    public int XpAwarded { get; set; }
     public Guid Id { get; set; }
     public Guid QuestionId { get; set; }
     public string AnswerJson { get; set; } = "{}";

@@ -1,14 +1,16 @@
 export interface LevelReward {
   level: number;
-  decorationId: string;
-  rarity: "common" | "rare" | "epic";
+  decorationId: string | null;
+  rarity: "common" | "rare" | "epic" | null;
   duplicate: boolean;
   compensation: number;
 }
 export interface LevelRewardReceipt {
   profile: User;
   rewards: LevelReward[];
+  notices: RewardNotice[];
 }
+export interface RewardNotice { id: string; coins: number; xp: number; createdAt: string }
 export interface User {
   id: string;
   nick: string;
@@ -17,6 +19,9 @@ export interface User {
   avatarUrl: string;
   level: number;
   xp: number;
+  xpIntoLevel: number;
+  xpForNextLevel: number;
+  nextLevelRewardRarity: "common" | "rare" | "epic" | null;
   coins: number;
   streak: number;
   tasksSolved: number;

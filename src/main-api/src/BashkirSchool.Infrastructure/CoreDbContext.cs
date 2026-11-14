@@ -144,6 +144,10 @@ public sealed class CoreDbContext(DbContextOptions<CoreDbContext> options) : Ide
         b.Entity<OutboxMessage>().HasIndex(x => x.ResponseId).IsUnique();
         b.Entity<OutboxMessage>().HasIndex(x => x.ProcessedAt);
         b.Entity<PlayerState>().HasKey(x => x.ParticipantId);
+        b.Entity<PlayerRewardNotice>().HasKey(x => x.Id);
+        b.Entity<PlayerRewardNotice>().HasOne<Participant>().WithMany().HasForeignKey(x => x.ParticipantId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<PlayerRewardNotice>().HasIndex(x => new { x.ParticipantId, x.Seen });
+        b.Entity<PlayerRewardNotice>().HasIndex(x => new { x.JudgmentId, x.ResolutionId }).IsUnique();
         b.Entity<PlayerState>().Property(x => x.LastRewardedLevel).HasDefaultValue(1);
         b.Entity<PlayerState>().HasOne<Participant>().WithOne().HasForeignKey<PlayerState>(x => x.ParticipantId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<PlayerState>().Property(x => x.ProfileCompletionRewarded).HasDefaultValue(false);

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" width="900" height="900" fill="none">
+  <title>Пиала с кумысом</title>
+  <defs><linearGradient id="wood" x1="80" y1="130" x2="218" y2="228" gradientUnits="userSpaceOnUse"><stop stop-color="#d6b47c"/><stop offset="1" stop-color="#a77b4e"/></linearGradient></defs>
+  <ellipse cx="150" cy="252" rx="96" ry="11" fill="#55745e" opacity=".13"/>
+  <path d="M51 126c4 75 36 113 99 113s95-38 99-113Z" fill="url(#wood)" stroke="#9b744c" stroke-width="4"/>
+  <ellipse cx="150" cy="126" rx="99" ry="40" fill="#e4c997" stroke="#9b744c" stroke-width="5"/>
+  <ellipse cx="150" cy="128" rx="85" ry="29" fill="#fbf4df"/>
+  <path d="M81 123q53-28 127-1" stroke="#fffdf4" stroke-width="7" stroke-linecap="round"/>
+  <ellipse cx="112" cy="136" rx="4" ry="2" fill="#e7ddbf"/><ellipse cx="180" cy="119" rx="5" ry="2" fill="#e7ddbf"/>
+  <path d="M64 168q86 58 172 0m-159 34q73 44 146 0" stroke="#795c3e" stroke-width="4"/>
+  <path d="m88 185 10-7 8 15-10 7Zm30 15 12-9 11 14-12 9Zm41 5 11-14 12 9-11 14Zm35-12 8-15 10 7-8 15Z" fill="#f0d696"/>
+  <path d="M118 238v9q32 12 64 0v-9" fill="#9b744c"/>
+  <path d="M96 72q-10-13 2-25m53 22q-10-13 2-25m51 28q-10-13 2-25" stroke="#a6b9a0" stroke-width="4" stroke-linecap="round" opacity=".7"/>
+</svg>

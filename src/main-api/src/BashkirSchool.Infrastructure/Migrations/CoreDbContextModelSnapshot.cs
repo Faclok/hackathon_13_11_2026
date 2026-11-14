@@ -340,6 +340,9 @@ namespace BashkirSchool.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int>("CoinsAwarded")
+                        .HasColumnType("integer");
+
                     b.Property<bool>("LevelCompleted")
                         .HasColumnType("boolean");
 
@@ -351,6 +354,9 @@ namespace BashkirSchool.Infrastructure.Migrations
 
                     b.Property<DateTimeOffset>("SubmittedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("XpAwarded")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
@@ -1255,13 +1261,45 @@ namespace BashkirSchool.Infrastructure.Migrations
                     b.ToTable("PlayerCaseOpenings");
                 });
 
+            modelBuilder.Entity("BashkirSchool.Infrastructure.PlayerRewardNotice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Coins")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("JudgmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ParticipantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ResolutionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Seen")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Xp")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("JudgmentId", "ResolutionId")
+                        .IsUnique();
+
+                    b.HasIndex("ParticipantId", "Seen");
+
+                    b.ToTable("PlayerRewardNotice");
+                });
+
             modelBuilder.Entity("BashkirSchool.Infrastructure.PlayerState", b =>
                 {
-                    b.Property<int>("LastRewardedLevel")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(1);
-
                     b.Property<Guid>("ParticipantId")
                         .HasColumnType("uuid");
 
@@ -1297,6 +1335,11 @@ namespace BashkirSchool.Infrastructure.Migrations
 
                     b.Property<DateOnly?>("LastDailyRewardDay")
                         .HasColumnType("date");
+
+                    b.Property<int>("LastRewardedLevel")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
 
                     b.Property<string>("OwnedJson")
                         .IsRequired()
@@ -1720,6 +1763,15 @@ namespace BashkirSchool.Infrastructure.Migrations
                 });
 
             modelBuilder.Entity("BashkirSchool.Infrastructure.PlayerCaseOpening", b =>
+                {
+                    b.HasOne("BashkirSchool.Domain.Participant", null)
+                        .WithMany()
+                        .HasForeignKey("ParticipantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BashkirSchool.Infrastructure.PlayerRewardNotice", b =>
                 {
                     b.HasOne("BashkirSchool.Domain.Participant", null)
                         .WithMany()

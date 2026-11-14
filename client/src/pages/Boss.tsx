@@ -34,6 +34,7 @@ export default function Boss() {
   const [teacherTask, setTeacherTask] = useState<TeacherBossTask | null>(null);
   const [pending, setPending] = useState<PendingBoss | null>(() => readPending(userId));
   const [feedback, setFeedback] = useState("");
+  const [earned, setEarned] = useState("");
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -69,6 +70,7 @@ export default function Boss() {
     setBusy(true); setError("");
     try {
       const result = await answerTeacherBoss(teacherTask.id, answer);
+      setEarned(result.xpAwarded > 0 ? `+${result.coinsAwarded} монета · +${result.xpAwarded} XP` : "");
       setTeacherTask(null);
       if (result.bossCompleted) {
         setDone(true); setFeedback("");
@@ -85,6 +87,7 @@ export default function Boss() {
     setBusy(true); setError("");
     try {
       const result = await answerBoss(attempt.bossId, attempt.assignmentId, attempt.answer);
+      setEarned(result.xpAwarded > 0 ? `+${result.coinsAwarded} монета · +${result.xpAwarded} XP` : "");
       sessionStorage.removeItem(pendingKey(userId)); setPending(null);
       if (result.bossCompleted) {
         setBoss(null); setDone(true); setFeedback("");
@@ -113,7 +116,7 @@ export default function Boss() {
     <PageTitle subtitle="Три проверки перевода">Испытание Босса</PageTitle>
     {error && <div className="surface learning-alert" role="alert"><p>{error}</p><button className="button button-soft" disabled={busy} onClick={() => void openBoss()}>Обновить задание</button></div>}
     {loading && <p className="loading-text" role="status">Проверяем доступ…</p>}
-    {!loading && done && <section className="surface result-card" role="status"><div className="boss-emblem small">👑</div><h2>Босс пройден!</h2><p>За каждый ответ начислена 1 монета. Если перевод подтвердит большинство или эксперт, начислятся ещё 4.</p><Link className="button button-primary full-width" to="/learn">К обучению</Link>{(progress?.availableBosses ?? 0) > 0 && <button className="button button-soft full-width" onClick={() => { setDone(false); void openBoss(); }} disabled={busy}>Следующий Босс</button>}</section>}
+    {earned && <p className="neutral-feedback" role="status">Получено за ответ: {earned}</p>}{!loading && done && <section className="surface result-card" role="status"><div className="boss-emblem small">👑</div><h2>Босс пройден!</h2><p>За каждый принятый ответ — 1 монета и 40 XP. Если перевод подтвердит большинство или эксперт, дополнительно придут 4 монеты и 20 XP.</p><Link className="button button-primary full-width" to="/learn">К обучению</Link>{(progress?.availableBosses ?? 0) > 0 && <button className="button button-soft full-width" onClick={() => { setDone(false); void openBoss(); }} disabled={busy}>Следующий Босс</button>}</section>}
     {!loading && !done && !boss && !teacherTask && <section className="surface intro-card">
       <div className={`boss-sword-cost ${swords > 0 ? "is-ready" : "is-empty"}`} role="status" aria-label={`Мечей в инвентаре: ${swords}. Для входа нужен 1 меч.`}>
         <span className="boss-sword-icon" aria-hidden="true">⚔️</span>
@@ -130,7 +133,7 @@ export default function Boss() {
       <span className="eyebrow-label">БОСС ОТ ПРЕПОДАВАТЕЛЯ · {teacherTask.className}</span>
       <h2>{teacherTask.title}</h2>
       <p className="bashkir-text" lang="ba">{teacherTask.sourceText}</p>
-      <p className="learning-hint">Переведи фрагмент на русский. За ответ — 1 монета; если перевод позже подтвердит большинство или эксперт, ещё 4 монеты.</p>
+      <p className="learning-hint">Переведи фрагмент на русский. За ответ — 1 монета и 40 XP; если перевод позже подтвердит большинство или эксперт, ещё 4 монеты и 20 XP.</p>
       <form onSubmit={(event) => { event.preventDefault(); const value = new FormData(event.currentTarget).get("answer"); if (typeof value === "string" && value.trim()) void submitTeacher(value.trim()); }}>
         <label className="field-label" htmlFor="teacher-boss-answer">Твой перевод</label>
         <textarea id="teacher-boss-answer" name="answer" rows={4} maxLength={5000} required disabled={busy} />
@@ -150,7 +153,7 @@ function BossTask({ question, busy, onSubmit, onRefresh }: { question: BossQuest
   return <>
     <span className="eyebrow-label">{question.kind === "translation-create" ? "СВОЙ ПЕРЕВОД" : choice ? "ВЫБОР ПЕРЕВОДА" : "ПРОВЕРКА ПЕРЕВОДА"}</span>
     <h2 className="bashkir-text" lang="ba">{question.original}</h2>
-    <p className="learning-hint">За ответ — 1 монета. За подтверждённый позже перевод — ещё 4.</p>
+    <p className="learning-hint">За ответ — 1 монета и 40 XP. За подтверждённый позже перевод — ещё 4 монеты и 20 XP.</p>
     {question.kind === "translation-create" ? <p className="learning-hint">Предложи перевод этого фрагмента на русский.</p> : choice ? <p className="learning-hint">Выбери подходящий вариант или предложи свой перевод.</p> : <><p className="learning-hint">Подходит ли этот перевод?</p><div className="translation-panel"><span>ПРЕДЛОЖЕННЫЙ ПЕРЕВОД</span><p>{question.translation}</p></div></>}
     {expired && <><p className="error-text" role="alert">Срок выдачи истёк. Обнови задание.</p><button type="button" className="button button-primary full-width" disabled={busy} onClick={onRefresh}>Получить новый фрагмент</button></>}
     {!custom && !expired && <div className="options-list">

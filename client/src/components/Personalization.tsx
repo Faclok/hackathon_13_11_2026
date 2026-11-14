@@ -28,9 +28,13 @@ export function Avatar({
   className?: string;
   framed?: boolean;
 }) {
+  const frame = framed
+    ? decorationCatalog.find((item) => item.id === user.frameId && item.type === "frame")
+    : undefined;
+  const hat = decorationCatalog.find((item) => item.id === user.hatId && item.type === "hat");
   return (
     <span
-      className={`player-avatar ${framed && user.frameId ? `frame-${user.frameId}` : ""} ${className}`}
+      className={`player-avatar ${framed && user.frameId ? `frame-${user.frameId}` : ""} ${frame?.imageUrl ? "has-artwork-frame" : ""} ${className}`}
       data-hat-id={user.hatId}
     >
       {user.avatarUrl ? (
@@ -42,9 +46,18 @@ export function Avatar({
       ) : (
         <Mascot />
       )}
+      {frame?.imageUrl && (
+        <span className="avatar-frame" aria-hidden="true">
+          <img src={frame.imageUrl} alt="" draggable={false} />
+        </span>
+      )}
       {user.hatId && user.hatId !== "hat_none" && (
         <span className="avatar-hat">
-          <HatOverlay id={user.hatId} />
+          {hat?.imageUrl ? (
+            <img src={hat.imageUrl} alt="" draggable={false} />
+          ) : (
+            <HatOverlay id={user.hatId} />
+          )}
         </span>
       )}
     </span>

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" width="900" height="900" fill="none">
+  <title>Башкирский ковёр — стилизованный геометрический узор</title>
+  <path d="M65 57 242 87 211 264 34 234Z" fill="#55745e" opacity=".12"/>
+  <g stroke="#cbb78b" stroke-width="4" stroke-linecap="round"><path d="m74 37 2-11m17 14 2-11m17 14 2-11m17 14 2-11m17 14 2-11m17 14 2-11m17 14 2-11m17 14 2-11m17 14 2-11m17 14 2-11"/><path d="m40 235-2 12m19-9-2 12m19-9-2 12m19-9-2 12m19-9-2 12m19-9-2 12m19-9-2 12m19-9-2 12m19-9-2 12m19-9-2 12"/></g>
+  <g transform="translate(70 35) rotate(10)">
+    <rect width="174" height="204" rx="3" fill="#9e5146" stroke="#77483c" stroke-width="3"/>
+    <rect x="9" y="9" width="156" height="186" fill="#d4bb7c"/>
+    <rect x="19" y="19" width="136" height="166" fill="#49715c"/>
+    <path d="m87 31 57 71-57 71-57-71Z" fill="#e1c88d"/>
+    <path d="m87 48 43 54-43 54-43-54Z" fill="#ac5d4c"/>
+    <path d="m87 67 28 35-28 35-28-35Z" fill="#f0db9f"/>
+    <path d="m87 86 13 16-13 16-13-16Z" fill="#49715c"/>
+    <g fill="#e1c88d"><path d="m28 29 9 10-9 10Zm118 0-9 10 9 10ZM28 155l9 10-9 10Zm118 0-9 10 9 10Z"/></g>
+    <path d="M8 58h11m-11 44h11m-11 44h11m136-88h11m-11 44h11m-11 44h11M48 9v10m39-10v10m39-10v10M48 185v10m39-10v10m39-10v10" stroke="#9e5146" stroke-width="5"/>
+    <path d="M5 4h164" stroke="#f0db9f" stroke-width="2" opacity=".6"/>
+  </g>
+</svg>

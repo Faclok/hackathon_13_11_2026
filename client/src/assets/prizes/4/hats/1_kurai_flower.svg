@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 155" width="900" height="465" fill="none">
+  <title>Цветок курая — тюбетейка</title>
+  <defs><linearGradient id="velvet" x1="89" y1="20" x2="207" y2="140" gradientUnits="userSpaceOnUse"><stop stop-color="#75977a"/><stop offset="1" stop-color="#305c47"/></linearGradient></defs>
+  <path d="M40 126C40 57 84 20 150 20s110 37 110 106Z" fill="url(#velvet)" stroke="#315440" stroke-width="4"/>
+  <path d="M150 23c-39 21-56 54-57 99m57-99c39 21 56 54 57 99" stroke="#99b08a" stroke-width="3" opacity=".45"/>
+  <path d="M37 115q113 23 226 0v25q-113 22-226 0Z" fill="#315440" stroke="#d1b26b" stroke-width="4"/>
+  <path d="m58 127 10 8 10-6m12 3 10 8 10-6m12 3 10 8 10-7m12 0 10 7 10-8m12 0 10 6 10-8m12-2 10 6 10-8" stroke="#d1b26b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M150 104V55m0 31-22-20m22 13-10-26m10 26 10-26m-10 33 22-20m-22 29-30-4m30 4 30-4" stroke="#e1c77d" stroke-width="3" stroke-linecap="round"/>
+  <g fill="#e1c77d"><circle cx="150" cy="51" r="5"/><circle cx="138" cy="50" r="5"/><circle cx="162" cy="50" r="5"/><circle cx="125" cy="64" r="5"/><circle cx="175" cy="64" r="5"/><circle cx="117" cy="90" r="5"/><circle cx="183" cy="90" r="5"/></g>
+</svg>

@@ -11,9 +11,9 @@ export type ExerciseQuestion =
   | { id: string; attemptToken: string; kind: "word-match"; schemaVersion: number; prompt: { left: ExerciseItem[]; right: ExerciseItem[]; languagePair: string } };
 export type ExerciseAnswer = { text: string } | { optionId: string } | { tokenIds: string[] } | { pairs: { leftId: string; rightId: string }[] };
 export interface Level { id: string; number: number; questionCount: number; correctCount: number; question: ExerciseQuestion }
-export interface LevelAnswerResult { attemptToken: string; recognized: boolean; levelCompleted: boolean; correctAnswer: string | null }
+export interface LevelAnswerResult { attemptToken: string; recognized: boolean; levelCompleted: boolean; correctAnswer: string | null; coinsAwarded: number; xpAwarded: number }
 export interface LearningProgress { completedLevels: number; completedBosses: number; availableBosses: number; attempts: number; mistakes: number }
-export interface LevelStatistic { number: number; questionCount: number; correctCount: number; attempts: number; mistakes: number; startedAt: string; completedAt: string | null }
+export interface LevelStatistic { number: number; questionCount: number; correctCount: number; attempts: number; mistakes: number; startedAt: string; completedAt: string | null; coinsAwarded: number; xpAwarded: number }
 
 export interface BossQuestion {
   id: string; caseId: string; variantId: string; original: string; translation: string; expiresAt: string;
@@ -23,7 +23,7 @@ export interface BossQuestion {
 }
 export interface BossLevel { id: string; checkpoint: number; questionCount: number; completedCount: number; question: BossQuestion | null }
 export type BossAnswer = { action: "Confirm"; selectedVariantId?: string } | { action: "Correct"; correction: string } | { action: "Skip" };
-export interface BossAnswerResult { responseId: string; archived: boolean; bossCompleted: boolean }
+export interface BossAnswerResult { responseId: string; archived: boolean; bossCompleted: boolean; coinsAwarded: number; xpAwarded: number }
 export interface TeacherBossTask { id: string; title: string; sourceText: string; className: string; dueAt: string | null }
 export type BossSource = { source: "teacher"; task: TeacherBossTask } | { source: "random"; assignment: BossQuestion };
 
@@ -43,7 +43,7 @@ export const getBossLevel = () => apiRequest<BossLevel | null>("/api/learning/bo
 export const getNextBossSource = () => apiRequest<BossSource | null>("/api/lms/me/next-translation", { method: "POST" });
 export const startBoss = () => apiRequest<{ id: string; checkpoint: number } | null>("/api/learning/boss/start", { method: "POST" });
 export const answerTeacherBoss = (taskId: string, answer: string) =>
-  apiRequest<{ bossCompleted: boolean }>(`/api/lms/me/tasks/${encodeURIComponent(taskId)}/submission`, {
+  apiRequest<{ bossCompleted: boolean; coinsAwarded: number; xpAwarded: number }>(`/api/lms/me/tasks/${encodeURIComponent(taskId)}/submission`, {
     method: "PUT", body: JSON.stringify({ answer, boss: true }),
   });
 export const answerBoss = (bossId: string, assignmentId: string, answer: BossAnswer) =>

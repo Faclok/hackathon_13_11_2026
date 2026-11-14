@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" width="900" height="900" fill="none">
+  <title>Степной сокол</title>
+  <defs><linearGradient id="wing" x1="150" y1="80" x2="150" y2="204" gradientUnits="userSpaceOnUse"><stop stop-color="#9ba8a0"/><stop offset="1" stop-color="#536a65"/></linearGradient></defs>
+  <ellipse cx="150" cy="269" rx="98" ry="9" fill="#55745e" opacity=".13"/>
+  <path d="m87 265 17-38 47-17 41 14 23 41Z" fill="#a6b1a5"/>
+  <path d="m104 227 47-17-12 55H87Zm47-17 41 14-23 41h-30Z" fill="#c8d0bf"/>
+  <path d="M132 115Q79 110 28 52c2 31 10 52 24 62l-12-2c10 20 23 31 39 35l-10 2q21 28 55 27Zm36 0q53-5 104-63c-2 31-10 52-24 62l12-2c-10 20-23 31-39 35l10 2q-21 28-55 27Z" fill="url(#wing)" stroke="#536a65" stroke-width="3" stroke-linejoin="round"/>
+  <path d="m44 83 62 52m-53-23 47 35m156-64-62 52m53-23-47 35" stroke="#c5cbb8" stroke-width="5" stroke-linecap="round"/>
+  <path d="m136 173-12 50 26-11 26 11-12-50Z" fill="#536a65"/>
+  <ellipse cx="150" cy="148" rx="32" ry="51" fill="#eee4c8"/>
+  <path d="M122 125c-10-33 6-51 28-51s38 18 28 51l-15-17h-26Z" fill="#627974"/>
+  <path d="m128 112 10 27 6-30m28 3-10 27-6-30" fill="#627974"/>
+  <circle cx="137" cy="106" r="6" fill="#e7c16e"/><circle cx="163" cy="106" r="6" fill="#e7c16e"/>
+  <circle cx="138" cy="106" r="3" fill="#344b45"/><circle cx="162" cy="106" r="3" fill="#344b45"/>
+  <path d="m143 118 7-5 7 5-7 12Z" fill="#b98b45"/>
+  <path d="m137 152 3 6m20-6-3 6m-10 7 3 6m-11 6 3 6m16-6-3 6" stroke="#a59472" stroke-width="4" stroke-linecap="round"/>
+  <path d="m138 194-3 23m27-23 3 23m-36 1h14m14 0h14" stroke="#be9857" stroke-width="5" stroke-linecap="round"/>
+</svg>

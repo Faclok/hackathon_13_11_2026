@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" width="900" height="900" fill="none">
+  <title>Сияние Урала — рамка с прозрачным центром</title>
+  <circle cx="150" cy="150" r="133" stroke="#59846d" stroke-width="17"/>
+  <circle cx="150" cy="150" r="143" stroke="#ceb16f" stroke-width="4"/>
+  <circle cx="150" cy="150" r="121" stroke="#e9d59b" stroke-width="3"/>
+  <defs><g id="gem"><path d="m150 2 13 19-13 22-13-22Z" fill="#6aab8b" stroke="#e5cd8a" stroke-width="2"/><path d="m150 2-4 19 4 22 5-22Z" fill="#b9dbc0"/><path d="m137 21 9 0 4 22Z" fill="#41795f"/></g></defs>
+  <use href="#gem"/><use href="#gem" transform="rotate(45 150 150)"/><use href="#gem" transform="rotate(90 150 150)"/><use href="#gem" transform="rotate(135 150 150)"/><use href="#gem" transform="rotate(180 150 150)"/><use href="#gem" transform="rotate(225 150 150)"/><use href="#gem" transform="rotate(270 150 150)"/><use href="#gem" transform="rotate(315 150 150)"/>
+  <g fill="#ead79d"><circle cx="201" cy="27" r="4"/><circle cx="273" cy="99" r="4"/><circle cx="273" cy="201" r="4"/><circle cx="201" cy="273" r="4"/><circle cx="99" cy="273" r="4"/><circle cx="27" cy="201" r="4"/><circle cx="27" cy="99" r="4"/><circle cx="99" cy="27" r="4"/></g>
+  <path d="m150 6 2 7 7 2-7 2-2 7-2-7-7-2 7-2Zm136 137 2 5 5 2-5 2-2 5-2-5-5-2 5-2Z" fill="#fff6da"/>
+</svg>

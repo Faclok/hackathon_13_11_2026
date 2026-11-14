@@ -36,6 +36,7 @@ export default function Learn() {
   const [level, setLevel] = useState<Level | null>(null);
   const [completedNumber, setCompletedNumber] = useState<number | null>(null);
   const [completedCoins, setCompletedCoins] = useState(0);
+  const [completedXp, setCompletedXp] = useState(0);
   const [feedback, setFeedback] = useState<LevelAnswerResult | null>(null);
   const [pending, setPending] = useState<PendingAttempt | null>(() => readPending(userId));
   const [busy, setBusy] = useState(false);
@@ -79,7 +80,8 @@ export default function Learn() {
       if (result.levelCompleted) {
         setLevel(null);
         setCompletedNumber(attempt.levelNumber);
-        setCompletedCoins(Math.floor((level?.questionCount ?? 0) / 3));
+        setCompletedCoins(result.coinsAwarded);
+        setCompletedXp(result.xpAwarded);
         try { await Promise.all([refreshOverview(), useUserStore.getState().refreshProfile()]); } catch (cause) { setError(message(cause)); }
       } else {
         try { await current(); } catch (cause) { setLevel(null); setError(message(cause)); }
@@ -93,7 +95,8 @@ export default function Learn() {
           const latest = await getLevelStatistics(0, 5);
           if (latest.some((item) => item.number === attempt.levelNumber && item.completedAt)) {
             const completed = latest.find((item) => item.number === attempt.levelNumber && item.completedAt)!;
-            setCompletedCoins(Math.floor(completed.questionCount / 3));
+            setCompletedCoins(completed.coinsAwarded);
+            setCompletedXp(completed.xpAwarded);
             setCompletedNumber(attempt.levelNumber); setLevel(null); setFeedback(null);
           } else await current();
         } catch { /* Recovery remains available through the page controls. */ }
@@ -142,7 +145,7 @@ export default function Learn() {
       <section className="surface intro-card">
         <span className="eyebrow-label">УРОВЕНЬ {history.find((item) => !item.completedAt)?.number ?? (progress?.completedLevels ?? 0) + 1}</span>
         <h2>Продолжай обучение</h2>
-        <p>В каждом уровне от 6 до 10 вопросов. За уровень получишь число монет, равное количеству заданий, делённому на 3 без остатка. За каждые 5 уровней — Меч.</p>
+        <p>В каждом уровне от 6 до 10 вопросов. За уровень получишь число монет, равное количеству заданий, делённому на 3 без остатка, и 5 XP за каждый вопрос. За каждые 5 уровней — Меч.</p>
         {pending ? <button className="button button-primary full-width" disabled={busy} onClick={() => void send(pending)}>Восстановить ответ</button>
           : <button className="button button-primary full-width" disabled={busy} onClick={() => void start()}>{history.some((item) => !item.completedAt) ? "Продолжить уровень" : "Начать уровень"}</button>}
         {noMaterial && <p className="learning-hint" role="status">Пока нет подходящих материалов. Попробуй позже.</p>}
@@ -158,6 +161,6 @@ export default function Learn() {
       </section>
     </>}
     {!level && feedback && completedNumber === null && <section className="surface task-panel"><div className={`answer-feedback ${feedback.recognized ? "correct" : "incorrect"}`} role="status"><strong>{feedback.recognized ? "Ответ принят" : "Ответ пока не совпал"}</strong>{!feedback.recognized && feedback.correctAnswer && <p><strong>Правильный ответ: {feedback.correctAnswer}</strong></p>}<p>Обнови текущий вопрос, чтобы продолжить.</p><button className="button button-primary full-width" disabled={busy} onClick={() => void continueLevel()}>Загрузить текущий вопрос</button></div></section>}
-    {completedNumber !== null && <section className="surface result-card" role="status"><div className="result-symbol">✓</div><h2>Уровень {completedNumber} пройден!</h2><p>Награда: {plural(completedCoins, "монета", "монеты", "монет")}{completedNumber % 5 === 0 ? " и Меч ⚔️" : ""}.</p><p>Все вопросы решены. Следующий уровень начнётся, когда ты нажмёшь кнопку.</p>{feedback && <p>Последний ответ принят.</p>}<button className="button button-primary full-width" disabled={busy} onClick={() => { setFeedback(null); void start(); }}>Начать следующий уровень</button><button className="button button-soft full-width" onClick={() => { setCompletedNumber(null); setFeedback(null); }} disabled={busy}>К истории уровней</button></section>}
+    {completedNumber !== null && <section className="surface result-card" role="status"><div className="result-symbol">✓</div><h2>Уровень {completedNumber} пройден!</h2><p>Награда: {plural(completedCoins, "монета", "монеты", "монет")} · +{completedXp} XP{completedNumber % 5 === 0 ? " и Меч ⚔️" : ""}.</p><p>Все вопросы решены. Следующий уровень начнётся, когда ты нажмёшь кнопку.</p>{feedback && <p>Последний ответ принят.</p>}<button className="button button-primary full-width" disabled={busy} onClick={() => { setFeedback(null); void start(); }}>Начать следующий уровень</button><button className="button button-soft full-width" onClick={() => { setCompletedNumber(null); setFeedback(null); }} disabled={busy}>К истории уровней</button></section>}
   </>;
 }

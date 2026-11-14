@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" width="900" height="900" fill="none">
+  <title>Башкирский узор — рамка с прозрачным центром</title>
+  <circle cx="150" cy="150" r="132" stroke="#395f4c" stroke-width="20"/>
+  <circle cx="150" cy="150" r="144" stroke="#c5a364" stroke-width="4"/>
+  <circle cx="150" cy="150" r="120" stroke="#e4cc91" stroke-width="4"/>
+  <g fill="#e4cc91">
+    <path id="ornament" d="m150 10 8 8-8 8-8-8Zm-20 8 8 5-5 8-8-5Zm40 0 5 8-8 5-5-8Z"/>
+    <use href="#ornament" transform="rotate(45 150 150)"/><use href="#ornament" transform="rotate(90 150 150)"/><use href="#ornament" transform="rotate(135 150 150)"/><use href="#ornament" transform="rotate(180 150 150)"/><use href="#ornament" transform="rotate(225 150 150)"/><use href="#ornament" transform="rotate(270 150 150)"/><use href="#ornament" transform="rotate(315 150 150)"/>
+  </g>
+  <g stroke="#8fa57b" stroke-width="3"><path d="m213 28 9 5m50 54 4 9m-4 117-5 9m-54 50-9 4m-117-4-9-5m-50-54-4-9m4-117 5-9m54-50 9-4"/></g>
+</svg>

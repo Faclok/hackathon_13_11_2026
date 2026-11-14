@@ -64,7 +64,8 @@ public sealed class LevelWorkflow(CoreDbContext db, IPermissionChecker permissio
                 throw new ConflictException("Attempt token was already used for a different answer.");
             using var previousKey = JsonDocument.Parse(question.AnswerKeyJson);
             var previousCorrect = prior.Recognized ? null : registry.Get(question.Kind, question.SchemaVersion).CorrectAnswer(previousKey.RootElement);
-            return new(prior.Id, prior.Recognized, prior.LevelCompleted, previousCorrect);
+            return new(prior.Id, prior.Recognized, prior.LevelCompleted, previousCorrect)
+                { CoinsAwarded = prior.CoinsAwarded, XpAwarded = prior.XpAwarded };
         }
         var questions = await Questions(level.Id, ct);
         var current = Next(questions);
@@ -80,14 +81,19 @@ public sealed class LevelWorkflow(CoreDbContext db, IPermissionChecker permissio
         if (questions.All(x => x.CompletedAt.HasValue))
         {
             level.CompletedAt = clock.GetUtcNow();
-            (await economy.StateAsync(actor, ct)).Coins += questions.Length / 3;
+            var state = await economy.StateAsync(actor, ct);
+            state.Coins += questions.Length / 3;
+            state.Xp += questions.Length * PlayerProgression.XpPerQuestion;
         }
         var answer = new LevelAnswer { Id = request.AttemptToken, QuestionId = question.Id, AnswerJson = canonical,
-            Recognized = recognized, SubmittedAt = clock.GetUtcNow(), LevelCompleted = level.CompletedAt.HasValue };
+            Recognized = recognized, SubmittedAt = clock.GetUtcNow(), LevelCompleted = level.CompletedAt.HasValue,
+            CoinsAwarded = level.CompletedAt.HasValue ? questions.Length / 3 : 0,
+            XpAwarded = level.CompletedAt.HasValue ? questions.Length * PlayerProgression.XpPerQuestion : 0 };
         db.Add(answer);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
-        return new(answer.Id, recognized, answer.LevelCompleted, correctAnswer);
+        return new(answer.Id, recognized, answer.LevelCompleted, correctAnswer)
+            { CoinsAwarded = answer.CoinsAwarded, XpAwarded = answer.XpAwarded };
     }
 
     public async Task<CheckWordPairResponse> CheckWordPairAsync(Guid actor, Guid levelId, Guid questionId,
@@ -137,7 +143,8 @@ public sealed class LevelWorkflow(CoreDbContext db, IPermissionChecker permissio
             var ids = questions.Select(x => x.Id).ToArray();
             var answers = await db.Set<LevelAnswer>().Where(x => ids.Contains(x.QuestionId)).ToArrayAsync(ct);
             result.Add(new(level.Number, questions.Length, questions.Count(x => x.CompletedAt.HasValue), answers.Length,
-                answers.Count(x => !x.Recognized), level.StartedAt, level.CompletedAt));
+                answers.Count(x => !x.Recognized), level.StartedAt, level.CompletedAt)
+                { CoinsAwarded = answers.Sum(x => x.CoinsAwarded), XpAwarded = answers.Sum(x => x.XpAwarded) });
         }
         return result;
     }
@@ -224,7 +231,8 @@ public sealed class LevelWorkflow(CoreDbContext db, IPermissionChecker permissio
         await db.SaveChangesAsync(ct);
         await ReconcileBoss(boss, ct);
         await transaction.CommitAsync(ct);
-        return new(response.Id, response.Archived, boss.CompletedAt.HasValue);
+        return new(response.Id, response.Archived, boss.CompletedAt.HasValue)
+            { CoinsAwarded = response.Archived ? 0 : 1, XpAwarded = response.Archived ? 0 : PlayerProgression.BossAnswerXp };
     }
 
     public async Task<LevelBossAnswerResponse> AttachTeacherAnswerAsync(Guid actor, Guid assignmentId, CancellationToken ct)
@@ -251,7 +259,9 @@ public sealed class LevelWorkflow(CoreDbContext db, IPermissionChecker permissio
         await ReconcileBoss(boss, ct);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
-        return new(receipt.ResponseId, receipt.Archived, boss.CompletedAt.HasValue);
+        var rewarded = !receipt.Archived && request.Action != ReviewAction.Skip;
+        return new(receipt.ResponseId, receipt.Archived, boss.CompletedAt.HasValue)
+            { CoinsAwarded = rewarded ? 1 : 0, XpAwarded = rewarded ? PlayerProgression.BossAnswerXp : 0 };
     }
 
     private async Task ReconcileBoss(LevelBoss boss, CancellationToken ct)

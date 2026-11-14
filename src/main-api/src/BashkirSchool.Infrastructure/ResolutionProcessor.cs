@@ -69,8 +69,18 @@ public sealed class ResolutionProcessor(CoreDbContext db, TimeProvider clock)
             var deltaCorrect = correct - (prior?.Correct ?? 0);
             var deltaTotal = total - (prior?.Total ?? 0);
             if (deltaCorrect != 0 && claim.IsBoss)
+            {
+                // XP is earned only on the first confirmed result, even if the decision changes later.
+                var xp = deltaCorrect > 0 && !await db.Set<PlayerRewardNotice>()
+                    .AnyAsync(x => x.JudgmentId == claim.Judgment.Id && x.Xp > 0, ct)
+                    ? PlayerProgression.ConfirmedAnswerXp : 0;
                 await db.Set<PlayerState>().Where(x => x.ParticipantId == claim.ParticipantId)
-                    .ExecuteUpdateAsync(s => s.SetProperty(x => x.Coins, x => x.Coins + 4 * deltaCorrect), ct);
+                    .ExecuteUpdateAsync(s => s.SetProperty(x => x.Coins, x => x.Coins + 4 * deltaCorrect)
+                        .SetProperty(x => x.Xp, x => x.Xp + xp), ct);
+                db.Add(new PlayerRewardNotice { ParticipantId = claim.ParticipantId,
+                    JudgmentId = claim.Judgment.Id, ResolutionId = resolution.Id,
+                    Coins = 4 * deltaCorrect, Xp = xp, CreatedAt = clock.GetUtcNow() });
+            }
             await db.Participants.Where(x => x.Id == claim.ParticipantId).ExecuteUpdateAsync(s =>
                 s.SetProperty(x => x.Correct, x => x.Correct + deltaCorrect).SetProperty(x => x.Total, x => x.Total + deltaTotal), ct);
             if (prior is null)

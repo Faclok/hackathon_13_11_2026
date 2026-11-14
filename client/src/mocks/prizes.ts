@@ -17,11 +17,134 @@ import kubyz from "../assets/prizes/3/items/3_kubyz.svg";
 import saba from "../assets/prizes/3/items/4_saba.svg";
 import ichigi from "../assets/prizes/3/items/5_ichigi.svg";
 import chakChak from "../assets/prizes/3/items/6_chak_chak.svg";
+import fox from "../assets/prizes/2/bashkortostan_pets/7_ural_fox.svg";
+import falcon from "../assets/prizes/2/bashkortostan_pets/8_steppe_falcon.svg";
+import spirit from "../assets/prizes/2/bashkortostan_pets/9_kurai_spirit.svg";
+import kumys from "../assets/prizes/3/items/7_kumys_bowl.svg";
+import carpet from "../assets/prizes/3/items/8_bashkir_carpet.svg";
+import uralHeart from "../assets/prizes/3/items/9_ural_heart.svg";
+import kuraiHat from "../assets/prizes/4/hats/1_kurai_flower.svg";
+import kashmau from "../assets/prizes/4/hats/2_festive_kashmau.svg";
+import wingedHat from "../assets/prizes/4/hats/3_akbuzat_wings.svg";
+import patternFrame from "../assets/prizes/5/frames/1_bashkir_pattern.svg";
+import honeyFrame from "../assets/prizes/5/frames/2_forest_honey.svg";
+import uralFrame from "../assets/prizes/5/frames/3_ural_radiance.svg";
 
 // The nested asset folders are canonical; the loose SVGs are duplicate exports.
 // Descriptions are adapted from the supplied texts into complete collection cards.
 type Prize = Omit<Decoration, "price" | "source">;
 const prizes: Prize[] = [
+  {
+    id: "hat_kurai_flower",
+    type: "hat",
+    title: "Цветок курая",
+    rarity: "rare",
+    previewUrl: "🌼",
+    imageUrl: kuraiHat,
+    description: "Зелёная тюбетейка с золотистой вышивкой в форме цветка курая. Мягкие оттенки и узор связывают этот головной убор с башкирской коллекцией.",
+  },
+  {
+    id: "hat_festive_kashmau",
+    type: "hat",
+    title: "Праздничный ҡашмау",
+    rarity: "epic",
+    previewUrl: "🔴",
+    imageUrl: kashmau,
+    description: "Стилизованный образ башкирского женского головного убора: красная ткань, серебристые монеты и подвески. Миниатюра передаёт праздничное настроение традиционного костюма.",
+  },
+  {
+    id: "hat_akbuzat_wings",
+    type: "hat",
+    title: "Крылья Акбузата",
+    rarity: "legendary",
+    previewUrl: "🪽",
+    imageUrl: wingedHat,
+    description: "Фантазийный головной убор, вдохновлённый крылатым конём Акбузатом. Светлые крылья, золотистый обод и зелёный камень напоминают о мире башкирских сказаний.",
+  },
+  {
+    id: "frame_bashkir_pattern",
+    type: "frame",
+    title: "Башкирский узор",
+    rarity: "rare",
+    previewUrl: "🟢",
+    imageUrl: patternFrame,
+    description: "Зелёное обрамление с золотистым геометрическим узором. Стилизованный орнамент объединяет аватарку с башкирской коллекцией украшений.",
+  },
+  {
+    id: "frame_forest_honey",
+    type: "frame",
+    title: "Бортевой мёд",
+    rarity: "epic",
+    previewUrl: "🍯",
+    imageUrl: honeyFrame,
+    description: "Янтарные соты, капля мёда и маленькая пчела окружают аватарку. Рамка продолжает тему башкирского бортничества и лесного мёда.",
+  },
+  {
+    id: "frame_ural_radiance",
+    type: "frame",
+    title: "Сияние Урала",
+    rarity: "legendary",
+    previewUrl: "💎",
+    imageUrl: uralFrame,
+    description: "Изумрудные грани и золотистый обод создают сказочное сияние уральских самоцветов. Светлые блики подчёркивают каждый кристалл рамки.",
+  },
+  {
+    id: "prize_pet_fox",
+    type: "pet",
+    title: "Лисёнок Урала",
+    rarity: "rare",
+    previewUrl: "🦊",
+    imageUrl: fox,
+    petName: "Лисёнок",
+    description: "Рыжий лесной спутник с белой грудкой и пушистым хвостом. Лисёнок продолжает коллекцию животных природы Башкортостана и сопровождает тебя в языковом путешествии.",
+  },
+  {
+    id: "prize_pet_falcon",
+    type: "pet",
+    title: "Степной сокол",
+    rarity: "epic",
+    previewUrl: "🦅",
+    imageUrl: falcon,
+    petName: "Сокол",
+    description: "Сокол расправил крылья над светлым камнем. Его силуэт напоминает об открытых просторах и степных пейзажах Башкортостана.",
+  },
+  {
+    id: "prize_pet_kurai_spirit",
+    type: "pet",
+    title: "Дух курая",
+    rarity: "legendary",
+    previewUrl: "🌿",
+    imageUrl: spirit,
+    petName: "Дух курая",
+    description: "Придуманный для коллекции сказочный спутник с цветком курая и золотистыми искрами. Этот фантазийный образ вдохновлён природой и музыкальным символом Башкортостана.",
+  },
+  {
+    id: "prize_item_kumys",
+    type: "item",
+    title: "Пиала с кумысом",
+    rarity: "rare",
+    previewUrl: "🥣",
+    imageUrl: kumys,
+    description: "Деревянная пиала с геометрическим узором и светлым кумысом. Миниатюра продолжает тему башкирского гостеприимства и традиционного напитка из кобыльего молока.",
+  },
+  {
+    id: "prize_item_carpet",
+    type: "item",
+    title: "Башкирский ковёр",
+    rarity: "epic",
+    previewUrl: "🧶",
+    imageUrl: carpet,
+    description: "Небольшой ковёр с бахромой и стилизованным геометрическим узором. Красные, зелёные и золотистые ромбы добавляют профилю тепло домашнего убранства.",
+  },
+  {
+    id: "prize_item_ural_heart",
+    type: "item",
+    title: "Сердце Урала",
+    rarity: "legendary",
+    previewUrl: "💚",
+    imageUrl: uralHeart,
+    description: "Фантазийный зелёный самоцвет на золотистой подставке с узором. Придуманное сокровище коллекции вдохновлено красотой Уральских гор.",
+  },
   {
     id: "prize_bg_kurai",
     type: "background",

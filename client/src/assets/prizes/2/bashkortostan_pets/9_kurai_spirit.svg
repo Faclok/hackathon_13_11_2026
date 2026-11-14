@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" width="900" height="900" fill="none">
+  <title>Дух курая — фантазийный спутник</title>
+  <defs><radialGradient id="halo"><stop stop-color="#e9cf83" stop-opacity=".35"/><stop offset="1" stop-color="#e9cf83" stop-opacity="0"/></radialGradient><linearGradient id="spirit" x1="115" y1="116" x2="184" y2="247" gradientUnits="userSpaceOnUse"><stop stop-color="#a9c8a1"/><stop offset="1" stop-color="#4d8269"/></linearGradient></defs>
+  <circle cx="150" cy="152" r="132" fill="url(#halo)"/>
+  <ellipse cx="150" cy="265" rx="62" ry="8" fill="#55745e" opacity=".13"/>
+  <path d="M149 128c-10-30-48-30-53-4 19 4 32 3 53 4Zm3 0c10-30 48-30 53-4-19 4-32 3-53 4Z" fill="#719a73"/>
+  <path d="M150 128V53m0 46-36-30m36 23-20-43m20 43 20-43m-20 50 36-30m-36 39-53-9m53 9 53-9" stroke="#ba9c57" stroke-width="4" stroke-linecap="round"/>
+  <g fill="#e6c779" stroke="#b99a56" stroke-width="2"><circle cx="150" cy="46" r="9"/><circle cx="128" cy="45" r="9"/><circle cx="172" cy="45" r="9"/><circle cx="109" cy="64" r="9"/><circle cx="191" cy="64" r="9"/><circle cx="93" cy="98" r="9"/><circle cx="207" cy="98" r="9"/></g>
+  <path d="M107 160c0-34 19-48 43-48s43 14 43 48c0 25-17 45-10 63l19 19q-24 8-36-4-14 21-33 7-20 8-31-7c18-22 5-46 5-78Z" fill="url(#spirit)"/>
+  <path d="M111 168q-21-20-34 1m112-1q21-20 34 1" stroke="#7fa487" stroke-width="12" stroke-linecap="round"/>
+  <ellipse cx="150" cy="169" rx="28" ry="33" fill="#c7d9b5"/>
+  <path d="M132 162q5-6 10 0m16 0q5-6 10 0m-25 16q7 7 14 0" stroke="#3f6451" stroke-width="4" stroke-linecap="round"/>
+  <path d="m150 207 7 9-7 9-7-9Z" fill="#e6c779"/>
+  <path d="m55 112 4 10 10 4-10 4-4 10-4-10-10-4 10-4Zm186 80 3 8 8 3-8 3-3 8-3-8-8-3 8-3Z" fill="#d4b66d"/>
+  <circle cx="76" cy="214" r="4" fill="#d4b66d"/><circle cx="235" cy="86" r="3" fill="#d4b66d"/>
+</svg>

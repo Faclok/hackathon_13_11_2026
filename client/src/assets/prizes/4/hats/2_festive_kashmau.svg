@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 155" width="900" height="465" fill="none">
+  <title>Праздничный ҡашмау — стилизованный головной убор</title>
+  <defs><linearGradient id="cloth" x1="88" y1="20" x2="216" y2="145" gradientUnits="userSpaceOnUse"><stop stop-color="#ba7461"/><stop offset="1" stop-color="#833f3b"/></linearGradient></defs>
+  <path d="M61 137V96c0-49 36-78 89-78s89 29 89 78v41l-29-19-18-15h-84l-18 15Z" fill="url(#cloth)" stroke="#793f37" stroke-width="4"/>
+  <path d="M92 74q58-31 116 0M77 95q73-30 146 0" stroke="#dbb18b" stroke-width="4" stroke-linecap="round"/>
+  <g fill="#e5e1cb" stroke="#a7a699" stroke-width="2"><circle cx="111" cy="57" r="10"/><circle cx="136" cy="48" r="10"/><circle cx="164" cy="48" r="10"/><circle cx="189" cy="57" r="10"/><circle cx="93" cy="83" r="9"/><circle cx="120" cy="76" r="9"/><circle cx="150" cy="72" r="10"/><circle cx="180" cy="76" r="9"/><circle cx="207" cy="83" r="9"/></g>
+  <path d="M78 101v25m17-31v22m127-16v25m-17-31v22" stroke="#d4d4be" stroke-width="4"/>
+  <g fill="#e5e1cb" stroke="#a7a699" stroke-width="2"><circle cx="78" cy="132" r="10"/><circle cx="95" cy="123" r="7"/><circle cx="222" cy="132" r="10"/><circle cx="205" cy="123" r="7"/></g>
+  <path d="m150 92 9 9-9 10-9-10Z" fill="#d9b36a"/>
+  <g fill="#f6f1dd"><circle cx="111" cy="54" r="2"/><circle cx="136" cy="45" r="2"/><circle cx="164" cy="45" r="2"/><circle cx="189" cy="54" r="2"/><circle cx="150" cy="69" r="3"/></g>
+</svg>

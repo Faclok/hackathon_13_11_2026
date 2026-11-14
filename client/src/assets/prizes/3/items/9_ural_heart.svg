@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" width="900" height="900" fill="none">
+  <title>Сердце Урала — фантазийный самоцвет</title>
+  <defs><radialGradient id="light"><stop stop-color="#a1c6a6" stop-opacity=".5"/><stop offset="1" stop-color="#a1c6a6" stop-opacity="0"/></radialGradient></defs>
+  <circle cx="150" cy="137" r="119" fill="url(#light)"/>
+  <ellipse cx="150" cy="264" rx="86" ry="10" fill="#55745e" opacity=".13"/>
+  <path d="m150 40 62 51-14 88-48 39-48-39-14-88Z" fill="#4e8972" stroke="#396b57" stroke-width="3" stroke-linejoin="round"/>
+  <path d="m150 40-21 72 21 106 21-106Z" fill="#b1d3b2"/>
+  <path d="m88 91 41 21 21-72Zm41 21-27 67 48 39Z" fill="#71aa8b"/>
+  <path d="m171 112 41-21-14 88-48 39Z" fill="#396e5b"/>
+  <path d="m150 40 21 72 41-21Z" fill="#92c7a4"/>
+  <path d="m129 112 21-72m-21 72 21 106m-62-127 41 21 42 0 41-21" stroke="#d6e8c8" stroke-width="2" opacity=".7"/>
+  <path d="M114 192q36 19 72 0l-8 30h-56Z" fill="#c1a165" stroke="#a1844f" stroke-width="3"/>
+  <path d="M106 224h88l18 27q-62 16-124 0Z" fill="#d6b775" stroke="#a1844f" stroke-width="3"/>
+  <path d="m150 229 8 10-8 10-8-10Zm-39 10 7-7 7 7-7 7Zm64 0 7-7 7 7-7 7Z" fill="#537e62"/>
+  <path d="m100 174 9 24m82-24-9 24" stroke="#e7cd8c" stroke-width="7" stroke-linecap="round"/>
+  <path d="m221 40 4 12 12 4-12 4-4 12-4-12-12-4 12-4ZM64 137l3 9 9 3-9 3-3 9-3-9-9-3 9-3Z" fill="#d1b36c"/>
+</svg>

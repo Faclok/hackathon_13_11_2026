@@ -1621,6 +1621,13 @@ input:focus {
   font-size: 10px;
   margin-top: 10px;
 }
+.reward-notifications {
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+}
+.reward-notifications p { margin: 0 0 12px; }
+
 .xp-caption {
   display: flex;
   justify-content: space-between;

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { apiRequest, ApiError, clearSession, hasSession, loginUsername, loginTelegram } from "../api/session";
 import { isMiniApp } from "../api/telegram";
-import type { CaseOpening, IssueReport, LevelReward, LevelRewardReceipt, User } from "../types";
+import type { CaseOpening, IssueReport, LevelReward, LevelRewardReceipt, RewardNotice, User } from "../types";
 
 interface UserState {
   user: User | null;
@@ -12,6 +12,8 @@ interface UserState {
   caseOpening: CaseOpening | null;
   caseHistory: CaseOpening[];
   levelRewards: LevelReward[];
+  rewardNotices: RewardNotice[];
+  dismissRewards: () => Promise<void>;
   bootstrap: () => Promise<void>;
   login: (username: string) => Promise<void>;
   logout: () => void;
@@ -36,6 +38,18 @@ export const useUserStore = create<UserState>()((set, get) => ({
   caseOpening: null,
   caseHistory: [],
   levelRewards: [],
+  rewardNotices: [],
+  dismissRewards: async () => {
+    const notices = get().rewardNotices;
+    const levels = get().levelRewards;
+    if (notices.length > 0) await apiRequest<void>("/api/player/rewards/acknowledge", {
+      method: "POST", body: JSON.stringify(notices.map((notice) => notice.id)),
+    });
+    set((state) => ({
+      rewardNotices: state.rewardNotices.filter((notice) => !notices.some((item) => item.id === notice.id)),
+      levelRewards: state.levelRewards.filter((reward) => !levels.some((item) => item.level === reward.level)),
+    }));
+  },
   bootstrap: async () => {
     if (get().ready) return;
     bootstrapping ??= (async () => {
@@ -55,7 +69,7 @@ export const useUserStore = create<UserState>()((set, get) => ({
           apiRequest<LevelRewardReceipt>("/api/player/level-rewards/claim", { method: "POST" }),
           apiRequest<CaseOpening[]>("/api/player/cases/history"),
         ]);
-        set({ user: receipt.profile, levelRewards: receipt.rewards, caseHistory, ready: true });
+        set({ user: receipt.profile, levelRewards: receipt.rewards, rewardNotices: receipt.notices, caseHistory, ready: true });
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) clearSession();
         set({ user: null, ready: true, authError: "Не удалось загрузить профиль. Откройте приложение заново." });
@@ -70,7 +84,7 @@ export const useUserStore = create<UserState>()((set, get) => ({
         apiRequest<LevelRewardReceipt>("/api/player/level-rewards/claim", { method: "POST" }),
         apiRequest<CaseOpening[]>("/api/player/cases/history"),
       ]);
-      set({ user: receipt.profile, levelRewards: receipt.rewards, caseHistory, caseOpening: null, ready: true });
+      set({ user: receipt.profile, levelRewards: receipt.rewards, rewardNotices: receipt.notices, caseHistory, caseOpening: null, ready: true });
     } catch (error) {
       clearSession();
       throw error;
@@ -78,11 +92,11 @@ export const useUserStore = create<UserState>()((set, get) => ({
   },
   logout: () => {
     clearSession();
-    set({ user: null, levelRewards: [], caseOpening: null, caseHistory: [], reports: [] });
+    set({ user: null, levelRewards: [], rewardNotices: [], caseOpening: null, caseHistory: [], reports: [] });
   },
   refreshProfile: async () => {
     const receipt = await apiRequest<LevelRewardReceipt>("/api/player/level-rewards/claim", { method: "POST" });
-    set((state) => ({ user: receipt.profile,
+    set((state) => ({ user: receipt.profile, rewardNotices: receipt.notices,
       levelRewards: [...state.levelRewards, ...receipt.rewards].filter((reward, index, all) =>
         all.findIndex((other) => other.level === reward.level) === index),
     }));

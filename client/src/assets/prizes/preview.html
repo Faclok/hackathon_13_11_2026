@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Башкирская коллекция — новые украшения</title>
+<link rel="stylesheet" href="../../personalization.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px; background: #f5f7f1; color: #344b3d; font: 15px/1.5 system-ui, sans-serif; }
+  main { max-width: 960px; margin: auto; }
+  h1 { margin: 0; font-size: 26px; } h2 { margin: 28px 0 12px; font-size: 19px; }
+  p { margin: 4px 0 18px; color: #6b7e6c; }
+  section { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  article { background: white; border: 1px solid #dce5d8; border-radius: 18px; text-align: center; overflow: hidden; }
+  .art { height: 180px; display: grid; place-items: center; background: #edf2e8; }
+  .art > img { width: 166px; height: 166px; object-fit: contain; }
+  .avatar { width: 112px; height: 112px; background: #d9e3cf; border-radius: 50%; position: relative; }
+  .face { width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(ellipse at 50% 42%, #b3c5a7 0 23%, transparent 24%), radial-gradient(ellipse at 50% 110%, #b3c5a7 0 48%, #e3ebdc 49%); }
+  .frame { position: absolute; inset: -8%; width: 116%; height: 116%; }
+  .hat { position: absolute; top: -28%; left: -12%; width: 124%; height: 64%; object-fit: contain; }
+  strong { display: block; padding: 12px 8px 0; font-size: 15px; }
+  small { display: block; padding: 2px 8px 12px; color: #537bad; }
+  .epic { color: #8764aa; } .legendary { color: #a57b36; }
+  footer { margin-top: 24px; color: #6b7e6c; font-size: 13px; }
+  @media (max-width: 650px) { body { padding: 16px; } section { grid-template-columns: 1fr; } }
+</style>
+<main>
+  <h1>Башкирская коллекция</h1>
+  <p>12 новых украшений · редкие, эпические и легендарные</p>
+  <h2>Головные уборы</h2>
+  <section>
+    <article><div class="art"><div class="avatar"><div class="face"></div><img class="hat" src="4/hats/1_kurai_flower.svg" alt="Зелёная тюбетейка с золотым цветком"></div></div><strong>Цветок курая</strong><small>Редкий</small></article>
+    <article><div class="art"><div class="avatar"><div class="face"></div><img class="hat" src="4/hats/2_festive_kashmau.svg" alt="Красный головной убор с монетами"></div></div><strong>Праздничный ҡашмау</strong><small class="epic">Эпический</small></article>
+    <article><div class="art"><div class="avatar"><div class="face"></div><img class="hat" src="4/hats/3_akbuzat_wings.svg" alt="Светлый головной убор с крыльями"></div></div><strong>Крылья Акбузата</strong><small class="legendary">Легендарный</small></article>
+  </section>
+  <h2>Рамки аватара</h2>
+  <section>
+    <article><div class="art"><div class="avatar"><div class="face"></div><img class="frame" src="5/frames/1_bashkir_pattern.svg" alt="Зелёная рамка с золотистым узором"></div></div><strong>Башкирский узор</strong><small>Редкий</small></article>
+    <article><div class="art"><div class="avatar"><div class="face"></div><img class="frame" src="5/frames/2_forest_honey.svg" alt="Рамка из сот с пчелой"></div></div><strong>Бортевой мёд</strong><small class="epic">Эпический</small></article>
+    <article><div class="art"><div class="avatar"><div class="face"></div><img class="frame" src="5/frames/3_ural_radiance.svg" alt="Зелёные самоцветы на золотистом ободе"></div></div><strong>Сияние Урала</strong><small class="legendary">Легендарный</small></article>
+  </section>
+  <h2>Питомцы</h2>
+  <section>
+    <article><div class="art"><img src="2/bashkortostan_pets/7_ural_fox.svg" alt="Рыжий лисёнок"></div><strong>Лисёнок Урала</strong><small>Редкий</small></article>
+    <article><div class="art"><img src="2/bashkortostan_pets/8_steppe_falcon.svg" alt="Сокол с раскрытыми крыльями"></div><strong>Степной сокол</strong><small class="epic">Эпический</small></article>
+    <article><div class="art"><img src="2/bashkortostan_pets/9_kurai_spirit.svg" alt="Сказочный зелёный дух с цветком курая"></div><strong>Дух курая</strong><small class="legendary">Легендарный</small></article>
+  </section>
+  <h2>Предметы</h2>
+  <section>
+    <article><div class="art"><img src="3/items/7_kumys_bowl.svg" alt="Узорчатая пиала с кумысом"></div><strong>Пиала с кумысом</strong><small>Редкий</small></article>
+    <article><div class="art"><img src="3/items/8_bashkir_carpet.svg" alt="Красно-зелёный ковёр с ромбами"></div><strong>Башкирский ковёр</strong><small class="epic">Эпический</small></article>
+    <article><div class="art"><img src="3/items/9_ural_heart.svg" alt="Зелёный самоцвет на золотистой подставке"></div><strong>Сердце Урала</strong><small class="legendary">Легендарный</small></article>
+  </section>
+  <footer>Все изображения — векторные SVG с прозрачным фоном. Дух курая, Крылья Акбузата и Сердце Урала — фантазийные образы коллекции.</footer>
+</main>
+</html>
