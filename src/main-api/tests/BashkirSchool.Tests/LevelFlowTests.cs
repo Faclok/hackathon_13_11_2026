@@ -212,6 +212,33 @@ public sealed class LevelFlowTests
     }
 
     [Fact]
+    public async Task BossOffersChoicesWhenSeveralTranslationsExist()
+    {
+        using var f = new CoreFactory(learningKind: "translation-text");
+        using var admin = await f.Bootstrap();
+        var student = await f.Student(admin);
+        await Training(admin);
+        using var producer = await f.Producer(admin);
+        var content = await Deliver(producer, "boss-choices");
+        using (var scope = f.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<CoreDbContext>();
+            db.Variants.Add(TranslationVariant.Create(content.CaseId, "Another translation", false));
+            await db.SaveChangesAsync();
+        }
+        for (var i = 0; i < 5; i++) await CompleteLevel(student.Client);
+        var boss = await Post<LevelBossResponse>(student.Client, Root + "/boss", new { });
+        Assert.Equal("translation-choice", boss.Question!.Kind);
+        Assert.Equal(2, boss.Question.Options.Count);
+        var chosen = boss.Question.Options[0];
+        var receipt = await Post<LevelBossAnswerResponse>(student.Client,
+            $"{Root}/bosses/{boss.Id}/questions/{boss.Question.Id}/answer",
+            new SubmitReviewRequest(ReviewAction.Confirm) { SelectedVariantId = chosen.Id });
+        Assert.False(receipt.BossCompleted);
+        Assert.Equal(1, (await Post<LevelBossResponse>(student.Client, Root + "/boss", new { })).CompletedCount);
+    }
+
+    [Fact]
     public async Task BossResumesWhenMaterialArrivesAndSkipsDoNotCompleteIt()
     {
         using var f = new CoreFactory(learningKind: "translation-text");

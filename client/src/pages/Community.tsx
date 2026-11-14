@@ -5,9 +5,7 @@ import { trophies } from "../mocks/data";
 import { useUserStore } from "../store";
 import {
   ranks,
-  BOSS_MIN_RANK,
   getCurrentRank,
-  canAccessBoss,
 } from "../utils/ranks";
 import type { Decoration } from "../types";
 import { Mascot, SchoolLogo } from "../components/Illustrations";
@@ -339,11 +337,6 @@ export function Profile() {
                 <small>
                   {tasks} задач{streak > 0 && ` · серия ${streak} дней`}
                 </small>
-                {name === BOSS_MIN_RANK[0] && (
-                  <small className="rank-unlocks-boss">
-                    Открывает Босс-испытание
-                  </small>
-                )}
                 {user.tasksSolved < tasks && (
                   <ProgressBar
                     value={Math.min(user.tasksSolved, tasks)}
@@ -356,17 +349,13 @@ export function Profile() {
         </div>
       </section>
       <Link
-        to={canAccessBoss(user) ? "/boss" : "/learn"}
+        to="/boss"
         className="surface profile-boss-link"
       >
-        <Icon name={canAccessBoss(user) ? "swords" : "lock"} />
+        <Icon name="swords" />
         <span>
           <strong>Босс-испытание</strong>
-          <small>
-            {canAccessBoss(user)
-              ? "Твоё звание открывает рейтинговые переводы"
-              : `Доступ со звания «${BOSS_MIN_RANK[0]}»`}
-          </small>
+          <small>Один Босс за каждые пять пройденных уровней</small>
         </span>
         <Icon name="arrow" size={17} />
       </Link>

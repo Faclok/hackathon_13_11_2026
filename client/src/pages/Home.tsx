@@ -1,7 +1,6 @@
 import { Link } from "react-router-dom";
 import { useUserStore } from "../store";
 import { displayName } from "../utils/displayName";
-import { BOSS_MIN_RANK, canAccessBoss } from "../utils/ranks";
 import {
   BookArt,
   FlameArt,
@@ -14,7 +13,7 @@ const quickActions = [
     to: "/boss",
     icon: "swords",
     title: "Испытание Босса",
-    detail: "Рейтинговый перевод",
+    detail: "Открывается за каждые 5 уровней",
     color: "peach",
   },
   {
@@ -118,20 +117,11 @@ export default function Home() {
           {quickActions.map((action) => (
             <Link to={action.to} key={action.to} className="quick-card surface">
               <span className={`quick-icon ${action.color}`}>
-                <Icon
-                  name={
-                    action.to === "/boss" && !canAccessBoss(user)
-                      ? "lock"
-                      : action.icon
-                  }
-                  size={23}
-                />
+                <Icon name={action.icon} size={23} />
               </span>
               <h3>{action.title}</h3>
               <p>
-                {action.to === "/boss" && !canAccessBoss(user)
-                  ? `Со звания «${BOSS_MIN_RANK[0]}»`
-                  : action.detail}
+                {action.detail}
               </p>
               <span className="quick-arrow">
                 <Icon name="arrow" size={17} />

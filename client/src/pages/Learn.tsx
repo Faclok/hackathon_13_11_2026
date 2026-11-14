@@ -19,7 +19,7 @@ function readPending(userId: string): PendingAttempt | null {
 }
 function message(error: unknown) {
   if (error instanceof ApiError) {
-    if (error.status === 401) return "Сессия закончилась. Войдите снова, затем продолжите уровень.";
+    if (error.status === 401) { useUserStore.getState().logout(); return "Сессия закончилась. Войдите снова, затем продолжите уровень."; }
     if (error.status === 403) return "Нет доступа к обучению для этого аккаунта.";
     if (error.status === 409) return "Состояние уровня изменилось. Обновите текущий вопрос.";
     return error.message;
@@ -151,6 +151,7 @@ export default function Learn() {
           : <LearningExercise key={`${level.question.id}:${level.question.attemptToken}`} question={level.question} busy={busy} onSubmit={submit} onRefreshAudio={() => void refreshAudio()} />}
       </section>
     </>}
+    {!level && feedback && completedNumber === null && <section className="surface task-panel"><div className={`answer-feedback ${feedback.recognized ? "correct" : "incorrect"}`} role="status"><strong>{feedback.recognized ? "Ответ принят" : "Ответ пока не совпал"}</strong><p>Обнови текущий вопрос, чтобы продолжить.</p><button className="button button-primary full-width" disabled={busy} onClick={() => void continueLevel()}>Загрузить текущий вопрос</button></div></section>}
     {completedNumber !== null && <section className="surface result-card" role="status"><div className="result-symbol">✓</div><h2>Уровень {completedNumber} пройден!</h2><p>Все вопросы решены. Следующий уровень начнётся, когда ты нажмёшь кнопку.</p>{feedback && <p>Последний ответ принят.</p>}<button className="button button-primary full-width" disabled={busy} onClick={() => { setFeedback(null); void start(); }}>Начать следующий уровень</button><button className="button button-soft full-width" onClick={() => { setCompletedNumber(null); setFeedback(null); }} disabled={busy}>К истории уровней</button></section>}
   </>;
 }

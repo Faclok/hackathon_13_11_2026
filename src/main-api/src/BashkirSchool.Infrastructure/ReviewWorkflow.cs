@@ -71,8 +71,15 @@ public sealed class ReviewWorkflow(CoreDbContext db, IPermissionChecker permissi
             .ThenBy(x => x.Case.CreatedAt).ThenBy(x => x.Case.Id).FirstOrDefault();
         if (eligible is null) return null;
         if (kind == "translation-auto")
-            kind = await db.Variants.AnyAsync(v => v.CaseId == eligible.Case.Id && v.Text != "", ct)
-                ? "translation-confirm" : "translation-create";
+        {
+            var candidateCount = await db.Variants.CountAsync(v => v.CaseId == eligible.Case.Id && v.Text != "", ct);
+            kind = candidateCount switch
+            {
+                0 => "translation-create",
+                1 => "translation-confirm",
+                _ => "translation-choice"
+            };
+        }
         var variants = await db.Variants.Where(x => x.CaseId == eligible.Case.Id && x.CreatedBy != participant &&
             (kind == "translation-create" ? x.Text == "" : x.Text != "")).ToArrayAsync(ct);
         var shownVariant = variants.OrderBy(v => assignments.Count(a => a.CaseId == eligible.Case.Id && a.ShownVariantId == v.Id && (a.Completed || a.ExpiresAt > now)))

@@ -11,7 +11,6 @@ import Layout from "./components/Layout";
 import { ToastProvider } from "./components/ui";
 import Home from "./pages/Home";
 import Learn from "./pages/Learn";
-import Lesson, { LessonResult } from "./pages/Lesson";
 import Boss from "./pages/Boss";
 import Inventory from "./pages/Inventory";
 import Cases from "./pages/Cases";
@@ -52,10 +51,10 @@ export default function App() {
               <Route index element={<Home />} />
               <Route path="daily" element={<Navigate to="/learn" replace />} />
               <Route path="learn" element={<Learn />} />
-              <Route path="lesson/:lessonId" element={<Lesson />} />
+              <Route path="lesson/:lessonId" element={<Navigate to="/learn" replace />} />
               <Route
                 path="lesson/:lessonId/result"
-                element={<LessonResult />}
+                element={<Navigate to="/learn" replace />}
               />
               <Route path="boss" element={<Boss />} />
               <Route path="leaderboard" element={<Leaderboard />} />

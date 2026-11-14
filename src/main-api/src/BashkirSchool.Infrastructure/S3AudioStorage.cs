@@ -27,7 +27,7 @@ public sealed class S3AudioStorage(IConfiguration configuration, TimeProvider cl
         await Client.PutObjectAsync(new PutObjectRequest
         {
             BucketName = Required("Bucket"), Key = key, ContentType = speech.ContentType, InputStream = stream,
-            AutoCloseStream = false
+            AutoCloseStream = false, UseChunkEncoding = false
         }, ct);
     }
     public Task<string> ListenUrlAsync(string key, CancellationToken ct)

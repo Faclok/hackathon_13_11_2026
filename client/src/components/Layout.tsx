@@ -1,7 +1,6 @@
 import { NavLink, Link, Outlet, useLocation } from "react-router-dom";
 import { useEffect } from "react";
 import { useUserStore } from "../store";
-import { canAccessBoss, BOSS_MIN_RANK } from "../utils/ranks";
 import { Ornament, SchoolLogo } from "./Illustrations";
 import { displayName } from "../utils/displayName";
 import { Avatar } from "./Personalization";
@@ -48,18 +47,11 @@ export default function Layout() {
             key={to}
             to={to}
             end={to === "/"}
-            title={
-              to === "/boss" && !canAccessBoss(user)
-                ? `Доступ со звания «${BOSS_MIN_RANK[0]}»`
-                : undefined
-            }
             className={({ isActive }) =>
               isActive ? "nav-item active" : "nav-item"
             }
           >
-            <Icon
-              name={to === "/boss" && !canAccessBoss(user) ? "lock" : icon}
-            />
+            <Icon name={icon} />
             <span>{label}</span>
           </NavLink>
         ))}
