@@ -7,6 +7,8 @@ const routes = [
   ['POST', /^\/auth\/(sign-in|refresh)$/],
   ['GET', /^\/api\/me$/],
   ['POST', /^\/api\/expert\/imports$/],
+  // Temporary vocabulary uploader in the expert client; core requires a session.
+  ['POST', /^\/api\/vocabulary$/],
   ['GET', /^\/api\/expert\/untranslated$/],
   ['POST', new RegExp(`^/api/expert/fragments/${uuid}/translation$`)],
   ['GET', /^\/api\/expert\/(dashboard|work|cases)$/],

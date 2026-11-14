@@ -187,7 +187,7 @@ textarea{resize:vertical}
 .sidebar{padding-bottom:25px}
 .sidebarFoot{margin-top:auto}
 }
-@media(max-width:800px){.shell{grid-template-columns:1fr}
+@media(max-width:800px){.shell{grid-template-columns:minmax(0,1fr)}
 .sidebar{position:relative;width:100%;height:auto;padding:14px 18px}
 .brand{font-size:15px}
 .navLabel,.sidebarFoot{display:none}
