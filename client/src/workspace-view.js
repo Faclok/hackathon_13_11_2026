@@ -70,6 +70,7 @@ export function mountWorkspace({ getActor, getState, save, onContext }) {
     (getActor() ? menus[currentMode] : ['accounts', 'lms']).forEach(page => nav.append(node('a', pages[page], { href: '#' + page })));
     document.querySelectorAll('[data-workspaces]').forEach(item => { item.hidden = !item.dataset.workspaces.split(' ').includes(currentMode); });
     $('button[data-action="logout"]').hidden = !getActor();
+    $('.account-add').hidden = !getActor();
     renderHome(); syncContext(); navigate(actorChanged ? (getActor() ? 'home' : 'accounts') : activePage || location.hash.slice(1) || (getActor() ? 'home' : 'accounts'), actorChanged);
   }
   function syncContext() {
@@ -155,6 +156,7 @@ export function mountWorkspace({ getActor, getState, save, onContext }) {
   });
   window.addEventListener('hashchange', () => navigate(location.hash.slice(1), true));
   document.addEventListener('click', event => {
+    if (event.target.closest('.skip-link')) { event.preventDefault(); $('#page-content').focus(); return; }
     const tab = event.target.closest('[data-auth-tab]'); if (!tab) return;
     document.querySelectorAll('[data-auth-panel]').forEach(item => { item.hidden = item.dataset.authPanel !== tab.dataset.authTab; });
     document.querySelectorAll('[data-auth-tab]').forEach(item => item.setAttribute('aria-pressed', String(item === tab)));

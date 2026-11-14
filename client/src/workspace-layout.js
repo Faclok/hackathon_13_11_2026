@@ -20,11 +20,11 @@ export function workspaceMarkup() {
   <label class="mode-label">Рабочее пространство<select id="workspace-mode">${Object.entries(roles).map(([key, name]) => `<option value="${key}">${name}</option>`).join('')}</select></label>
   <p class="mode-note">Показывает задачи выбранного профиля. Права аккаунта проверяет сервер.</p>
   <nav id="workspace-nav" aria-label="Основные разделы"></nav>
-  <div class="sidebar-bottom"><a href="#help">Как пользоваться</a><a href="#health">Проверить подключение</a></div>
+  <div class="sidebar-bottom"><a href="#help">Как пользоваться</a><a href="#health">Проверить подключение</a><a href="https://expert.bashperevod.ru" data-workspaces="expert">Отдельный кабинет эксперта</a></div>
 </aside><div class="workspace">
 <header class="topbar"><span id="identity">Вы ещё не вошли</span><div class="account-switch"><label>Аккаунт<select id="actor" aria-label="Текущий аккаунт"></select></label><a href="#accounts" class="account-add">Войти в другой аккаунт</a>${button('logout', 'Выйти')}</div></header>
 <p id="status" role="status" aria-live="polite">Добро пожаловать. Выберите задачу в меню слева.</p>
-<main id="page-content">
+<main id="page-content" tabindex="-1">
 ${page('home', 'С чего начнём?', 'Здесь собраны ваши задачи и следующий шаг.', '<div id="home-content"></div>')}
 ${page('accounts', 'Войдите в свой аккаунт', 'Один аккаунт для переводов и обучения. Для обычного участия школа не нужна.', `
 <div class="auth-tabs" role="group" aria-label="Вход или регистрация"><button type="button" data-auth-tab="login" aria-pressed="true">У меня есть аккаунт</button><button type="button" data-auth-tab="register" aria-pressed="false">Зарегистрироваться</button></div>
@@ -57,7 +57,7 @@ ${form('students', 'Ученики класса', picker('classId', 'Класс'
 ${page('materials', 'Добавить материал', 'Передайте готовую фразу и предложенный перевод в общий поток проверки.', `
 ${form('deliver', 'Фраза для проверки', field('original', 'Оригинал на башкирском', 'text', 'required value="Һаумыһығыҙ"') + field('translation', 'Предложенный перевод', 'text', 'required value="Здравствуйте"') + field('documentId', 'Документ-источник', 'text', 'required value="manual-material"') + technical('Идентификаторы и языковая пара', field('key', 'Ключ повторной отправки', 'text', 'id="delivery-key" required') + field('fragmentId', 'Идентификатор фрагмента у поставщика', 'text', 'id="fragment-id" required') + field('languagePair', 'Языковая пара', 'text', 'required value="ba-ru"') + '<p class="hint">Для нового фрагмента измените идентификатор и ключ. Повтор прежнего запроса с тем же содержимым безопасен.</p>'), 'Отправить на проверку')}${result('delivery-result')}`)}
 ${page('expert', 'Проверка эксперта', 'Откройте фразу из очереди и выберите допустимые переводы.', `
-${button('queue', 'Открыть очередь переводов', true)}<div id="queue" class="queue-list"></div>
+<div class="task-toolbar">${button('queue', 'Открыть очередь переводов', true)}${button('case-last', 'Открыть перевод текущего сценария')}</div><p class="hint">Очередь содержит спорные переводы с достаточным числом ответов. Новый материал можно открыть кнопкой текущего сценария или по идентификатору ниже.</p><div id="queue" class="queue-list"></div>
 ${technical('Открыть по идентификатору', form('case-read', '', field('caseId', 'Идентификатор случая', 'text', 'required data-context="caseId"'), 'Открыть перевод'))}
 <div id="case-view" class="translation-sheet"></div><div class="expert-actions" hidden>
 ${form('resolve', 'Какие переводы допустимы?', '<p class="hint">Выберите один основной. Дополнительно можно принять до четырёх вариантов. Остальные можно оставить нерассмотренными.</p><div id="variants"></div>' + field('comment', 'Комментарий (необязательно)'), 'Сохранить окончательное решение')}
