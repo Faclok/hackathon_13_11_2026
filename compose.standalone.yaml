@@ -1,0 +1,20 @@
+# Use only on a server where ports 80 and 443 are free.
+services:
+  caddy:
+    build:
+      context: ./deploy
+      dockerfile: Caddy.Dockerfile
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - nginx
+
+volumes:
+  caddy_data:
+  caddy_config:

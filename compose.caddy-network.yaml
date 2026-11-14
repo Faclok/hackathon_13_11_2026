@@ -1,0 +1,14 @@
+# Use only when the existing Caddy also runs in Docker.
+# Set CADDY_DOCKER_NETWORK to a network already attached to that Caddy container.
+services:
+  nginx:
+    networks:
+      default: {}
+      caddy_shared:
+        aliases:
+          - bashperevod-nginx
+
+networks:
+  caddy_shared:
+    external: true
+    name: ${CADDY_DOCKER_NETWORK:?set CADDY_DOCKER_NETWORK in .env}

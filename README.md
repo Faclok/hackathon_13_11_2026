@@ -1,6 +1,6 @@
 # Башперевод
 
-Рабочий MVP башкирской языковой школы: React сайт, основной REST API на C#, отдельный LMS API на C#, Telegram бот на C#, PostgreSQL, Nginx и Caddy для бесплатного автоматического HTTPS на `bashperevod.ru`.
+Рабочий MVP башкирской языковой школы: React сайт, основной REST API на C#, отдельный LMS API на C#, Telegram бот на C#, PostgreSQL и Nginx. Для сервера без общего входного прокси предусмотрен Caddy с бесплатным автоматическим HTTPS на `bashperevod.ru`.
 
 ## Что работает
 
@@ -16,52 +16,77 @@
 ## Архитектура
 
 ```text
-Интернет :80/:443 → Caddy (TLS) → Nginx
-                                    ├─ /           → React (статический Nginx)
-                                    ├─ /api/lms/*  → LMS API
-                                    └─ /api/*      → основной API
+Интернет :80/:443 → общий прокси Coolify (Traefik, TLS)
+                              ├─ vinokurov-it.ru → launch_core
+                              └─ bashperevod.ru → nginx:80
+                                                    ├─ /          → React
+                                                    ├─ /api/lms/* → LMS API
+                                                    └─ /api/*     → основной API
 Telegram Bot API ↔ Telegram бот → основной API
 основной API + LMS API → PostgreSQL
 ```
 
 Служебные `/api/internal/*` доступны только внутри сети Compose: внешний Nginx отвечает 404, а основной API дополнительно проверяет секретный заголовок.
 
-## Развёртывание на сервере
+## Развёртывание через Coolify
 
-Нужны Linux сервер с публичным IPv4, Docker Engine и Docker Compose v2, доступ к DNS домена и токен Telegram бота, если бот нужен. На сервере порты 80 и 443 должны быть свободны.
+В текущей установке Coolify серверный прокси — **Traefik**. Веб-сервису этого проекта не нужен собственный Caddy и не нужно публиковать порты 80/443. Основной `compose.yaml` содержит только сервисы приложения; Nginx слушает порт 80 **внутри** Docker сети. Конфигурация Nginx и SQL инициализация включены в Docker образы, поэтому Coolify не зависит от bind mounts исходников.
 
-1. Создайте `A` запись `bashperevod.ru` с публичным IPv4 сервера. Если есть `AAAA` запись, она должна указывать на рабочий IPv6 этого же сервера; иначе удалите её. Откройте входящий TCP 80/443 и UDP 443.
-2. Склонируйте репозиторий и перейдите в его каталог.
-3. Создайте `.env` из шаблона и замените оба секрета. Для генерации используйте, например, `openssl rand -hex 32` **дважды**. В `TELEGRAM_BOT_TOKEN` укажите токен от BotFather. Если бот пока не нужен, оставьте поле пустым.
+1. Направьте DNS `A` запись `bashperevod.ru` на тот же публичный IP, что и `vinokurov-it.ru`. Если есть `AAAA`, она должна указывать на рабочий IPv6 этого сервера; иначе удалите её. `www` добавляйте только при наличии отдельной DNS записи.
+2. В Coolify выберите Git репозиторий `Faclok/hackathon_13_11_2026`, ветку `main`, стратегию **Docker Compose**, путь `/compose.yaml`.
+3. В Environment Variables задайте `POSTGRES_DB`, `POSTGRES_USER`, случайный `POSTGRES_PASSWORD` и отдельный случайный `INTERNAL_API_KEY`. Для генерации двух секретов можно дважды выполнить `openssl rand -hex 32`. `TELEGRAM_BOT_TOKEN` нужен только для работающего Telegram бота; при пустом значении контейнер остаётся в режиме ожидания.
+4. В Domains назначьте **сервису `nginx`** адрес `https://bashperevod.ru`, внутренний порт **80**. Удалите старую запись `https://bashperevod.ru:8088` у сервиса `caddy`: `8088` был портом хоста в прежней конфигурации, а не внутренним портом Nginx. Запись `www.bashperevod.ru` удалите, если она пока не нужна или не имеет DNS записи.
+5. После обновления исходников выполните Deploy. Проверьте логи сборки и адреса `https://bashperevod.ru/api/health` и `https://bashperevod.ru/api/lms/health`. Работающий маршрут `vinokurov-it.ru` не меняйте.
 
-   ```bash
-   cp .env.example .env
-   nano .env
-   chmod 600 .env
-   ```
+Ранее деплой в Coolify останавливался при монтировании `deploy/nginx/default.conf` с хоста. Образы в текущей версии устраняют эту зависимость. Первый старт PostgreSQL исполняет `db/001_init.sql` и создаёт таблицы и демонстрационные записи. При уже существующем томе init скрипт повторно не запускается. Не удаляйте постоянный том `postgres_data` при обновлении.
 
-4. Запустите контейнеры:
+### Развёртывание без Coolify
 
-   ```bash
-   docker compose config --quiet
-   docker compose up -d --build
-   docker compose ps
-   docker compose logs -f caddy main-api lms-api
-   ```
+Создайте `.env` из `.env.example`, задайте два случайных секрета и при необходимости токен Telegram бота:
 
-5. Откройте `https://bashperevod.ru` и проверьте `https://bashperevod.ru/api/health` и `https://bashperevod.ru/api/lms/health`.
+```bash
+cp .env.example .env
+nano .env
+chmod 600 .env
+```
 
-Caddy сам получает и обновляет сертификат, когда DNS указывает на сервер и порты доступны. Данные сертификата живут в томе `caddy_data`, PostgreSQL — в `postgres_data`. Не удаляйте эти тома при обновлении. Первый старт PostgreSQL исполняет `db/001_init.sql` и создаёт таблицы и демонстрационные записи. При уже существующем томе init скрипт повторно не запускается.
+Если внешний Caddy работает **на самом сервере**, запустите Nginx с локальным портом 8088:
+
+```bash
+docker compose -f compose.yaml -f compose.host-caddy.yaml up -d --build
+```
+
+В действующий Caddyfile добавьте блок, сохранив существующие домены:
+
+```caddyfile
+bashperevod.ru {
+    reverse_proxy 127.0.0.1:8088
+}
+```
+
+Если внешний Caddy работает **в Docker**, подключите Nginx к его сети через `compose.caddy-network.yaml` и направьте Caddy на `bashperevod-nginx:80`. Имя сети укажите в `.env` как `CADDY_DOCKER_NETWORK`.
+
+Если сервер свободен от других входных прокси, можно запустить Caddy из этого репозитория:
+
+```bash
+docker compose -f compose.yaml -f compose.standalone.yaml up -d --build
+```
+
+Этот режим занимает публичные порты 80/443 и автоматически получает HTTPS сертификат для `bashperevod.ru`. Он не подходит для текущего сервера с работающим Coolify Traefik.
 
 ### Обновление и резервное копирование
 
+При развёртывании без Coolify:
+
 ```bash
 git pull
-docker compose up -d --build
+docker compose -f compose.yaml -f compose.host-caddy.yaml up -d --build
 docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > backup.sql
 ```
 
-Перед изменением схемы существующей базы сделайте резервную копию. Для дальнейших обновлений схемы понадобятся отдельные SQL миграции; init скрипт подходит для новой установки.
+Если вы использовали другое дополнение Compose, при обновлении повторите тот же набор `-f` файлов.
+
+В Coolify обновляйте приложение через Deploy из Git и настраивайте резервное копирование постоянного тома PostgreSQL. Перед изменением схемы существующей базы сделайте резервную копию. Для дальнейших обновлений схемы понадобятся отдельные SQL миграции; init скрипт подходит для новой установки.
 
 ## Как проверить сценарий
 
