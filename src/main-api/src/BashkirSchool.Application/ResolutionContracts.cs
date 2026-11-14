@@ -21,12 +21,14 @@ public sealed record ExpertCaseResponse(Guid CaseId, long Revision, string Origi
 }
 /// <summary>A queued case, ordered by disagreement among sufficiently sampled cases.</summary>
 public sealed record ExpertQueueItem(Guid CaseId, long Revision, string Original, bool Disputed, int Observations,
-    decimal? LeadingSupport, DateTimeOffset CreatedAt);
+    decimal? LeadingSupport, DateTimeOffset CreatedAt, bool TeacherRequested);
 /// <summary>An expert's reserved or completed case.</summary>
 public sealed record ExpertWorkItem(Guid CaseId, long Revision, string Original, int Observations,
     decimal? LeadingSupport, DateTimeOffset TakenAt, bool Completed, DateTimeOffset? CompletedAt);
 /// <summary>Counts for the expert's dashboard under the current consensus policy.</summary>
-public sealed record ExpertDashboardResponse(int Available, int Taken, int Completed, int RequiredParticipants, decimal SupportThreshold);
+public sealed record ExpertDashboardResponse(int Available, int Taken, int Completed, int RequiredParticipants,
+    decimal SupportThreshold, int TotalCompleted);
+public sealed record ExpertPreferencesResponse(int RequiredParticipants, decimal SupportThreshold);
 /// <summary>Export in the original intake team's column format.</summary>
 public sealed record ExportRow([property: JsonPropertyName("fragment_id")] string FragmentId,
     [property: JsonPropertyName("text_ba")] string TextBa, [property: JsonPropertyName("lang_pair")] string LanguagePair,

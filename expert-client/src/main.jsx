@@ -1,22 +1,25 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import './style.css';
 import CsvImport from './CsvImport.jsx';
+import './style.css';
 
 const tokenKey = 'bashperevod_expert_token';
 const refreshKey = 'bashperevod_expert_refresh';
+const number = value => new Intl.NumberFormat('ru-RU').format(value ?? 0);
+const percent = value => value == null ? '—' : `${Math.round(Number(value) * 100)}%`;
+const date = value => value ? new Date(value).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
 let refreshing;
+
+function saveSession(session) {
+  localStorage.setItem(tokenKey, session.accessToken);
+  localStorage.setItem(refreshKey, session.refreshToken);
+}
 async function api(path, options = {}, retry = true) {
-  const token = localStorage.getItem(tokenKey);
-  const send = bearer => fetch(path, {
-    ...options,
-    headers: { 'Content-Type': 'application/json', ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}), ...options.headers }
-  });
-  let response = await send(token);
+  const send = token => fetch(path, { ...options, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...options.headers } });
+  let response = await send(localStorage.getItem(tokenKey));
   if (response.status === 401 && retry && localStorage.getItem(refreshKey)) {
-    refreshing ||= fetch('/auth/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken: localStorage.getItem(refreshKey) }) })
-      .then(async r => { if (!r.ok) throw new Error('Войдите снова.'); const session = await r.json(); saveSession(session); return session.accessToken; })
+    refreshing ||= fetch('/auth/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken: localStorage.getItem(refreshKey) }) })
+      .then(async r => { if (!r.ok) { const issue = new Error('Сессия завершилась. Войдите снова.'); issue.status = 401; throw issue; } const session = await r.json(); saveSession(session); return session.accessToken; })
       .finally(() => { refreshing = null; });
     response = await send(await refreshing);
   }
@@ -25,24 +28,30 @@ async function api(path, options = {}, retry = true) {
   if (!response.ok) { const issue = new Error(data?.detail || data?.title || `Ошибка ${response.status}`); issue.status = response.status; throw issue; }
   return data;
 }
-function saveSession(session) {
-  localStorage.setItem(tokenKey, session.accessToken);
-  localStorage.setItem(refreshKey, session.refreshToken);
+async function loadQueue() {
+  const result = [];
+  for (let offset = 0; ; offset += 100) {
+    const page = await api(`/api/expert/cases?offset=${offset}&limit=100`);
+    result.push(...page);
+    if (page.length < 100) return result;
+  }
 }
-const percent = value => value == null ? '—' : `${Math.round(value * 100)}%`;
-const date = value => new Date(value).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
 function Login({ onLogin }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const submit = async event => {
+  async function submit(event) {
     event.preventDefault(); setBusy(true); setError('');
     try { const session = await api('/auth/sign-in', { method: 'POST', body: JSON.stringify({ username, password }) }, false); saveSession(session); onLogin(); }
     catch (issue) { setError(issue.message); } finally { setBusy(false); }
-  };
-  return <div className="loginPage"><div className="loginIntro"><span className="mark">Б<span>↗</span></span><div className="eyebrow">БАШПЕРЕВОД / ЭКСПЕРТИЗА</div><h1>Сложные переводы<br/><em>нуждаются в вашем слове.</em></h1><p>Решения экспертов помогают выбрать точный перевод там, где мнения участников разделились.</p></div><form className="loginCard" onSubmit={submit}><span className="eyebrow">РАБОЧЕЕ ПРОСТРАНСТВО</span><h2>Вход для экспертов</h2><label>Логин<input autoComplete="username" value={username} onChange={e => setUsername(e.target.value)} required/></label><label>Пароль<input type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} required/></label>{error && <p className="error" role="alert">{error}</p>}<button className="primary" disabled={busy}>Войти <span>↗</span></button><a href="https://bashperevod.ru">На основной сайт</a></form></div>;
+  }
+  return <main className="loginPage"><section className="loginIntro"><div className="brand"><span className="brandMark">б.</span><span>башперевод<small>экспертный кабинет</small></span></div><div className="loginText"><span className="eyebrow">ПРОСТРАНСТВО ЭКСПЕРТИЗЫ</span><h1>Ваше слово<br/><em>делает перевод</em><br/>точнее.</h1><p>Проверяйте запросы преподавателей, изучайте мнение сообщества и выбирайте лучший вариант.</p></div><span className="loginGlyph" aria-hidden="true">Ә</span><div className="loginFoot">Каждый участник может стать экспертом.</div></section><form className="loginCard" onSubmit={submit}><span className="eyebrow">ДОБРО ПОЖАЛОВАТЬ</span><h2>Войти в кабинет</h2><p>Используйте аккаунт Башперевода.</p><label>Логин<input autoComplete="username" autoFocus value={username} onChange={e => setUsername(e.target.value)} required/></label><label>Пароль<input type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} required/></label>{error && <p className="error" role="alert">{error}</p>}<button className="primary" disabled={busy}>{busy ? 'Входим…' : 'Продолжить'} <span>↗</span></button><a href="https://bashperevod.ru">На основной сайт ↗</a></form></main>;
+}
+
+function CaseList({ title, eyebrow, rows, empty, onOpen }) {
+  return <section className="card listCard"><div className="sectionHead"><div><span className="eyebrow">{eyebrow}</span><h2>{title}</h2></div><span className="badge">{number(rows.length)}</span></div>{rows.length ? <div className="list">{rows.map(item => <button className="listItem" key={item.caseId} onClick={() => onOpen(item.caseId)}><span className={`listIcon ${item.teacherRequested ? 'teacher' : ''}`}>{item.teacherRequested ? 'П' : 'Ә'}</span><span className="listMain"><strong>{item.original || `Перевод ${item.caseId.slice(0, 8)}`}</strong><small>{item.teacherRequested ? <b>Запрос преподавателя</b> : item.completed ? 'Проверено' : 'Спорный перевод'} <i>·</i> {number(item.observations)} ответов <i>·</i> лидер {percent(item.leadingSupport)}</small></span><span className="listMeta">{date(item.completedAt || item.takenAt || item.createdAt)}</span><span className="rowArrow">↗</span></button>)}</div> : <div className="empty"><span>✓</span><strong>Здесь пока пусто</strong><p>{empty}</p></div>}</section>;
 }
 
 function CasePanel({ caseId, onBack, onChange, isTaken }) {
@@ -54,20 +63,29 @@ function CasePanel({ caseId, onBack, onChange, isTaken }) {
   const [proposal, setProposal] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const load = async () => { const value = await api(`/api/expert/cases/${caseId}`); setItem(value); setPrimary(value.resolution?.primaryVariantId || value.variants[0]?.id || ''); };
-  useEffect(() => { load().catch(e => setError(e.message)); }, [caseId]);
-  const claim = async () => { setBusy(true); setError(''); try { await api(`/api/expert/cases/${caseId}/claim`, { method: 'POST' }); await onChange(); } catch (e) { setError(e.message); } finally { setBusy(false); } };
-  const release = async () => { setBusy(true); setError(''); try { await api(`/api/expert/cases/${caseId}/claim`, { method: 'DELETE' }); await onChange(); onBack(); } catch (e) { setError(e.message); } finally { setBusy(false); } };
-  const addVariant = async event => { event.preventDefault(); setBusy(true); setError(''); try { await api(`/api/expert/cases/${caseId}/variants`, { method: 'POST', body: JSON.stringify({ text: proposal.trim(), expectedRevision: item.revision }) }); setProposal(''); await load(); } catch (e) { setError(e.message); } finally { setBusy(false); } };
-  const resolve = async event => { event.preventDefault(); setBusy(true); setError(''); try {
-    await api(`/api/expert/cases/${caseId}/resolution`, { method: 'POST', body: JSON.stringify({ expectedRevision: item.revision, primaryVariantId: primary,
-      additionalVariantIds: additional.filter(id => id !== primary && !rejected.includes(id)), rejectedVariantIds: rejected.filter(id => id !== primary), comment: comment.trim() || null }) });
-    await onChange(); onBack();
-  } catch (e) { setError(e.message); } finally { setBusy(false); } };
-  const toggle = (value, list, set) => set(list.includes(value) ? list.filter(id => id !== value) : [...list, value]);
-  if (!item) return <section className="card"><button className="back" onClick={onBack}>← Назад</button><p>{error || 'Загрузка…'}</p></section>;
-  const votes = item.variants.reduce((sum, v) => sum + v.supports, 0);
-  return <div className="detail"><button className="back" onClick={onBack}>← К списку</button><div className="detailGrid"><section className="card source"><span className="eyebrow">ИСХОДНЫЙ ФРАГМЕНТ · {item.languagePair.toUpperCase()}</span><h2>{item.original}</h2><p>Ответов участников: <strong>{votes}</strong></p>{item.teacherNote && <p><strong>Пометка преподавателя:</strong> {item.teacherNote}</p>}{item.source?.title && <p>Источник: {item.source.title}</p>}<div className="caseId">ID: {item.caseId}</div></section><section className="card"><div className="row"><div><span className="eyebrow">ЭКСПЕРТНОЕ РЕШЕНИЕ</span><h2>{item.closed ? 'Решение принято' : 'Выберите перевод'}</h2></div>{!item.closed && !isTaken && <button className="primary small" disabled={busy} onClick={claim}>Взять в работу</button>}{!item.closed && isTaken && <button className="ghost" disabled={busy} onClick={release}>Вернуть в очередь</button>}</div><div className="variantList">{item.variants.map(v => <div className="variant" key={v.id}><div className="variantTop"><strong>{v.text}</strong><span>{v.supports} · {percent(v.supportRatio)}</span></div>{!item.closed && isTaken && <div className="variantActions"><label><input type="radio" name="primary" checked={primary === v.id} onChange={() => { setPrimary(v.id); setRejected(rejected.filter(id => id !== v.id)); setAdditional(additional.filter(id => id !== v.id)); }}/> Основной</label><label><input type="checkbox" checked={additional.includes(v.id)} disabled={primary === v.id || rejected.includes(v.id)} onChange={() => toggle(v.id, additional, setAdditional)}/> Допустимый</label><label><input type="checkbox" checked={rejected.includes(v.id)} disabled={primary === v.id || additional.includes(v.id)} onChange={() => toggle(v.id, rejected, setRejected)}/> Отклонить</label></div>}</div>)}</div>{item.closed ? <p className="success">Решение сохранено. Повторная экспертиза закрыта.</p> : isTaken ? <><form onSubmit={addVariant} className="addVariant"><label>Предложить свой вариант<input value={proposal} onChange={e => setProposal(e.target.value)} maxLength={1000} placeholder="Точный перевод" required/></label><button className="ghost" disabled={busy || !proposal.trim()}>Добавить вариант</button></form><form onSubmit={resolve} className="resolveForm"><label>Комментарий к решению<textarea value={comment} onChange={e => setComment(e.target.value)} maxLength={10000} rows={3} placeholder="Почему выбран этот вариант?"/></label><button className="primary" disabled={busy || !primary || additional.length > 4}>Завершить экспертизу <span>↗</span></button>{additional.length > 4 && <p className="error">Можно выбрать не более четырёх допустимых вариантов.</p>}</form></> : <p className="muted">Закрепите перевод за собой, чтобы принять решение.</p>}{error && <p className="error" role="alert">{error}</p>}</section></div></div>;
+  async function load() { const value = await api(`/api/expert/cases/${caseId}`); setItem(value); setPrimary(current => current && value.variants.some(v => v.id === current) ? current : value.resolution?.primaryVariantId || ''); }
+  useEffect(() => { setItem(null); setError(''); load().catch(e => setError(e.message)); }, [caseId]);
+  async function action(task) { setBusy(true); setError(''); try { await task(); } catch (e) { setError(e.message); if (e.status === 409) await load(); } finally { setBusy(false); } }
+  const claim = () => action(async () => { await api(`/api/expert/cases/${caseId}/claim`, { method: 'POST' }); await onChange(); });
+  const release = () => action(async () => { await api(`/api/expert/cases/${caseId}/claim`, { method: 'DELETE' }); await onChange(); onBack(); });
+  const addVariant = event => { event.preventDefault(); action(async () => { await api(`/api/expert/cases/${caseId}/variants`, { method: 'POST', body: JSON.stringify({ text: proposal.trim(), expectedRevision: item.revision }) }); setProposal(''); await load(); }); };
+  const resolve = event => { event.preventDefault(); action(async () => { await api(`/api/expert/cases/${caseId}/resolution`, { method: 'POST', body: JSON.stringify({ expectedRevision: item.revision, primaryVariantId: primary, additionalVariantIds: additional.filter(id => id !== primary), rejectedVariantIds: rejected.filter(id => id !== primary), comment: comment.trim() || null }) }); await onChange(); onBack(); }); };
+  const toggle = (id, list, set) => set(list.includes(id) ? list.filter(x => x !== id) : [...list, id]);
+  if (!item) return <div className="detail"><button className="back" onClick={onBack}>← К списку</button><section className="card">{error || 'Загружаем перевод…'}</section></div>;
+  const variants = [...item.variants].sort((a, b) => b.supports - a.supports || a.text.localeCompare(b.text, 'ru'));
+  const max = Math.max(1, ...variants.map(v => v.supports));
+  return <div className="detail"><button className="back" onClick={onBack}>← К списку</button><div className="detailTitle"><div><span className="eyebrow">ЭКСПЕРТИЗА / {caseId.slice(0, 8).toUpperCase()}</span><h1>{item.closed ? 'Проверенный перевод' : 'Выбор перевода'}</h1><p>Сравните варианты и зафиксируйте экспертное решение.</p></div><span className={`status ${item.teacherNote ? 'teacher' : ''}`}>{item.closed ? 'Решение принято' : item.teacherNote ? 'Запрос преподавателя' : isTaken ? 'У вас в работе' : 'Доступен'}</span></div><div className="detailGrid"><div><section className="card source"><span className="eyebrow">ИСХОДНЫЙ ТЕКСТ · {item.languagePair.toUpperCase()}</span><span className="quote">“</span><h2>{item.original}</h2><div className="sourceLine"><span>Ответов участников</span><strong>{number(variants.reduce((sum, v) => sum + v.supports, 0))}</strong></div>{item.source?.title && <div className="sourceLine"><span>Источник</span><strong>{item.source.title}</strong></div>}</section>{item.teacherNote && <section className="teacherNote"><span className="eyebrow">ОТ ПРЕПОДАВАТЕЛЯ</span><p>{item.teacherNote}</p></section>}</div><section className="card decision"><div className="sectionHead"><div><span className="eyebrow">МНЕНИЕ СООБЩЕСТВА</span><h2>Варианты перевода</h2></div><span className="badge">{variants.length}</span></div><p className="helper">Популярность помогает сравнить ответы. Правильным может быть и редкий вариант.</p><div className="variantList">{variants.map((v, index) => <div className={`variant ${primary === v.id ? 'selected' : ''}`} key={v.id}><div className="variantTop"><span className="rank">{String(index + 1).padStart(2, '0')}</span><div className="variantText"><strong>{v.text}</strong><span className="bar"><i style={{ width: `${Math.max(3, v.supports / max * 100)}%` }}/></span></div><span className="votes"><strong>{percent(v.supportRatio)}</strong><small>{number(v.supports)} голосов</small></span></div>{!item.closed && isTaken && <div className="variantActions"><label><input type="radio" name="primary" checked={primary === v.id} onChange={() => { setPrimary(v.id); setAdditional(additional.filter(id => id !== v.id)); setRejected(rejected.filter(id => id !== v.id)); }}/> Основной</label><label><input type="checkbox" checked={additional.includes(v.id)} disabled={primary === v.id || rejected.includes(v.id)} onChange={() => toggle(v.id, additional, setAdditional)}/> Допустимый</label><label><input type="checkbox" checked={rejected.includes(v.id)} disabled={primary === v.id || additional.includes(v.id)} onChange={() => toggle(v.id, rejected, setRejected)}/> Неверный</label></div>}{item.closed && item.resolution?.primaryVariantId === v.id && <div className="approved">✓ Основной перевод</div>}</div>)}</div>{item.closed ? <p className="success">Экспертиза завершена.</p> : !isTaken ? <div className="takeAction"><p>Возьмите перевод в работу, чтобы выбрать вариант или предложить свой.</p><button className="primary" disabled={busy} onClick={claim}>Взять в работу <span>↗</span></button></div> : <><form onSubmit={addVariant} className="addVariant"><label>Не нашли точный вариант? <small>Добавьте свой перевод</small><input value={proposal} onChange={e => setProposal(e.target.value)} maxLength={1000} placeholder="Новый вариант перевода" required/></label><button className="ghost" disabled={busy || !proposal.trim()}>Добавить</button></form><form onSubmit={resolve} className="resolveForm"><label>Комментарий к решению <small>По желанию</small><textarea value={comment} onChange={e => setComment(e.target.value)} maxLength={10000} rows={3} placeholder="Что помогло выбрать этот перевод?"/></label><div className="formActions"><button type="button" className="textButton" disabled={busy} onClick={release}>Вернуть в очередь</button><button className="primary" disabled={busy || !primary || additional.length > 4}>Подтвердить решение <span>↗</span></button></div>{additional.length > 4 && <p className="error">Можно выбрать не более четырёх дополнительных вариантов.</p>}</form></>}{error && <p className="error" role="alert">{error}</p>}</section></div></div>;
+}
+
+function Settings({ value, onSave }) {
+  const [form, setForm] = useState(value);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+  useEffect(() => setForm(value), [value]);
+  if (!form) return <section className="card">Загружаем настройки…</section>;
+  async function submit(event) { event.preventDefault(); setBusy(true); setNotice(''); setError(''); try { await onSave(form); setNotice('Ваши настройки сохранены. Очередь обновлена.'); } catch (e) { setError(e.message); } finally { setBusy(false); } }
+  return <section className="card settingsCard"><span className="eyebrow">ЛИЧНЫЕ НАСТРОЙКИ</span><h2>Какие переводы показывать</h2><p>Задайте границу для спорных переводов в своей очереди. Запросы преподавателей всегда идут первыми и не зависят от этих значений.</p><form onSubmit={submit}><div className="settingRow"><label htmlFor="required">Минимум ответов<small>Сколько участников должны ответить, прежде чем перевод попадёт в вашу очередь.</small></label><div className="numberInput"><input id="required" type="number" min="1" max="100000" step="1" value={form.requiredParticipants} onChange={e => setForm({ ...form, requiredParticipants: Number(e.target.value) })} required/><span>ответов</span></div></div><div className="settingRow"><label htmlFor="threshold">Поддержка лидера ниже<small>Если самый популярный вариант набрал меньше этого процента, перевод требует проверки.</small></label><div className="numberInput"><input id="threshold" type="number" min="1" max="100" step="1" value={Math.round(form.supportThreshold * 100)} onChange={e => setForm({ ...form, supportThreshold: Number(e.target.value) / 100 })} required/><span>%</span></div></div><div className="settingsActions"><span>Настройки действуют только для вашего кабинета.</span><button className="primary" disabled={busy}>Сохранить настройки <span>↗</span></button></div>{error && <p className="error" role="alert">{error}</p>}{notice && <p className="success" role="status">{notice}</p>}</form></section>;
 }
 
 function App() {
@@ -76,36 +94,30 @@ function App() {
   const [dashboard, setDashboard] = useState(null);
   const [queue, setQueue] = useState([]);
   const [work, setWork] = useState([]);
-  const [policy, setPolicy] = useState(null);
+  const [preferences, setPreferences] = useState(null);
+  const [administrator, setAdministrator] = useState(false);
   const [tab, setTab] = useState('overview');
   const [caseId, setCaseId] = useState(null);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
-  const [busy, setBusy] = useState(false);
-  const load = async () => {
-    const results = await Promise.allSettled([api('/api/me'), api('/api/expert/dashboard'), api('/api/expert/cases?limit=100'), api('/api/expert/work'), api('/api/policies/distribution')]);
-    if (results[0].status === 'rejected') throw results[0].reason;
-    setProfile(results[0].value);
-    if (results[1].status === 'fulfilled') setDashboard(results[1].value);
-    if (results[2].status === 'fulfilled') setQueue(results[2].value);
-    if (results[3].status === 'fulfilled') setWork(results[3].value);
-    if (results[4].status === 'fulfilled') {
-      setPolicy(results[4].value);
-      if (results[1].status === 'rejected') setTab('settings');
-    }
-    if (results[1].status === 'rejected' && results[4].status === 'rejected') setTab('import');
-  };
-  useEffect(() => { if (signedIn) load().catch(e => setError(e.message)); }, [signedIn]);
-  const logout = () => { localStorage.removeItem(tokenKey); localStorage.removeItem(refreshKey); setSignedIn(false); setProfile(null); setDashboard(null); setPolicy(null); setError(''); };
-  const savePolicy = async event => { event.preventDefault(); setBusy(true); setError(''); setNotice(''); try {
-    await api('/api/policies/distribution', { method: 'POST', body: JSON.stringify(policy.settings) }); await load(); setNotice('Настройки применены для всех новых решений.');
-  } catch (e) { setError(e.message); } finally { setBusy(false); } };
+  const [loading, setLoading] = useState(true);
+  async function load() {
+    api('/api/policies/distribution').then(() => setAdministrator(true)).catch(() => setAdministrator(false));
+    const [me, stats, cases, mine, prefs] = await Promise.all([api('/api/me'), api('/api/expert/dashboard'), loadQueue(), api('/api/expert/work'), api('/api/expert/preferences')]);
+    setProfile(me); setDashboard(stats); setQueue(cases); setWork(mine); setPreferences(prefs); setError(''); setLoading(false);
+  }
+  useEffect(() => { if (signedIn) load().catch(e => { setError(e.message); setLoading(false); if (e.status === 401) logout(); }); }, [signedIn]);
+  function logout() { localStorage.removeItem(tokenKey); localStorage.removeItem(refreshKey); setSignedIn(false); setProfile(null); setAdministrator(false); setLoading(true); }
+  async function savePreferences(value) { const saved = await api('/api/expert/preferences', { method: 'PUT', body: JSON.stringify(value) }); setPreferences(saved); await load(); }
   if (!signedIn) return <Login onLogin={() => setSignedIn(true)}/>;
-  const taken = work.filter(x => !x.completed);
-  const completed = work.filter(x => x.completed);
+  const taken = work.filter(item => !item.completed);
+  const completed = work.filter(item => item.completed);
+  const teachers = queue.filter(item => item.teacherRequested);
+  const community = queue.filter(item => !item.teacherRequested);
   const open = id => { setCaseId(id); window.scrollTo(0, 0); };
-  const list = (rows, empty, status) => rows.length ? <div className="list">{rows.map(item => <button className="listItem" key={item.caseId} onClick={() => open(item.caseId)}><span className="listMain"><strong>{item.original || `Перевод ${item.caseId.slice(0, 8)}`}</strong><small>{status || (item.completed ? 'Завершено' : 'Спорный перевод')} · {item.observations} ответов · лидер {percent(item.leadingSupport)}</small></span><span className="listMeta">{date(item.takenAt || item.createdAt)} <b>↗</b></span></button>)}</div> : <p className="empty">{empty}</p>;
-  return <div className="shell"><aside className="sidebar"><a className="logo" href="/"><span className="mark">Б<span>↗</span></span><span>башперевод<small>экспертиза</small></span></a><div className="navLabel">РАБОЧЕЕ ПРОСТРАНСТВО</div><nav>{[['overview', '▦', 'Дашборд'], ['available', '◫', 'Доступные'], ['taken', '◷', 'В работе'], ['completed', '✓', 'Сделано'], ['import', '↑', 'Загрузка CSV'], ...(policy ? [['settings', '⚙', 'Настройки']] : [])].map(([id, icon, label]) => <button key={id} className={tab === id ? 'active' : ''} onClick={() => { setTab(id); setCaseId(null); setError(''); }}><span>{icon}</span>{label}{id === 'available' && queue.length > 0 && <small>{queue.length}</small>}</button>)}</nav><div className="sidebarFoot"><span className="avatar">{profile?.username?.[0]?.toUpperCase() || 'Э'}</span><span>{profile?.username || 'Эксперт'}<small>Личный кабинет</small></span><button onClick={logout} title="Выйти">↗</button></div></aside><main className="content"><header className="topbar"><div className="breadcrumb">БАШПЕРЕВОД <span>/</span> ЭКСПЕРТИЗА</div><a href="https://bashperevod.ru">Основной сайт ↗</a></header>{caseId ? <CasePanel caseId={caseId} onBack={() => setCaseId(null)} onChange={load} isTaken={taken.some(x => x.caseId === caseId)}/> : <><div className="heading"><div><span className="eyebrow">{tab === 'overview' ? 'ОБЗОР' : 'ЭКСПЕРТИЗА ПЕРЕВОДОВ'}</span><h1>{{ overview: 'Рабочий стол', available: 'Можно взять', taken: 'В работе', completed: 'Сделано', settings: 'Настройки экспертизы', import: 'Загрузка переводов' }[tab]}</h1><p>{tab === 'import' ? 'Добавьте подготовленные переводы для проверки.' : tab === 'settings' ? 'Глобальные условия, по которым перевод попадает на экспертизу.' : 'Точные решения для спорных переводов.'}</p></div><span className="today">{new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}</span></div>{tab === 'import' && <CsvImport api={api} profile={profile} administrator={Boolean(policy)}/>}{tab === 'overview' && <><div className="stats"><button onClick={() => setTab('available')}><span>ОЖИДАЮТ РЕШЕНИЯ</span><strong>{dashboard?.available ?? '—'}</strong><small>Можно взять в работу ↗</small></button><button onClick={() => setTab('taken')}><span>У МЕНЯ В РАБОТЕ</span><strong>{dashboard?.taken ?? '—'}</strong><small>Открыть список ↗</small></button><button onClick={() => setTab('completed')}><span>ЗАВЕРШЕНО МНОЙ</span><strong>{dashboard?.completed ?? '—'}</strong><small>Посмотреть историю ↗</small></button></div><section className="card"><div className="sectionHead"><div><span className="eyebrow">ОЧЕРЕДЬ</span><h2>Спорные переводы</h2></div><button className="linkButton" onClick={() => setTab('available')}>Все доступные ↗</button></div>{list(queue.slice(0, 5), 'Пока нет переводов, требующих экспертизы.')}</section><div className="rule"><span>✳</span><p>На экспертизу попадают переводы с {dashboard?.requiredParticipants ?? '—'} ответами и поддержкой лидера ниже {percent(dashboard?.supportThreshold)}, а также переводы по запросу преподавателя. После экспертного решения повторная проверка закрыта.</p></div></>}{tab === 'available' && <section className="card"><div className="sectionHead"><h2>Доступные для экспертизы</h2><span className="badge">{queue.length}</span></div>{list(queue, 'Сейчас нет спорных переводов.')}</section>}{tab === 'taken' && <section className="card"><div className="sectionHead"><h2>Взятые мной</h2><span className="badge">{taken.length}</span></div>{list(taken, 'Вы пока не взяли перевод в работу.', 'В работе')}</section>}{tab === 'completed' && <section className="card"><div className="sectionHead"><h2>Мои решения</h2><span className="badge">{completed.length}</span></div>{list(completed, 'Экспертных решений пока нет.', 'Завершено')}</section>}{tab === 'settings' && policy && <section className="card settingsCard"><span className="eyebrow">ОБЩАЯ ПОЛИТИКА · ВЕРСИЯ {policy.version}</span><h2>Когда нужен эксперт</h2><p>Если ответов достаточно, а наиболее популярный перевод получил меньше указанной доли, задача появится в очереди. Преподаватель также может запросить проверку своего перевода с пояснением.</p><form onSubmit={savePolicy}><label>Минимальное количество ответов<input type="number" min={Math.max(1, policy.settings.minimumClasses)} step="1" value={policy.settings.requiredParticipants} onChange={e => setPolicy({ ...policy, settings: { ...policy.settings, requiredParticipants: Number(e.target.value) } })} required/><small>Например, 300 ответов</small></label><label>Порог поддержки лидера, %<input type="number" min="1" max="100" step="1" value={Math.round(policy.settings.supportThreshold * 100)} onChange={e => setPolicy({ ...policy, settings: { ...policy.settings, supportThreshold: Number(e.target.value) / 100 } })} required/><small>При 80% перевод не требует экспертизы; 60–70% — спорный.</small></label><button className="primary" disabled={busy}>Сохранить для всех <span>↗</span></button></form></section>}</>}{error && <div className="alert error" role="alert">{error}</div>}{notice && <div className="alert success" role="status">{notice}</div>}</main></div>;
+  const navigate = id => { setTab(id); setCaseId(null); setError(''); window.scrollTo(0, 0); };
+  const tabs = [['overview', '▦', 'Обзор'], ['available', '▤', 'Доступные'], ['taken', '◷', 'В работе'], ['completed', '✓', 'Мои решения'], ['settings', '⚙', 'Настройки'], ['import', '↑', 'Загрузка CSV']];
+  const titles = { overview: 'Рабочий стол', available: 'Доступные переводы', taken: 'У меня в работе', completed: 'Мои решения', settings: 'Настройки очереди', import: 'Загрузка переводов' };
+  return <div className="shell"><aside className="sidebar"><a className="brand" href="/"><span className="brandMark">б.</span><span>башперевод<small>экспертный кабинет</small></span></a><div className="navLabel">РАБОЧЕЕ ПРОСТРАНСТВО</div><nav>{tabs.map(([id, icon, label]) => <button key={id} className={tab === id && !caseId ? 'active' : ''} onClick={() => navigate(id)}><span>{icon}</span>{label}{id === 'available' && queue.length > 0 && <small>{queue.length}</small>}</button>)}</nav><div className="sideHint"><span>✳</span><strong>Точность начинается с вас</strong><p>Даже один проверенный перевод помогает всему сообществу.</p></div><div className="sidebarFoot"><span className="avatar">{profile?.username?.[0]?.toUpperCase() || 'Э'}</span><span>{profile?.username || 'Участник'}<small>Эксперт</small></span><button onClick={logout} title="Выйти" aria-label="Выйти">↗</button></div></aside><main className="content"><header className="topbar"><div>БАШПЕРЕВОД <span>/</span> ЭКСПЕРТИЗА</div><a href="https://bashperevod.ru">Основной сайт ↗</a></header>{caseId ? <CasePanel caseId={caseId} onBack={() => setCaseId(null)} onChange={load} isTaken={taken.some(item => item.caseId === caseId)}/> : <><div className="heading"><div><span className="eyebrow">{tab === 'overview' ? 'ВАШ ВКЛАД В ОБЩЕЕ ДЕЛО' : 'ЭКСПЕРТИЗА ПЕРЕВОДОВ'}</span><h1>{titles[tab]}</h1><p>{tab === 'settings' ? 'Настройте свою очередь и сосредоточьтесь на нужных проверках.' : tab === 'completed' ? 'Все переводы, для которых вы приняли экспертное решение.' : 'Выбирайте точные переводы на основе контекста и ответов сообщества.'}</p></div><span className="today">{new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}</span></div>{error && <div className="alert error" role="alert">{error} <button onClick={() => load().catch(e => setError(e.message))}>Повторить</button></div>}{loading ? <section className="card">Загружаем рабочее пространство…</section> : <>{tab === 'overview' && <><section className="hero"><div><span className="eyebrow">СЕГОДНЯ В ОЧЕРЕДИ</span><h2>Начните с запросов<br/>преподавателей.</h2><p>Затем переходите к переводам, где сообщество не пришло к единому мнению.</p><button className="heroButton" onClick={() => navigate('available')}>Открыть очередь ↗</button></div><span className="heroGlyph" aria-hidden="true">Ә</span></section><div className="stats"><button onClick={() => navigate('completed')}><span className="statIcon mint">✓</span><small>ПРОВЕРЕНО ВСЕГО</small><strong>{number(dashboard?.totalCompleted)}</strong><em>решений экспертов в проекте</em></button><button onClick={() => navigate('available')}><span className="statIcon coral">▤</span><small>ОСТАЛОСЬ В ОЧЕРЕДИ</small><strong>{number(dashboard?.available)}</strong><em>доступно вам сейчас</em></button><button onClick={() => navigate('completed')}><span className="statIcon lilac">✳</span><small>МОЙ ВКЛАД</small><strong>{number(dashboard?.completed)}</strong><em>ваших завершённых проверок</em></button></div><div className="overviewGrid"><CaseList title="Сначала — преподаватели" eyebrow="ПРИОРИТЕТНАЯ ОЧЕРЕДЬ" rows={teachers.slice(0, 4)} empty="Новых запросов преподавателей нет." onOpen={open}/><section className="insight"><span className="eyebrow">КАК РАБОТАЕТ ОЧЕРЕДЬ</span><div className="insightNumerals">01 <span>→</span> 02</div><h2>От запроса<br/>к решению</h2><p>Запросы преподавателей идут первыми. Остальные переводы появляются после {number(preferences.requiredParticipants)} ответов, если лидер набрал меньше {percent(preferences.supportThreshold)}.</p><button onClick={() => navigate('settings')}>Изменить параметры ↗</button></section></div><CaseList title="Спорные переводы" eyebrow="ПОСЛЕ ЗАПРОСОВ ПРЕПОДАВАТЕЛЕЙ" rows={community.slice(0, 5)} empty="Сообщество пока не передало спорных переводов." onOpen={open}/></>}{tab === 'available' && <><div className="queueNote"><span>✳</span><p><strong>Порядок проверки:</strong> сначала запросы преподавателей, затем переводы с низкой поддержкой лидера. Сейчас у вас {number(taken.length)} в работе.</p></div><CaseList title="Запросы преподавателей" eyebrow="ПРИОРИТЕТ · 01" rows={teachers} empty="Запросов от преподавателей пока нет." onOpen={open}/><CaseList title="Спорные переводы" eyebrow="СООБЩЕСТВО · 02" rows={community} empty="Под ваши параметры пока нет спорных переводов." onOpen={open}/></>}{tab === 'taken' && <CaseList title="Взятые мной" eyebrow="ТЕКУЩАЯ РАБОТА" rows={taken} empty="Вы пока не взяли перевод. Выберите задачу в доступной очереди." onOpen={open}/>} {tab === 'completed' && <CaseList title="Проверенные переводы" eyebrow="ИСТОРИЯ ВАШИХ РЕШЕНИЙ" rows={completed} empty="Ваши решения появятся здесь после первой проверки." onOpen={open}/>} {tab === 'settings' && <Settings value={preferences} onSave={savePreferences}/>} {tab === 'import' && <CsvImport api={api} profile={profile} administrator={administrator}/>}</>}</>}</main></div>;
 }
 
 createRoot(document.getElementById('root')).render(<App/>);

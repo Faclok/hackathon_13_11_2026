@@ -9,6 +9,8 @@ const routes = [
   ['POST', /^\/api\/deliveries$/],
   ['PUT', new RegExp(`^/api/accounts/${uuid}/access$`)],
   ['GET', /^\/api\/expert\/(dashboard|work|cases)$/],
+  ['GET', /^\/api\/expert\/preferences$/],
+  ['PUT', /^\/api\/expert\/preferences$/],
   ['GET', new RegExp(`^/api/expert/cases/${uuid}(?:/history)?$`)],
   ['POST', new RegExp(`^/api/expert/cases/${uuid}/(?:claim|variants|resolution)$`)],
   ['DELETE', new RegExp(`^/api/expert/cases/${uuid}/claim$`)],

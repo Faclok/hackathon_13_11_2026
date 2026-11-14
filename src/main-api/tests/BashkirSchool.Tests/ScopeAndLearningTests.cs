@@ -12,7 +12,7 @@ namespace BashkirSchool.Tests;
 public sealed class ScopeAndLearningTests
 {
     [Fact]
-    public async Task CaseScopedExpertAndExporterCannotReadOtherCaseAndRevocationTakesEffect()
+    public async Task ExpertAccessIsUniversalWhileExportRemainsCaseScoped()
     {
         using var f = new CoreFactory(); using var admin = await f.Bootstrap(); await f.Student(admin);
         using var producer = await f.Producer(admin); var a = await Deliver(producer, "a"); var b = await Deliver(producer, "b");
@@ -22,24 +22,24 @@ public sealed class ScopeAndLearningTests
         Assert.Equal(HttpStatusCode.NoContent, (await admin.PutAsJsonAsync($"/api/accounts/{teacherId}/access", new AssignAccessRequest("exporter", CaseId: a.CaseId))).StatusCode);
         using var teacher = f.CreateClient(); await Login(teacher, "teacher1");
         Assert.Equal(HttpStatusCode.OK, (await teacher.GetAsync($"/api/expert/cases/{a.CaseId}")).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await teacher.GetAsync($"/api/expert/cases/{b.CaseId}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await teacher.GetAsync($"/api/expert/cases/{b.CaseId}")).StatusCode);
         var export = await teacher.GetFromJsonAsync<ExportRow[]>("/api/translations/export?includeDisputed=true");
         Assert.Equal("fragment-a", Assert.Single(export!).FragmentId);
         Assert.Empty((await teacher.GetFromJsonAsync<ExportRow[]>("/api/translations/export?includeDisputed=true&offset=1"))!);
         var grants = await admin.GetFromJsonAsync<AccessAssignmentResponse[]>($"/api/accounts/{teacherId}/access", Json);
         var expertGrant = grants!.Single(x => x.Profile == "expert");
         Assert.Equal(HttpStatusCode.NoContent, (await admin.DeleteAsync($"/api/access/{expertGrant.Id}")).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await teacher.GetAsync($"/api/expert/cases/{a.CaseId}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await teacher.GetAsync($"/api/expert/cases/{a.CaseId}")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await teacher.GetAsync("/api/translations/export?includeDisputed=true")).StatusCode);
     }
 
     [Fact]
-    public async Task ExpertRejectsForeignAndDuplicateVariantsAndAdministratorIsNotAnExpert()
+    public async Task ExpertRejectsForeignAndDuplicateVariantsAndAdministratorCanReadCases()
     {
         using var f = new CoreFactory(); using var admin = await f.Bootstrap(); using var producer = await f.Producer(admin);
         var a = await Deliver(producer, "a"); var b = await Deliver(producer, "b");
         using var expert = await ResolutionFlowTests.Staff(f, admin, "expert");
-        Assert.Equal(HttpStatusCode.Forbidden, (await admin.PostAsJsonAsync($"/api/expert/cases/{a.CaseId}/resolution", new ResolveCaseRequest(0, a.VariantId, [], []))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync($"/api/expert/cases/{a.CaseId}")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await expert.PostAsJsonAsync($"/api/expert/cases/{a.CaseId}/resolution", new ResolveCaseRequest(0, b.VariantId, [], []))).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await expert.PostAsJsonAsync($"/api/expert/cases/{a.CaseId}/resolution", new ResolveCaseRequest(0, a.VariantId, [a.VariantId], []))).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await expert.PostAsJsonAsync($"/api/expert/cases/{a.CaseId}/resolution", new ResolveCaseRequest(0, a.VariantId, [], [a.VariantId]))).StatusCode);

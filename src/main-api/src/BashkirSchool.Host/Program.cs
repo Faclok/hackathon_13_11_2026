@@ -118,6 +118,9 @@ api.MapDelete("/access/{assignmentId:guid}", async (ClaimsPrincipal user, Guid a
 api.MapGet("/expert/cases", (ClaimsPrincipal user, int? offset, int? limit, ExpertReviews expert, CancellationToken ct) => expert.QueueAsync(Subject(user), offset ?? 0, limit ?? 50, ct));
 api.MapGet("/expert/dashboard", (ClaimsPrincipal user, ExpertReviews expert, CancellationToken ct) => expert.DashboardAsync(Subject(user), ct));
 api.MapGet("/expert/work", (ClaimsPrincipal user, ExpertReviews expert, CancellationToken ct) => expert.WorkAsync(Subject(user), ct));
+api.MapGet("/expert/preferences", (ClaimsPrincipal user, ExpertReviews expert, CancellationToken ct) => expert.PreferencesAsync(Subject(user), ct));
+api.MapPut("/expert/preferences", (ClaimsPrincipal user, ExpertPreferencesResponse preferences, ExpertReviews expert, CancellationToken ct) =>
+    expert.SavePreferencesAsync(Subject(user), preferences, ct));
 api.MapPost("/expert/cases/{caseId:guid}/claim", (ClaimsPrincipal user, Guid caseId, ExpertReviews expert, CancellationToken ct) => expert.ClaimAsync(Subject(user), caseId, ct));
 api.MapDelete("/expert/cases/{caseId:guid}/claim", async (ClaimsPrincipal user, Guid caseId, ExpertReviews expert, CancellationToken ct) =>
 { await expert.ReleaseAsync(Subject(user), caseId, ct); return TypedResults.NoContent(); });
