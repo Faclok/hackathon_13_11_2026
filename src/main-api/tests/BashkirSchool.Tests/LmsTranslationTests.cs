@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using BashkirSchool.Application;
 using BashkirSchool.Domain;
 using BashkirSchool.Infrastructure;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using static BashkirSchool.Tests.CoreFactory;
 
@@ -10,6 +11,36 @@ namespace BashkirSchool.Tests;
 
 public sealed class LmsTranslationTests
 {
+    [Fact]
+    public async Task StudentTaskAnswerAddsVariantAndVoteWithoutRewritingSourceOrExpertTranslation()
+    {
+        using var factory = new CoreFactory(lmsKey: "test-lms-secret");
+        using var admin = await factory.Bootstrap();
+        var student = await factory.Student(admin);
+        using var teacher = await factory.Producer(admin);
+        var created = await PostInternal(teacher, "/api/lms-source/teacher/translations",
+            new { externalId = Guid.NewGuid(), sourceText = "Һаумы", translationText = "Привет", languagePair = "ba-ru" });
+        var caseId = (await created.Content.ReadFromJsonAsync<CaseIdResponse>())!.CaseId;
+        var taskId = Guid.NewGuid();
+        var first = await PostInternal(student.Client, $"/api/lms-source/translations/{caseId}/student-answer",
+            new { taskId, text = "Здравствуйте" });
+        var again = await PostInternal(student.Client, $"/api/lms-source/translations/{caseId}/student-answer",
+            new { taskId, text = "Здравствуйте" });
+        Assert.Equal(await first.Content.ReadAsStringAsync(), await again.Content.ReadAsStringAsync());
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<CoreDbContext>();
+        Assert.Equal("Һаумы", (await db.Fragments.SingleAsync()).Text);
+        var originalCase = await db.Cases.SingleAsync();
+        Assert.Equal("Привет", (await db.Variants.SingleAsync(x => x.Id == originalCase.ShownVariantId)).Text);
+        Assert.Equal(2, await db.Variants.CountAsync());
+        Assert.Single(await db.Responses.ToArrayAsync());
+        Assert.Equal(1, await db.Judgments.CountAsync());
+        var catalog = await teacher.GetFromJsonAsync<CatalogWithTop>($"/api/lms-source/translations/{caseId}");
+        Assert.Equal("Здравствуйте", catalog!.TranslationText);
+        Assert.Equal("Здравствуйте", catalog.TopTranslations[0].Text);
+        Assert.Equal(100, catalog.TopTranslations[0].Votes);
+    }
+
     [Fact]
     public async Task CommunityDecisionBecomesTheAcceptedLmsAnswer()
     {
@@ -72,4 +103,6 @@ public sealed class LmsTranslationTests
 
     private sealed record CaseIdResponse(Guid CaseId);
     private sealed record LmsCase(string Status, string[] AcceptedTranslations);
+    private sealed record CatalogWithTop(string TranslationText, PopularVariant[] TopTranslations);
+    private sealed record PopularVariant(string Text, int Votes);
 }

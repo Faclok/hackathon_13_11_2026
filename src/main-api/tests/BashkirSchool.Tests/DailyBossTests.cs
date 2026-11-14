@@ -16,6 +16,63 @@ public sealed class DailyBossTests
     private const string Key = "daily-boss-test-key";
 
     [Fact]
+    public async Task TranslationBossCanStartWithoutSimpleLearning()
+    {
+        using var f = new CoreFactory();
+        using var admin = await f.Bootstrap();
+        var student = await f.Student(admin);
+        using var producer = await f.Producer(admin);
+        var training = await Deliver(producer, "training");
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await student.Client.PostAsJsonAsync("/api/boss/next", new { })).StatusCode);
+        using (var setup = f.Services.CreateScope())
+        {
+            var db = setup.ServiceProvider.GetRequiredService<CoreDbContext>();
+            var translationCase = await db.Cases.SingleAsync();
+            var policy = await db.Policies.SingleAsync();
+            for (var i = 0; i < 250; i++)
+            {
+                var at = f.Clock.Now.AddDays(-(i % 14));
+                var assignment = ReviewAssignment.Issue(student.Id, translationCase, null, null, policy.Id,
+                    at, TimeSpan.FromMinutes(30));
+                var response = ReviewResponse.Submit(assignment, student.Id, ReviewAction.Confirm, null, .5m, at, false);
+                db.AddRange(assignment, response);
+            }
+            await db.SaveChangesAsync();
+        }
+        var access = await student.Client.GetFromJsonAsync<BossAccessResponse>("/api/boss/access");
+        Assert.True(access!.CanAccess);
+        var content = await Deliver(producer, "boss");
+        using (var setup = f.Services.CreateScope())
+        {
+            var db = setup.ServiceProvider.GetRequiredService<CoreDbContext>();
+            db.Variants.AddRange(Enumerable.Range(0, 4)
+                .Select(i => TranslationVariant.Create(content.CaseId, $"Вариант {i}", false)));
+            await db.SaveChangesAsync();
+        }
+        var boss = await Post<AssignmentResponse>(student.Client, "/api/boss/next", new { });
+        Assert.Equal("boss", boss.Kind);
+        Assert.Equal(content.CaseId, boss.CaseId);
+        Assert.Equal(3, boss.Options.Count);
+        await Post<ReviewReceipt>(student.Client, $"/api/reviews/{boss.Id}/response",
+            new SubmitReviewRequest(ReviewAction.Confirm) { SelectedVariantId = boss.Options[0].Id });
+        await Deliver(producer, "boss-2");
+        await Deliver(producer, "boss-3");
+        for (var i = 0; i < 2; i++)
+        {
+            var next = await Post<AssignmentResponse>(student.Client, "/api/boss/next", new { });
+            await Post<ReviewReceipt>(student.Client, $"/api/reviews/{next.Id}/response",
+                new SubmitReviewRequest(ReviewAction.Confirm) { SelectedVariantId = next.Options[0].Id });
+        }
+        var profile = await student.Client.GetFromJsonAsync<PlayerProfile>("/api/player/profile");
+        Assert.Equal(100, profile!.Xp);
+        Assert.Equal(50, profile.Coins);
+        Assert.Contains("boss", profile.TrophyIds);
+        using var scope = f.Services.CreateScope();
+        Assert.Empty(await scope.ServiceProvider.GetRequiredService<CoreDbContext>().Set<DailyLesson>().ToArrayAsync());
+    }
+
+    [Fact]
     public void BossMigrationMatchesModelAndPreservesExistingLessons()
     {
         using var db = new CoreDbContext(new DbContextOptionsBuilder<CoreDbContext>()

@@ -101,6 +101,20 @@ app.MapPost("/auth/password", async (CompletePasswordRequest request, SchoolAcco
 
 var api = app.MapGroup("/api").RequireAuthorization();
 api.MapGet("/me", (ClaimsPrincipal user, IndependentAccounts accounts, CancellationToken ct) => accounts.ProfileAsync(Subject(user), ct));
+api.MapGet("/player/profile", (ClaimsPrincipal user, PlayerEconomy economy, CancellationToken ct) =>
+    economy.ProfileAsync(Subject(user), ct));
+api.MapGet("/player/decorations", () => Results.Ok(RewardCatalog.Items));
+api.MapGet("/player/cases", () => Results.Ok(RewardCatalog.Cases.Select(RewardCatalog.Describe)));
+api.MapGet("/player/cases/history", (ClaimsPrincipal user, PlayerEconomy economy, CancellationToken ct) =>
+    economy.HistoryAsync(Subject(user), ct));
+api.MapPost("/player/keys", (ClaimsPrincipal user, BuyCaseKeysRequest request, PlayerEconomy economy, CancellationToken ct) =>
+    economy.BuyKeysAsync(Subject(user), request.Quantity, ct));
+api.MapPost("/player/cases/{caseId}/open", (ClaimsPrincipal user, string caseId, PlayerEconomy economy, CancellationToken ct) =>
+    economy.OpenCaseAsync(Subject(user), caseId, ct));
+api.MapPut("/player/equipment/{itemId}", (ClaimsPrincipal user, string itemId, EquipDecorationRequest request, PlayerEconomy economy, CancellationToken ct) =>
+    economy.EquipAsync(Subject(user), itemId, request.Equipped, ct));
+api.MapGet("/leaderboard", (ClaimsPrincipal user, string? period, string? metric, PlayerEconomy economy, CancellationToken ct) =>
+    economy.LeaderboardAsync(Subject(user), period ?? "global", metric ?? "tasks", ct));
 api.MapPost("/accounts/{accountId:guid}/recovery-link", (ClaimsPrincipal user, Guid accountId, RecoverIndependentAccountRequest request,
     IndependentAccounts accounts, CancellationToken ct) => accounts.IssueRecoveryAsync(Subject(user), accountId, request, ct));
 api.MapPost("/credentials/change", async (ClaimsPrincipal user, ChangePasswordRequest request, SchoolAccounts accounts, CancellationToken ct) =>
@@ -196,6 +210,14 @@ api.MapPost("/reviews/next", async (ClaimsPrincipal user, string? kind, IReviewW
     var assignment = await reviews.ReceiveAsync(Subject(user), kind ?? "translation-confirm", ct);
     return assignment is null ? Results.NoContent() : Results.Ok(assignment);
 }).Produces<AssignmentResponse>().Produces(StatusCodes.Status204NoContent);
+api.MapGet("/boss/access", (ClaimsPrincipal user, BossAccess access, CancellationToken ct) =>
+    access.ReadAsync(Subject(user), ct));
+api.MapPost("/boss/next", async (ClaimsPrincipal user, BossAccess access, IReviewWorkflow reviews, CancellationToken ct) =>
+{
+    if (!(await access.ReadAsync(Subject(user), ct)).CanAccess) return Results.Forbid();
+    var assignment = await reviews.ReceiveBossAsync(Subject(user), ct);
+    return assignment is null ? Results.NoContent() : Results.Ok(assignment);
+}).Produces<AssignmentResponse>().Produces(StatusCodes.Status204NoContent);
 api.MapPost("/reviews/{assignmentId:guid}/response", (ClaimsPrincipal user, Guid assignmentId, SubmitReviewRequest request, IReviewWorkflow reviews, CancellationToken ct) =>
     reviews.SubmitAsync(Subject(user), assignmentId, request, ct));
 api.MapGet("/cases/{caseId:guid}/statistics", (ClaimsPrincipal user, Guid caseId, IReviewWorkflow reviews, CancellationToken ct) =>
@@ -212,6 +234,8 @@ public partial class Program;
 public sealed record AccountStatusRequest(bool Active);
 /// <summary>The identifier of a newly created resource.</summary>
 public sealed record ResourceCreatedResponse(Guid Id);
+public sealed record BuyCaseKeysRequest(int Quantity);
+public sealed record EquipDecorationRequest(bool Equipped);
 /// <summary>The currently active version of administrator settings.</summary>
 public sealed record DistributionPolicyResponse(Guid Id, int Version, DistributionPolicyRequest Settings);
 /// <summary>Creates a new immutable version of the distribution and consensus settings.</summary>

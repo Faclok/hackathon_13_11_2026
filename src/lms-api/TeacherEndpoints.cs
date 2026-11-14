@@ -305,6 +305,27 @@ public static class TeacherEndpoints
                     task.DueAt, task.CreatedAt, Answer = submission == null ? null : submission.Answer,
                     SubmittedAt = submission == null ? (DateTimeOffset?)null : submission.SubmittedAt }).ToListAsync());
         });
+        api.MapPost("/me/next-translation", async (HttpRequest request, IHttpClientFactory factory, LmsDbContext db) =>
+        {
+            var user = await Identity(request, factory);
+            if (user is null) return Results.Unauthorized();
+            var now = DateTimeOffset.UtcNow;
+            var task = await (from member in db.ClassMembers.AsNoTracking() where member.UserId == user.Id
+                              join studyClass in db.TeacherClasses on member.ClassId equals studyClass.Id
+                              join item in db.ClassTasks on studyClass.Id equals item.ClassId
+                              where (item.DueAt == null || item.DueAt >= now) &&
+                                  !db.TaskSubmissions.Any(x => x.TaskId == item.Id && x.UserId == user.Id)
+                              orderby item.DueAt == null, item.DueAt, item.CreatedAt, item.Id
+                              select new { item.Id, item.CatalogCaseId, item.Title, item.SourceText,
+                                  item.DueAt, ClassName = studyClass.Name }).FirstOrDefaultAsync();
+            if (task is not null) return Results.Ok(new { source = "teacher", task });
+            using var response = await MainPost(request, factory, "/api/boss/next", new { });
+            if (response.StatusCode == System.Net.HttpStatusCode.NoContent) return Results.NoContent();
+            if (response.StatusCode == System.Net.HttpStatusCode.Forbidden) return Results.StatusCode(403);
+            if (!response.IsSuccessStatusCode) return Results.StatusCode(502);
+            using var assignment = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            return Results.Ok(new { source = "random", assignment = assignment.RootElement.Clone() });
+        });
         api.MapPut("/me/tasks/{taskId:guid}/submission", async (Guid taskId, HttpRequest request, IHttpClientFactory factory, LmsDbContext db, SubmissionInput input) =>
         {
             var user = await Identity(request, factory);
@@ -313,6 +334,9 @@ public static class TeacherEndpoints
             var task = await db.ClassTasks.AsNoTracking().SingleOrDefaultAsync(x => x.Id == taskId);
             if (task is null || !await db.ClassMembers.AnyAsync(x => x.ClassId == task.ClassId && x.UserId == user.Id)) return Results.NotFound();
             if (task.DueAt is not null && task.DueAt < DateTimeOffset.UtcNow) return Results.Conflict(new { title = "Срок сдачи истёк." });
+            if (task.CatalogCaseId is not Guid caseId) return Results.Conflict(new { title = "Перевод задания ещё не синхронизирован с общим каталогом." });
+            using var contribution = await MainPost(request, factory, $"/api/lms-source/translations/{caseId}/student-answer", new { taskId, text = answer });
+            if (!contribution.IsSuccessStatusCode) return Results.StatusCode(502);
             var submission = await db.TaskSubmissions.SingleOrDefaultAsync(x => x.TaskId == taskId && x.UserId == user.Id);
             if (submission is null) { submission = new TaskSubmission { TaskId = taskId, UserId = user.Id }; db.TaskSubmissions.Add(submission); }
             submission.Answer = answer; submission.SubmittedAt = DateTimeOffset.UtcNow;

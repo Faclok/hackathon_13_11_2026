@@ -33,6 +33,8 @@ public static class DependencyInjection
         services.AddScoped<TranslationExport>();
         services.AddScoped<ResolutionProcessor>();
         services.AddScoped<LearningWorkflow>();
+        services.AddScoped<BossAccess>();
+        services.AddScoped<PlayerEconomy>();
         services.AddScoped<LearningMaterials>();
         services.AddScoped<AudioPreparation>();
         services.AddSingleton<IExerciseHandler, TranslationTextHandler>();

@@ -72,6 +72,8 @@ services:
     restart: unless-stopped
     environment:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      # Optional outbound proxy for Telegram from restricted hosting networks.
+      HTTPS_PROXY: ${TELEGRAM_HTTPS_PROXY:-}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-}
       MAIN_API_URL: http://main-api:8080
       STUDENT_PORTAL_URL: ${STUDENT_PORTAL_URL:-https://bashperevod.ru/telegram.html}

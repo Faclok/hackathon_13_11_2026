@@ -58,6 +58,7 @@ public sealed class ExerciseWorkflowTests
         }
         var issued = await Post<AssignmentResponse>(student.Client, "/api/reviews/next?kind=translation-choice", new { });
         Assert.Equal("translation-choice", issued.Kind); Assert.Equal(4, issued.Options.Count); Assert.Equal(popular, issued.Options[0].Id);
+        Assert.Equal(100, issued.Options[0].Votes);
         var selected = issued.Options[2].Id;
         Assert.Equal(HttpStatusCode.BadRequest, (await student.Client.PostAsJsonAsync($"/api/reviews/{issued.Id}/response", new SubmitReviewRequest(ReviewAction.Confirm) { SelectedVariantId = Guid.NewGuid() }, Json)).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await student.Client.PostAsJsonAsync($"/api/reviews/{issued.Id}/response", new SubmitReviewRequest(ReviewAction.Confirm), Json)).StatusCode);
