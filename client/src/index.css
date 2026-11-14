@@ -1298,6 +1298,50 @@ input:focus {
   margin-top: 23px;
   color: #9da98f;
 }
+.boss-sword-cost {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  justify-content: center;
+  column-gap: 12px;
+  width: fit-content;
+  margin: 0 auto 20px;
+  padding: 14px 24px;
+  border: 1px solid #c8dfcc;
+  border-radius: 20px;
+  background: #eef7ef;
+  color: #2e7d32;
+}
+.boss-sword-icon {
+  grid-row: span 2;
+  font-size: 38px;
+  line-height: 1;
+}
+.boss-sword-value {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.boss-sword-value strong {
+  font-size: 34px;
+  font-weight: 800;
+}
+.boss-sword-value > span {
+  font-size: 22px;
+  opacity: .7;
+}
+.boss-sword-label {
+  margin-top: 4px;
+  font-size: 11px;
+  text-align: left;
+}
+.boss-sword-cost.is-empty {
+  border-color: #dce2dc;
+  background: #f3f5f3;
+  color: #596c55;
+}
 .boss-access-badge {
   display: inline-block;
   margin: 12px 0 2px;

@@ -28,6 +28,7 @@ function message(error: unknown) {
 
 export default function Boss() {
   const userId = useUserStore((state) => state.user!.id);
+  const swords = useUserStore((state) => state.user?.swords ?? 0);
   const [progress, setProgress] = useState<LearningProgress | null>(null);
   const [boss, setBoss] = useState<BossLevel | null>(null);
   const [teacherTask, setTeacherTask] = useState<TeacherBossTask | null>(null);
@@ -113,7 +114,18 @@ export default function Boss() {
     {error && <div className="surface learning-alert" role="alert"><p>{error}</p><button className="button button-soft" disabled={busy} onClick={() => void openBoss()}>Обновить задание</button></div>}
     {loading && <p className="loading-text" role="status">Проверяем доступ…</p>}
     {!loading && done && <section className="surface result-card" role="status"><div className="boss-emblem small">👑</div><h2>Босс пройден!</h2><p>За каждый ответ начислена 1 монета. Если перевод подтвердит большинство или эксперт, начислятся ещё 4.</p><Link className="button button-primary full-width" to="/learn">К обучению</Link>{(progress?.availableBosses ?? 0) > 0 && <button className="button button-soft full-width" onClick={() => { setDone(false); void openBoss(); }} disabled={busy}>Следующий Босс</button>}</section>}
-    {!loading && !done && !boss && !teacherTask && <section className="surface intro-card"><div className="boss-emblem">⚔️</div><span className="eyebrow-label">БӘЙГЕ · БОСС</span><h2>{(progress?.availableBosses ?? 0) > 0 ? "Босс доступен" : "Нужен Меч"}</h2><p>За каждые пять пройденных уровней в «Учить» получишь Меч. Он тратится при входе к Боссу. Сначала получишь задание преподавателя, если оно есть.</p>{progress && <><p className="learning-hint">Пройдено уровней: {progress.completedLevels} · Мечей в инвентаре: {useUserStore.getState().user?.swords ?? 0}</p><ProgressBar value={progress.completedLevels % 5} max={5} /></>}{pending ? <button className="button button-primary full-width" disabled={busy} onClick={() => void send(pending)}>Восстановить ответ</button> : (progress?.availableBosses ?? 0) > 0 ? <button className="button button-primary full-width" disabled={busy} onClick={() => void openBoss()}>Начать или продолжить Босса</button> : <Link className="button button-primary full-width" to="/learn">Продолжить обучение</Link>}</section>}
+    {!loading && !done && !boss && !teacherTask && <section className="surface intro-card">
+      <div className={`boss-sword-cost ${swords > 0 ? "is-ready" : "is-empty"}`} role="status" aria-label={`Мечей в инвентаре: ${swords}. Для входа нужен 1 меч.`}>
+        <span className="boss-sword-icon" aria-hidden="true">⚔️</span>
+        <span className="boss-sword-value" aria-hidden="true"><strong>{swords}</strong><span>/1</span></span>
+        <span className="boss-sword-label" aria-hidden="true">Для входа</span>
+      </div>
+      <span className="eyebrow-label">БӘЙГЕ · БОСС</span>
+      <h2>{(progress?.availableBosses ?? 0) > 0 ? "Босс доступен" : "Нужен Меч"}</h2>
+      <p>За каждые пять пройденных уровней получишь Меч. Один вход — один Меч. Задания преподавателя идут первыми.</p>
+      {progress && <><p className="learning-hint">Пройдено уровней: {progress.completedLevels}</p><ProgressBar value={progress.completedLevels % 5} max={5} /></>}
+      {pending ? <button className="button button-primary full-width" disabled={busy} onClick={() => void send(pending)}>Восстановить ответ</button> : (progress?.availableBosses ?? 0) > 0 ? <button className="button button-primary full-width" disabled={busy} onClick={() => void openBoss()}>Начать или продолжить Босса</button> : <Link className="button button-primary full-width" to="/learn">Продолжить обучение</Link>}
+    </section>}
     {!loading && !done && teacherTask && <section className="surface task-panel boss-teacher-task">
       <span className="eyebrow-label">БОСС ОТ ПРЕПОДАВАТЕЛЯ · {teacherTask.className}</span>
       <h2>{teacherTask.title}</h2>
