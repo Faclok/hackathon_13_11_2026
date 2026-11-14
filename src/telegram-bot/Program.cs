@@ -1,65 +1,56 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Telegram.Bot;
 using Telegram.Bot.Types.Enums;
 using TelegramBotKit.DependencyInjection;
-using TelegramBotKit.Dispatching;
-using TelegramBotKit.Fallbacks;
+using TelegramBotKit.Hosting;
 
-using var shutdown = new CancellationTokenSource();
-Console.CancelKeyPress += (_, e) => { e.Cancel = true; shutdown.Cancel(); };
-var ct = shutdown.Token;
-var token = Environment.GetEnvironmentVariable("TELEGRAM_BOT_TOKEN");
+var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings { Args = args, ContentRootPath = AppContext.BaseDirectory });
+var token = builder.Configuration["TELEGRAM_BOT_TOKEN"] ?? builder.Configuration["TelegramBotKit:Token"];
 if (string.IsNullOrWhiteSpace(token))
 {
     Console.WriteLine("Telegram bot is disabled: set TELEGRAM_BOT_TOKEN.");
-    try { await Task.Delay(Timeout.Infinite, ct); } catch (OperationCanceledException) { }
+    await builder.Build().RunAsync();
     return;
 }
-var key = Environment.GetEnvironmentVariable("INTERNAL_API_KEY");
+var key = builder.Configuration["INTERNAL_API_KEY"];
 if (string.IsNullOrWhiteSpace(key)) throw new InvalidOperationException("INTERNAL_API_KEY is required.");
-using var api = new HttpClient { BaseAddress = new Uri(Environment.GetEnvironmentVariable("MAIN_API_URL") ?? "http://main-api:8080"), Timeout = TimeSpan.FromSeconds(30) };
+var api = new HttpClient { BaseAddress = new Uri(builder.Configuration["MAIN_API_URL"] ?? "http://main-api:8080"), Timeout = TimeSpan.FromSeconds(30) };
 api.DefaultRequestHeaders.Add("X-Internal-Key", key);
-var services = new ServiceCollection();
-services.AddLogging();
-services.AddTelegramBotKit(options => options.Token = token);
-services.AddSingleton(api);
-services.AddSingleton(_ => new ExerciseAudio(new HttpClient { Timeout = TimeSpan.FromSeconds(30), MaxResponseContentBufferSize = 20_000_000 }));
-services.AddSingleton<BotDbContextFactory>();
-services.AddSingleton<IDbContextFactory<BotDbContext>>(sp => sp.GetRequiredService<BotDbContextFactory>());
-services.AddScoped<IDefaultMessageHandler, StudentConversation>();
-await using var provider = services.BuildServiceProvider();
-var telegram = provider.GetRequiredService<ITelegramBotClient>();
-var dispatcher = provider.GetRequiredService<IUpdateDispatcher>();
-var factory = provider.GetRequiredService<BotDbContextFactory>();
-await using var db = factory.CreateDbContext([]);
-await db.Database.MigrateAsync(ct);
-var cursor = await db.Cursors.SingleOrDefaultAsync(x => x.Id == 1, ct);
-if (cursor is null) { cursor = new(); db.Cursors.Add(cursor); await db.SaveChangesAsync(ct); }
-await telegram.SetMyCommands([
-    new() { Command = "profile", Description = "Мой профиль" },
-    new() { Command = "daily", Description = "Задания на сегодня" },
-    new() { Command = "cancel", Description = "Вернуться в меню" }
-], cancellationToken: ct);
-while (!ct.IsCancellationRequested)
+builder.Services.AddSingleton(api);
+builder.Services.AddSingleton(_ => new ExerciseAudio(new HttpClient { Timeout = TimeSpan.FromSeconds(30), MaxResponseContentBufferSize = 20_000_000 }));
+builder.Services.AddDbContextFactory<BotDbContext>(options => options.UseNpgsql(
+    builder.Configuration.GetConnectionString("Default") ?? "Host=localhost;Database=bot;Username=postgres;Password=postgres",
+    postgres => postgres.MigrationsHistoryTable("__EFMigrationsHistory_Bot")));
+var bot = builder.Services.AddTelegramBotKit(options =>
 {
-    try
-    {
-        var updates = await telegram.GetUpdates(offset: checked((int)cursor.NextOffset), timeout: 25,
-            allowedUpdates: [UpdateType.Message], cancellationToken: ct);
-        foreach (var update in updates)
-        {
-            // Sequential dispatch preserves each student's conversation and the durable cursor.
-            await dispatcher.DispatchAsync(update, ct);
-            cursor.NextOffset = (long)update.Id + 1;
-            await db.SaveChangesAsync(ct);
-        }
-    }
-    catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
-    catch (Exception ex)
-    {
-        // Exception messages from HTTP clients can contain the bot token.
-        Console.Error.WriteLine($"Bot update failed: {ex.GetType().Name}");
-        try { await Task.Delay(TimeSpan.FromSeconds(5), ct); } catch (OperationCanceledException) { break; }
-    }
-}
+    options.Polling.Limit = 100;
+    options.Polling.TimeoutSeconds = 25;
+    builder.Configuration.GetSection("TelegramBotKit").Bind(options);
+    options.Token = token;
+    // Private messages and callback queries share persistent student state.
+    options.Polling.MaxDegreeOfParallelism = 1;
+    options.Polling.AllowedUpdates = [UpdateType.Message, UpdateType.CallbackQuery];
+});
+bot.UseMiddleware<PrivateStudentChat>();
+bot.UseQueuedMessageSender(options =>
+{
+    options.GlobalMaxPerSecond = 25;
+    options.PerChatMinDelay = TimeSpan.FromSeconds(1);
+    options.MaxRetryAttempts = 5;
+});
+builder.Services.AddStudentCommands();
+builder.Services.AddTelegramBotKitPolling();
+using var host = builder.Build();
+await using (var db = host.Services.GetRequiredService<IDbContextFactory<BotDbContext>>().CreateDbContext())
+    await db.Database.MigrateAsync();
+await host.Services.GetRequiredService<ITelegramBotClient>().SetMyCommands([
+    new() { Command = "start", Description = "Привязка и главное меню" },
+    new() { Command = "profile", Description = "Мой профиль" },
+    new() { Command = "daily", Description = "Продолжить дневной урок" },
+    new() { Command = "tasks", Description = "Выбрать вид задания" },
+    new() { Command = "cancel", Description = "Вернуться в меню" }
+]);
+await host.RunAsync();

@@ -38,6 +38,11 @@ public static class TelegramEndpoints
         });
         bot.MapGet("/lesson", async (long telegramId, TelegramStudents students, LearningWorkflow learning, CancellationToken ct) =>
             await learning.TodayAsync(await students.ResolveAsync(telegramId, ct), ct));
+        bot.MapPost("/lesson/boss", async (long telegramId, TelegramStudents students, LearningWorkflow learning, IReviewWorkflow reviews, CancellationToken ct) =>
+        {
+            var boss = await learning.StartBossAsync(await students.ResolveAsync(telegramId, ct), reviews, ct);
+            return boss is null ? Results.NoContent() : Results.Ok(boss);
+        }).Produces<AssignmentResponse>().Produces(StatusCodes.Status204NoContent);
         bot.MapPost("/lesson/exercises", async (long telegramId, IssueExerciseRequest request, TelegramStudents students, LearningWorkflow learning, CancellationToken ct) =>
         {
             var exercise = await learning.IssueAsync(await students.ResolveAsync(telegramId, ct), request, ct);

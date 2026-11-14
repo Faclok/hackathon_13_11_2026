@@ -5,6 +5,7 @@ public sealed class DailyLesson
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid ParticipantId { get; set; }
     public DateOnly Date { get; set; }
+    public Guid? BossAssignmentId { get; set; }
 }
 public sealed class Exercise
 {

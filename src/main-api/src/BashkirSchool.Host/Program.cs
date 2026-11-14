@@ -132,6 +132,11 @@ api.MapGet("/accounts/{accountId:guid}/access", (ClaimsPrincipal user, Guid acco
 api.MapPost("/expert/cases/{caseId:guid}/resolution", (ClaimsPrincipal user, Guid caseId, ResolveCaseRequest request, ExpertReviews expert, CancellationToken ct) => expert.ResolveAsync(Subject(user), caseId, request, ct));
 api.MapGet("/translations/export", (ClaimsPrincipal user, int? offset, int? limit, bool? includeDisputed, TranslationExport export, CancellationToken ct) => export.ReadAsync(Subject(user), offset ?? 0, limit ?? 100, includeDisputed ?? false, ct));
 api.MapGet("/lessons/today", (ClaimsPrincipal user, LearningWorkflow learning, CancellationToken ct) => learning.TodayAsync(Subject(user), ct));
+api.MapPost("/lessons/today/boss", async (ClaimsPrincipal user, LearningWorkflow learning, IReviewWorkflow reviews, CancellationToken ct) =>
+{
+    var boss = await learning.StartBossAsync(Subject(user), reviews, ct);
+    return boss is null ? Results.NoContent() : Results.Ok(boss);
+}).Produces<AssignmentResponse>().Produces(StatusCodes.Status204NoContent);
 api.MapPost("/exercises/{exerciseId:guid}/attempt", (ClaimsPrincipal user, Guid exerciseId, SubmitAttemptRequest request, LearningWorkflow learning, CancellationToken ct) => learning.SubmitAsync(Subject(user), exerciseId, request, ct));
 api.MapGet("/exercises/kinds", (ExerciseRegistry registry) => registry.Kinds)
     .WithName("ListExerciseKinds").WithSummary("Supported learning exercise kinds and answer schema versions.")
