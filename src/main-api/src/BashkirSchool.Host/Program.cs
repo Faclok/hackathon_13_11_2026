@@ -188,6 +188,7 @@ api.MapGet("/cases/{caseId:guid}/statistics", (ClaimsPrincipal user, Guid caseId
 
 app.MapTelegramEndpoints();
 app.MapClassInvitationEndpoints();
+app.MapLmsCatalogEndpoints();
 app.Run();
 static Guid Subject(ClaimsPrincipal user) => Guid.Parse(user.FindFirstValue("sub")!);
 public partial class Program;

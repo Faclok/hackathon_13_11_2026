@@ -48,6 +48,8 @@ app.MapPost("/api/lms/lessons/{id:int}/complete", async (int id, HttpRequest req
     return Results.Ok(new { completed = true, lessonId = id });
 });
 
+app.MapTeacherEndpoints();
+
 app.Run();
 
 static async Task<Guid?> Resolve(HttpRequest request, IHttpClientFactory factory)
