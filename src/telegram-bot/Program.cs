@@ -1,3 +1,4 @@
+using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,8 +23,23 @@ api.DefaultRequestHeaders.Add("X-Internal-Key", key);
 builder.Services.AddSingleton(api);
 builder.Services.AddSingleton(_ => new ExerciseAudio(new HttpClient { Timeout = TimeSpan.FromSeconds(30), MaxResponseContentBufferSize = 20_000_000 }));
 builder.Services.AddDbContextFactory<BotDbContext>(options => options.UseNpgsql(
-    builder.Configuration.GetConnectionString("Core") ?? "Host=localhost;Database=bot;Username=postgres;Password=postgres",
+    builder.Configuration.GetConnectionString("Default") ?? "Host=localhost;Database=bot;Username=postgres;Password=postgres",
     postgres => postgres.MigrationsHistoryTable("__EFMigrationsHistory_Bot")));
+using var telegramHandler = new HttpClientHandler();
+var proxySettings = builder.Configuration.GetSection("TelegramProxy");
+if (proxySettings.GetValue<bool>("Enabled"))
+{
+    if (!Uri.TryCreate(proxySettings["Address"], UriKind.Absolute, out var proxyAddress) ||
+        proxyAddress.Scheme is not ("http" or "https" or "socks4" or "socks4a" or "socks5"))
+        throw new InvalidOperationException("TelegramProxy:Address must be an absolute HTTP, HTTPS or SOCKS proxy URL.");
+
+    var proxy = new WebProxy(proxyAddress);
+    if (!string.IsNullOrWhiteSpace(proxySettings["Username"]))
+        proxy.Credentials = new NetworkCredential(proxySettings["Username"], proxySettings["Password"]);
+    telegramHandler.Proxy = proxy;
+    telegramHandler.UseProxy = true;
+}
+using var telegramHttp = new HttpClient(telegramHandler, disposeHandler: false);
 var bot = builder.Services.AddTelegramBotKit(options =>
 {
     options.Polling.Limit = 100;
@@ -33,7 +49,7 @@ var bot = builder.Services.AddTelegramBotKit(options =>
     // Private messages and callback queries share persistent student state.
     options.Polling.MaxDegreeOfParallelism = 1;
     options.Polling.AllowedUpdates = [UpdateType.Message, UpdateType.CallbackQuery];
-});
+}, telegramHttp);
 bot.UseMiddleware<PrivateStudentChat>();
 bot.UseQueuedMessageSender(options =>
 {
