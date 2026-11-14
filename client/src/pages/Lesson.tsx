@@ -12,7 +12,7 @@ import {
 } from "../components/ui";
 
 type Answer = { correct: boolean; expected: string; prompt: string };
-function ExerciseView({
+export function ExerciseView({
   exercise,
   onNext,
 }: {

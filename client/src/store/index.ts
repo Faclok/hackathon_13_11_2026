@@ -135,6 +135,8 @@ export const useUserStore = create<UserState>()(
   ),
 );
 interface ProgressState {
+  dailyPractice: { date: string; answers: { exerciseId: string; correct: boolean }[] } | null;
+  answerDailyExercise: (exerciseId: string, correct: boolean) => void;
   completedLessons: string[];
   dailyAnswers: (DailyAnswer & { date: string })[];
   bossAnswers: BossAnswer[];
@@ -146,6 +148,12 @@ interface ProgressState {
 export const useProgressStore = create<ProgressState>()(
   persist(
     (set, get) => ({
+      dailyPractice: null,
+      answerDailyExercise: (exerciseId, correct) => {
+        const answers = get().dailyPractice?.date === today() ? get().dailyPractice!.answers : [];
+        if (answers.some((a) => a.exerciseId === exerciseId)) return;
+        set({ dailyPractice: { date: today(), answers: [...answers, { exerciseId, correct }] } });
+      },
       completedLessons: [],
       dailyAnswers: [],
       bossAnswers: [],
@@ -163,7 +171,7 @@ export const useProgressStore = create<ProgressState>()(
       },
       saveBoss: (bossAnswers) => set({ bossAnswers }),
       reset: () =>
-        set({ completedLessons: [], dailyAnswers: [], bossAnswers: [] }),
+        set({ completedLessons: [], dailyAnswers: [], bossAnswers: [], dailyPractice: null }),
     }),
     { name: "bashkir-school-progress-v1" },
   ),

@@ -12,7 +12,7 @@ import { ToastProvider } from "./components/ui";
 import Home from "./pages/Home";
 import Learn from "./pages/Learn";
 import Lesson, { LessonResult } from "./pages/Lesson";
-import Boss from "./pages/Boss";
+import Daily from "./pages/Daily";
 import {
   Leaderboard,
   Login,
@@ -51,14 +51,14 @@ export default function App() {
           <Route element={<AuthGuard />}>
             <Route element={<Layout />}>
               <Route index element={<Home />} />
-              <Route path="daily" element={<Navigate to="/learn" replace />} />
+              <Route path="daily" element={<Daily />} />
               <Route path="learn" element={<Learn />} />
               <Route path="lesson/:lessonId" element={<Lesson />} />
               <Route
                 path="lesson/:lessonId/result"
                 element={<LessonResult />}
               />
-              <Route path="boss" element={<Boss />} />
+              <Route path="boss" element={<Navigate to="/daily" replace />} />
               <Route path="leaderboard" element={<Leaderboard />} />
               <Route path="profile" element={<Profile />} />
               <Route path="shop" element={<Shop />} />

@@ -11,6 +11,8 @@ import { schoolDay, dayNumber } from "../utils/calendar";
 export const getLessons = async () => lessons;
 export const getDaily = async () =>
   dailyFragments[dayNumber(schoolDay()) % dailyFragments.length];
+export const getDailyExercises = async () =>
+  lessons[dayNumber(schoolDay()) % lessons.length].exercises;
 export const submitDaily = async (answer: DailyAnswer) => answer;
 export const getBossPhrases = async () => bossPhrases;
 export const getDecorations = async () => decorations;

@@ -102,6 +102,22 @@ public sealed class LearningWorkflow(CoreDbContext db, IPermissionChecker permis
         return null;
     }
 
+    // Allocate through the same review workflow as standalone translation checks.
+    // The lesson keeps its assignment so progress survives switching channels.
+    public async Task<AssignmentResponse?> StartBossAsync(Guid actor, IReviewWorkflow reviews, CancellationToken ct)
+    {
+        var today = await TodayAsync(actor, ct);
+        if (today.Exercises.Any(x => !x.Completed)) throw new ConflictException("Complete the daily exercises before the boss.");
+        await Require(actor, "reviews.receive", ct);
+        var lesson = await db.Set<DailyLesson>().SingleAsync(x => x.Id == today.Id, ct);
+        if (today.BossCompleted) return null;
+        var assignment = await reviews.ReceiveAsync(actor, "translation-confirm", ct);
+        if (assignment is null) return null;
+        lesson.BossAssignmentId = assignment.Id;
+        await db.SaveChangesAsync(ct);
+        return assignment;
+    }
+
     public Task<AttemptResponse> SubmitAsync(Guid actor, Guid exerciseId, SubmitAttemptRequest request, CancellationToken ct) =>
         SubmitCore(actor, exerciseId, ExerciseJson.Element(new TextExerciseAnswer(request.Answer)), true, ct);
 
@@ -188,7 +204,9 @@ public sealed class LearningWorkflow(CoreDbContext db, IPermissionChecker permis
         var exercises = await db.Set<Exercise>().Where(x => x.LessonId == lesson.Id).OrderBy(x => x.Id).ToArrayAsync(ct);
         var result = new List<ExerciseResponse>();
         foreach (var exercise in exercises) result.Add(await View(exercise, ct));
-        return new(lesson.Id, lesson.Date, result);
+        var bossCompleted = lesson.BossAssignmentId is Guid bossId && await db.Responses
+            .AnyAsync(x => x.AssignmentId == bossId && x.Action != ReviewAction.Skip, ct);
+        return new(lesson.Id, lesson.Date, result) { BossCompleted = bossCompleted };
     }
     private async Task<ExerciseResponse> View(Exercise exercise, CancellationToken ct)
     {
