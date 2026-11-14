@@ -5,22 +5,35 @@ using BashkirSchool.Application;
 using BashkirSchool.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace BashkirSchool.Infrastructure;
 
 public sealed class LevelWorkflow(CoreDbContext db, IPermissionChecker permissions, TimeProvider clock,
-    IConfiguration configuration, ExerciseRegistry registry, IAudioStorage audioStorage, IReviewWorkflow reviews)
+    IConfiguration configuration, ExerciseRegistry registry, IAudioStorage audioStorage, IReviewWorkflow reviews,
+    AudioPreparation audioPreparation, ILogger<LevelWorkflow> logger)
 {
     public async Task<LevelResponse?> CurrentAsync(Guid actor, CancellationToken ct)
     {
         await Require(actor, "lessons.receive", ct);
+        // Audio preparation owns a transaction and can run inference/network I/O. Do it
+        // before locking the participant, then recheck their level under the lock.
+        List<LevelQuestion>? prepared = null;
+        long preparedNumber = 0;
+        if (!await db.Set<LearningLevel>().AnyAsync(x => x.ParticipantId == actor && x.CompletedAt == null, ct))
+        {
+            preparedNumber = (await db.Set<LearningLevel>().Where(x => x.ParticipantId == actor).MaxAsync(x => (long?)x.Number, ct) ?? 0) + 1;
+            prepared = await CreateQuestions(actor, preparedNumber, ct);
+        }
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         await Lock(actor, ct);
         var level = await db.Set<LearningLevel>().SingleOrDefaultAsync(x => x.ParticipantId == actor && x.CompletedAt == null, ct);
         if (level is null)
         {
             var number = (await db.Set<LearningLevel>().Where(x => x.ParticipantId == actor).MaxAsync(x => (long?)x.Number, ct) ?? 0) + 1;
-            var questions = await CreateQuestions(number, ct);
+            if (prepared is null || preparedNumber != number)
+                throw new ConflictException("Learning progress changed while preparing the level. Retry the request.");
+            var questions = prepared;
             if (questions.Count == 0) return null;
             level = new LearningLevel { ParticipantId = actor, Number = number, StartedAt = clock.GetUtcNow() };
             db.Add(level);
@@ -184,7 +197,7 @@ public sealed class LevelWorkflow(CoreDbContext db, IPermissionChecker permissio
         await db.SaveChangesAsync(ct);
     }
 
-    private async Task<List<LevelQuestion>> CreateQuestions(long number, CancellationToken ct)
+    private async Task<List<LevelQuestion>> CreateQuestions(Guid actor, long number, CancellationToken ct)
     {
         var kinds = configuration.GetSection("Learning:Kinds").Get<string[]>() ??
             ["translation-text", "missing-word", "sentence-order", "audio-dictation", "audio-translation", "word-match"];
@@ -215,18 +228,54 @@ public sealed class LevelWorkflow(CoreDbContext db, IPermissionChecker permissio
                 audio.TryGetValue(row.Id, out var audioId) ? audioId : null);
             var vocabulary = words.Where(x => x.LanguagePair == row.LanguagePair).Select(x => new ExerciseWord(x.Id, x.Word, x.Translation)).ToArray();
             foreach (var handler in handlers)
-                candidates.Add((handler, new(handler.RequiresSentence ? sentence : null, vocabulary, row.LanguagePair)));
+            {
+                // A placeholder permits material validation before synthesis. It is
+                // replaced with a persisted asset before any question is saved.
+                var candidate = handler.RequiresAudio && sentence.AudioId is null ? sentence with { AudioId = Guid.Empty } : sentence;
+                candidates.Add((handler, new(handler.RequiresSentence ? candidate : null, vocabulary, row.LanguagePair)));
+            }
         }
         var offset = (int)((number - 1) % candidates.Count);
         var available = candidates.Skip(offset).Concat(candidates.Take(offset)).Where(x => x.Handler.Create(x.Material) is not null).ToArray();
         if (available.Length == 0) return [];
-        for (var i = 0; i < size; i++)
+        var preparedAudio = new Dictionary<Guid, Guid>();
+        var preparationFailed = false;
+        foreach (var (handler, candidate) in available)
         {
-            var (handler, material) = available[i % available.Length];
+            var material = candidate;
+            if (handler.RequiresAudio && material.Sentence is { AudioId: var id } sentence && id == Guid.Empty)
+            {
+                if (!preparedAudio.TryGetValue(sentence.CaseId, out var audioId))
+                {
+                    if (preparationFailed) continue;
+                    try
+                    {
+                        audioId = (await audioPreparation.PrepareAsync(actor, sentence.CaseId, ct)).Id;
+                        preparedAudio.Add(sentence.CaseId, audioId);
+                    }
+                    catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                    catch (Exception error)
+                    {
+                        logger.LogWarning(error, "Could not prepare audio for case {CaseId}; using other available exercises", sentence.CaseId);
+                        preparationFailed = true;
+                        continue;
+                    }
+                }
+                material = material with { Sentence = sentence with { AudioId = audioId } };
+            }
             var draft = handler.Create(material)!;
-            drafts.Add(new LevelQuestion { Position = i, QueueOrder = i, Kind = handler.Kind, SchemaVersion = handler.SchemaVersion,
+            drafts.Add(new LevelQuestion { Position = drafts.Count, QueueOrder = drafts.Count, Kind = handler.Kind, SchemaVersion = handler.SchemaVersion,
                 CaseId = material.Sentence?.CaseId, ResolutionId = material.Sentence?.ResolutionId,
                 PromptJson = draft.Prompt.GetRawText(), AnswerKeyJson = draft.AnswerKey.GetRawText() });
+            if (drafts.Count == size) break;
+        }
+        var distinctCount = drafts.Count;
+        for (var i = distinctCount; distinctCount > 0 && i < size; i++)
+        {
+            var source = drafts[i % distinctCount];
+            drafts.Add(new LevelQuestion { Position = i, QueueOrder = i, Kind = source.Kind, SchemaVersion = source.SchemaVersion,
+                CaseId = source.CaseId, ResolutionId = source.ResolutionId,
+                PromptJson = source.PromptJson, AnswerKeyJson = source.AnswerKeyJson });
         }
         return drafts;
     }

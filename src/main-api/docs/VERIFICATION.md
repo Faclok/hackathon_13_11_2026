@@ -1,5 +1,18 @@
 # Проверка школьного MVP ядра
 
+## Автоматическая подготовка озвучки уровней — 14 ноября 2026
+
+Из `src/main-api` выполнено: `dotnet test tests/BashkirSchool.Tests/BashkirSchool.Tests.csproj --no-restore --filter 'FullyQualifiedName~LevelAudioTests|FullyQualifiedName~LevelFlowTests|FullyQualifiedName~ExerciseWorkflowTests|FullyQualifiedName~MergedPlayerLevelsTests' --verbosity minimal`. Результат: **25 пройдено, 0 ошибок, 2 пропущено**; код выхода 0. Пропущены две проверки миграций на настоящем PostgreSQL без тестового подключения. Шесть новых случаев `LevelAudioTests` прошли. Сборка сообщает NU1900: источник NuGet недоступен для проверки уязвимостей; компиляция и запуск тестов завершились успешно.
+
+| Requirement | Evidence |
+| --- | --- |
+| Диктант и перевод на слух автоматически получают озвучку без ручного POST; повторные вопросы и уровни используют кеш | `LevelAutomaticallyPreparesAudioAndReusesItAcrossQuestionsAndLevels` — оба вида |
+| Озвучиваются только выбранные вопросы, а не весь корпус | `LevelPreparesOnlySelectedAudioInsteadOfTheWholeCorpus` |
+| Ошибки синтеза и загрузки не блокируют текстовые упражнения; следующий уровень повторяет подготовку | `AudioFailureFallsBackToTextAndNextLevelRetriesPreparation` — оба сбоя |
+| Если доступны только аудиоупражнения, сбой не сохраняет пустой уровень и не меняет его номер; повтор может завершиться успешно | `FailedAudioOnlyLevelStaysEmptyAndCanBeRetriedWithoutAdvancingProgress` |
+
+Синтезатор и объектное хранилище в новых проверках подменены. Реальный синтез Silero, сетевой доступ к Garage и развёртывание в рамках этого изменения не проверялись. Ниже сохранены предыдущие результаты.
+
 ## Слияние уровней и экономики игрока — 14 ноября 2026
 
 Текущий итог main-api: **113 пройдено, 0 ошибок, 1 пропущен** (настоящий Silero без настроенной модели). PostgreSQL-проверки включены на отдельном временном кластере `127.0.0.1:55436`; каждая создаёт и удаляет только свою тестовую базу. LMS: **5 пройдено, 0 ошибок, 0 пропусков**. TRX `merge-final.trx` проверен: total=114, executed=passed=113, failed=0; `merge-lms.trx`: passed=5, failed=0. Ниже сохранены исторические запуски.
