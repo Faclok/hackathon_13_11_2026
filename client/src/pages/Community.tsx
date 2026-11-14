@@ -2,7 +2,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { getLeaderboard } from "../api";
 import { trophies } from "../mocks/data";
-import { useProgressStore, useUserStore } from "../store";
+import { useUserStore } from "../store";
 import {
   ranks,
   BOSS_MIN_RANK,
@@ -21,7 +21,13 @@ import { Icon, Modal, PageTitle, ProgressBar } from "../components/ui";
 
 export function Login() {
   const [nick, setNick] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const user = useUserStore((state) => state.user);
   const navigate = useNavigate();
+  useEffect(() => {
+    if (user) navigate("/", { replace: true });
+  }, [user, navigate]);
   return (
     <div className="school-app login-app">
       <Link to="/" className="login-logo">
@@ -32,12 +38,18 @@ export function Login() {
         <h1>Һаумы! Привет!</h1>
         <p>Давай знакомиться и открывать башкирский язык вместе.</p>
         <form
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
-            useProgressStore.getState().reset();
-            useUserStore.setState({ lastActiveDay: null, reports: [] });
-            useUserStore.getState().login(nick);
-            navigate("/", { replace: true });
+            setBusy(true);
+            setError("");
+            try {
+              await useUserStore.getState().login(nick);
+              navigate("/", { replace: true });
+            } catch (cause) {
+              setError(cause instanceof Error ? cause.message : "Не удалось войти.");
+            } finally {
+              setBusy(false);
+            }
           }}
         >
           <label htmlFor="nick" className="field-label">
@@ -56,12 +68,13 @@ export function Login() {
           />
           <button
             className="button button-primary full-width"
-            disabled={nick.trim().length < 3}
+            disabled={busy || nick.trim().length < 3}
           >
             Войти <Icon name="arrow" size={18} />
           </button>
         </form>
-        <p className="demo-note">Демо-режим. Данные хранятся локально.</p>
+        {error && <p className="form-error" role="alert">{error}</p>}
+        <p className="demo-note">Временный вход по username. Профиль, монеты и инвентарь хранятся на сервере.</p>
       </section>
     </div>
   );
@@ -74,8 +87,12 @@ export function Leaderboard() {
   const [entries, setEntries] = useState<
     Awaited<ReturnType<typeof getLeaderboard>>
   >([]);
+  const [error, setError] = useState("");
   useEffect(() => {
-    getLeaderboard(user, period, metric).then(setEntries);
+    getLeaderboard(user, period, metric).then((result) => {
+      setEntries(result);
+      setError("");
+    }).catch((cause) => setError(cause instanceof Error ? cause.message : "Не удалось загрузить рейтинг."));
   }, [user, period, metric]);
   const own = entries.find((e) => e.user.id === user.id);
   return (
@@ -83,6 +100,7 @@ export function Leaderboard() {
       <PageTitle subtitle="Вдохновляем друг друга учиться">
         Турнирная таблица
       </PageTitle>
+      {error && <p role="alert">{error}</p>}
       <div className="tabs" aria-label="Период">
         {(["global", "monthly"] as const).map((value) => (
           <button
@@ -190,6 +208,9 @@ export function Profile() {
   const navigate = useNavigate();
   const currentRank = getCurrentRank(user);
   const [itemInfo, setItemInfo] = useState<Decoration | null>(null);
+  useEffect(() => {
+    void useUserStore.getState().refreshProfile().catch(() => {});
+  }, []);
   return (
     <>
       <PageTitle>Профиль</PageTitle>

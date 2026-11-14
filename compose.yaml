@@ -48,6 +48,7 @@ services:
       Bootstrap__Password: ${BOOTSTRAP_PASSWORD:-}
       Telegram__InternalKey: ${INTERNAL_API_KEY:-}
       Lms__InternalKey: ${INTERNAL_API_KEY:-}
+      Demo__UsernameLoginEnabled: "true"
       Telegram__BotUsername: ${TELEGRAM_BOT_USERNAME:-}
       AudioStorage__Endpoint: https://s3.bashperevod.ru
       AudioStorage__Bucket: school-audio

@@ -93,6 +93,9 @@ app.MapGet("/health/ready", async (CoreDbContext db, CancellationToken ct) =>
     await db.Database.CanConnectAsync(ct) ? Results.Ok(new { status = "ready" }) : Results.StatusCode(503));
 
 app.MapPost("/auth/sign-in", (SignInRequest request, SchoolAccounts accounts, CancellationToken ct) => accounts.SignInAsync(request, ct));
+app.MapPost("/auth/username", (UsernameLoginRequest request, IndependentAccounts accounts, CancellationToken ct) =>
+    accounts.UsernameLoginAsync(request.Username, ct)).RequireRateLimiting("registration")
+    .ProducesProblem(StatusCodes.Status429TooManyRequests);
 app.MapPost("/auth/register", async (RegisterAccountRequest request, IndependentAccounts accounts, CancellationToken ct) =>
     TypedResults.Created("/api/me", await accounts.RegisterAsync(request, ct))).RequireRateLimiting("registration").ProducesProblem(StatusCodes.Status429TooManyRequests);
 app.MapPost("/auth/refresh", (RefreshSessionRequest request, Sessions sessions, CancellationToken ct) => sessions.RefreshAsync(request.RefreshToken, ct));
@@ -234,6 +237,7 @@ public partial class Program;
 public sealed record AccountStatusRequest(bool Active);
 /// <summary>The identifier of a newly created resource.</summary>
 public sealed record ResourceCreatedResponse(Guid Id);
+public sealed record UsernameLoginRequest(string Username);
 public sealed record BuyCaseKeysRequest(int Quantity);
 public sealed record EquipDecorationRequest(bool Equipped);
 /// <summary>The currently active version of administrator settings.</summary>

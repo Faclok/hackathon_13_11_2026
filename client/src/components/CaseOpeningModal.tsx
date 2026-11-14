@@ -99,10 +99,14 @@ export default function CaseOpeningModal({
           <button
             className="button button-primary full-width"
             disabled={equipped}
-            onClick={() => {
-              equip(winner.id);
-              dismiss();
-              toast(`«${winner.title}» — теперь в твоём образе`);
+            onClick={async () => {
+              try {
+                await equip(winner.id);
+                dismiss();
+                toast(`«${winner.title}» — теперь в твоём образе`);
+              } catch (cause) {
+                toast(cause instanceof Error ? cause.message : "Не удалось надеть предмет.");
+              }
             }}
           >
             {equipped

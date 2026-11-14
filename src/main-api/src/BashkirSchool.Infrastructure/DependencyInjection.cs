@@ -51,6 +51,7 @@ public static class DependencyInjection
         services.AddIdentityCore<Account>(o =>
         {
             o.User.RequireUniqueEmail = false;
+            o.User.AllowedUserNameCharacters = null!;
             o.Password.RequiredLength = 12;
             o.Lockout.MaxFailedAccessAttempts = 5;
             o.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
