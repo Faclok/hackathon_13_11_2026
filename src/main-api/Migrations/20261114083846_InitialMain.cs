@@ -5,10 +5,10 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace MainApi.Migrations
 {
-    /// <inheritdoc />
+    /// <summary>Creates the original main API schema for users, source content, tasks, votes, and points.</summary>
     public partial class InitialMain : Migration
     {
-        /// <inheritdoc />
+        /// <summary>Creates tables in foreign-key dependency order.</summary>
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
@@ -302,7 +302,7 @@ namespace MainApi.Migrations
                 unique: true);
         }
 
-        /// <inheritdoc />
+        /// <summary>Drops dependent tables before their referenced tables.</summary>
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(

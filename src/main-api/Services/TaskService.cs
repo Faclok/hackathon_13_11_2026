@@ -1,75 +1,21 @@
-using System.Security.Cryptography;
-using System.Text;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
-static class Passwords
+/// <summary>Assigns daily tasks and turns user answers into a consensus translation.</summary>
+public sealed class TaskService(AppDbContext db)
 {
-    public static string Hash(string password)
+    /// <summary>Gets or creates today's task and includes any prior answer.</summary>
+    public async Task<Dictionary<string, object?>?> Today(Guid userId)
     {
-        var salt = RandomNumberGenerator.GetBytes(16);
-        var hash = Rfc2898DeriveBytes.Pbkdf2(password, salt, 210_000, HashAlgorithmName.SHA256, 32);
-        return $"{Convert.ToBase64String(salt)}:{Convert.ToBase64String(hash)}";
-    }
-
-    public static bool Verify(string password, string stored)
-    {
-        try
-        {
-            var parts = stored.Split(':');
-            if (parts.Length != 2) return false;
-            var salt = Convert.FromBase64String(parts[0]);
-            var expected = Convert.FromBase64String(parts[1]);
-            var actual = Rfc2898DeriveBytes.Pbkdf2(password, salt, 210_000, HashAlgorithmName.SHA256, 32);
-            return CryptographicOperations.FixedTimeEquals(actual, expected);
-        }
-        catch (FormatException) { return false; }
-    }
-}
-
-static class Sessions
-{
-    public static async Task<object> Create(AppDbContext db, AppUser user)
-    {
-        var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
-        db.Sessions.Add(new UserSession { TokenHash = Sha(token), UserId = user.Id, ExpiresAt = DateTime.UtcNow.AddDays(30) });
-        await db.SaveChangesAsync();
-        return new { token, user = new { id = user.Id, display_name = user.DisplayName, lang_pair = user.LangPair } };
-    }
-
-    public static Task<Guid?> User(HttpRequest request, AppDbContext db) => User(request.Headers.Authorization.ToString(), db);
-
-    public static async Task<Guid?> User(string authorization, AppDbContext db)
-    {
-        if (!authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)) return null;
-        var token = authorization[7..].Trim();
-        if (token.Length != 64) return null;
-        return await db.Sessions.AsNoTracking().Where(s => s.TokenHash == Sha(token) && s.ExpiresAt > DateTime.UtcNow)
-            .Select(s => (Guid?)s.UserId).FirstOrDefaultAsync();
-    }
-
-    private static string Sha(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
-}
-
-static class Internal
-{
-    public static bool Valid(HttpRequest request, string expected)
-    {
-        var actual = request.Headers["X-Internal-Key"].ToString();
-        return actual.Length == expected.Length && CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(actual), Encoding.UTF8.GetBytes(expected));
-    }
-}
-
-static class Tasks
-{
-    public static async Task<Dictionary<string, object?>?> Today(AppDbContext db, Guid userId)
-    {
+        // The daily task changes at midnight in the product's Moscow time zone.
         var date = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Europe/Moscow")));
         var existing = await db.DailyTasks.AsNoTracking().FirstOrDefaultAsync(t => t.UserId == userId && t.LangPair == "ba-ru" && t.TaskDate == date);
         if (existing is null)
         {
             var count = await db.Fragments.CountAsync();
             if (count == 0) return null;
+            // Every user sees the same fragment on a given calendar day.
             var offset = date.DayNumber % count;
             var candidate = await (from f in db.Fragments
                 join c in db.Candidates on f.Id equals c.FragmentId
@@ -80,6 +26,7 @@ static class Tasks
             db.DailyTasks.Add(new DailyTask { UserId = userId, FragmentId = candidate.FragmentId,
                 CandidateId = candidate.CandidateId, LangPair = "ba-ru", TaskDate = date });
             try { await db.SaveChangesAsync(); }
+            // A concurrent request may have inserted the task first; reload it below.
             catch (DbUpdateException e) when (e.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
             { db.ChangeTracker.Clear(); }
         }
@@ -101,14 +48,16 @@ static class Tasks
         };
     }
 
-    public static async Task<IResult> Submit(AppDbContext db, Guid userId, Guid taskId, Submission input)
+    /// <summary>Stores one answer per task, awards points once, and updates consensus.</summary>
+    public async Task<ServiceResult> Submit(Guid userId, Guid taskId, Submission input)
     {
-        if (input.Action is not ("confirm" or "correct")) return Results.BadRequest(new { error = "Действие: confirm или correct." });
+        if (input.Action is not ("confirm" or "correct")) return ServiceResult.BadRequest(new { error = "Действие: confirm или correct." });
         var task = await db.DailyTasks.AsNoTracking().FirstOrDefaultAsync(t => t.Id == taskId && t.UserId == userId);
-        if (task is null) return Results.NotFound();
+        if (task is null) return ServiceResult.NotFound();
         var candidate = await db.Candidates.AsNoTracking().FirstAsync(c => c.Id == task.CandidateId);
         var answer = input.Action == "confirm" ? candidate.Text : input.AnswerText?.Trim() ?? "";
-        if (answer.Length is < 1 or > 1000) return Results.BadRequest(new { error = "Введите перевод длиной от 1 до 1000 символов." });
+        if (answer.Length is < 1 or > 1000) return ServiceResult.BadRequest(new { error = "Введите перевод длиной от 1 до 1000 символов." });
+        // The submission, points, and consensus record must commit together.
         await using var transaction = await db.Database.BeginTransactionAsync();
         var submission = await db.Submissions.FirstOrDefaultAsync(s => s.TaskId == taskId);
         if (submission is null)
@@ -119,32 +68,44 @@ static class Tasks
         }
         else { submission.Action = input.Action; submission.AnswerText = answer; submission.UpdatedAt = DateTime.UtcNow; }
         await db.SaveChangesAsync();
+        // Editing an earlier answer does not award the task's points again.
         if (!await db.PointEvents.AnyAsync(p => p.SubmissionId == submission.Id))
         {
             db.PointEvents.Add(new PointEvent { UserId = userId, SubmissionId = submission.Id, Points = 10 });
             await db.SaveChangesAsync();
         }
-        // Only independent user answers count. Imported candidates are never votes.
-        var answers = await db.Submissions.AsNoTracking().Where(s => s.FragmentId == task.FragmentId && s.LangPair == task.LangPair)
-            .Select(s => s.AnswerText).ToListAsync();
+        // Count only the latest answer from each user; imported candidates are not votes.
+        var submissions = await db.Submissions.AsNoTracking().Where(s => s.FragmentId == task.FragmentId && s.LangPair == task.LangPair)
+            .Select(s => new { s.Id, s.UserId, s.AnswerText, s.UpdatedAt }).ToListAsync();
+        var answers = submissions.GroupBy(s => s.UserId)
+            .Select(g => g.OrderByDescending(s => s.UpdatedAt).ThenByDescending(s => s.Id).First().AnswerText);
         var votes = answers.GroupBy(a => a.Trim().ToLowerInvariant())
             .Select(g => new { Normalized = g.Key, Example = g.Min(), Count = g.Count() })
             .OrderByDescending(v => v.Count).ThenBy(v => v.Normalized).ToList();
         var top = votes[0];
         var total = votes.Sum(v => v.Count);
+        // Two matching users are required, and a tie keeps the translation disputed.
         var status = top.Count >= 2 && (votes.Count == 1 || top.Count > votes[1].Count) ? "confirmed" : total >= 2 ? "disputed" : "collecting";
-        var decision = await db.Decisions.FirstOrDefaultAsync(d => d.FragmentId == task.FragmentId && d.LangPair == task.LangPair);
-        if (decision is null)
+        var translation = await db.Translations.FirstOrDefaultAsync(d => d.FragmentId == task.FragmentId && d.LangPair == task.LangPair);
+        if (translation is null)
         {
-            decision = new ConsensusDecision { FragmentId = task.FragmentId, LangPair = task.LangPair };
-            db.Decisions.Add(decision);
+            var origin = await (from fragment in db.Fragments.AsNoTracking()
+                join source in db.Sources.AsNoTracking() on fragment.SourceId equals source.Id
+                where fragment.Id == task.FragmentId
+                select new { fragment.TextBa, source.Title, source.SourceUrl, source.Dataset, source.OriginalId }).FirstAsync();
+            // The translation row keeps a snapshot of the fragment and source coordinates.
+            translation = new TranslationRecord { FragmentId = task.FragmentId, LangPair = task.LangPair,
+                TextBa = origin.TextBa,
+                Source = JsonSerializer.Serialize(new { document = origin.Title, file = origin.SourceUrl,
+                    chapter = (string?)null, time = (string?)null, dataset = origin.Dataset, original_id = origin.OriginalId }) };
+            db.Translations.Add(translation);
         }
-        decision.Translation = status == "confirmed" ? top.Example : null;
-        decision.Status = status;
-        decision.Confirmations = top.Count;
-        decision.UpdatedAt = DateTime.UtcNow;
+        translation.Translation = status == "confirmed" ? top.Example : null;
+        translation.Status = status;
+        translation.Confirmed = top.Count;
+        translation.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
         await transaction.CommitAsync();
-        return Results.Ok(new { status, confirmations = top.Count, points = 10, answer });
+        return ServiceResult.Success(new { status, confirmations = top.Count, points = 10, answer });
     }
 }

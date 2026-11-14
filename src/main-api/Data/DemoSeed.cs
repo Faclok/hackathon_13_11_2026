@@ -1,9 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 
+/// <summary>Seeds demonstration phrases for an otherwise empty source catalog.</summary>
 static class DemoSeed
 {
+    /// <summary>Writes the source, fragments, and candidates in one transaction.</summary>
     public static async Task Apply(AppDbContext db)
     {
+        // Existing sources indicate that the database has already been initialized.
         if (await db.Sources.AnyAsync()) return;
         await using var transaction = await db.Database.BeginTransactionAsync();
         var source = new SourceItem { Dataset = "demo", OriginalId = "starter", Title = "Демонстрационные фразы",

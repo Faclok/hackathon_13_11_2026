@@ -13,6 +13,8 @@
 
 Сейчас поддерживается пара `ba-ru`. В базе лежат **демонстрационные фразы**, созданные для проверки системы. Перед публичным использованием их нужно вычитать носителем языка. Импорт реальных датасетов, аудио, экспертная модерация и привязка Telegram аккаунта к веб аккаунту в этот MVP не включены.
 
+В базе `main-api` таблица `translations` хранит результат согласования: `fragment_id`, `text_ba`, `lang_pair`, `translation`, `source`, `confirmed`, `status`. Поле `source` имеет тип JSONB и содержит координаты источника (`document`, `file`, `chapter`, `time`) и идентификаторы датасета; неизвестные координаты равны `null`. `confirmed` — число пользователей, поддержавших ведущий вариант. В процессе согласования `status` принимает `collecting` или `disputed`, подтверждённый результат — `confirmed`; значение `expert_review` зарезервировано для экспертной проверки. Пользователи хранятся в `app_users`, их ответы — в `submissions`, а начисления для рейтинга — в `point_events`. Миграция переименовывает прежнюю `consensus_decisions` в `translations` без удаления записей.
+
 ## Архитектура
 
 ```text
@@ -136,7 +138,7 @@ curl -X POST https://bashperevod.ru/api/tasks/<id>/submission \
   -d '{"action":"confirm"}'
 ```
 
-Исходники разложены по `client/`, `src/main-api/`, `src/lms-api/`, `src/telegram-bot/`; миграции лежат в `Migrations/` каждого C# сервиса, старая общая схема сохранена в `db/legacy_shared_schema.sql`; конфигурация прокси — `deploy/`.
+Исходники разложены по `client/`, `src/main-api/`, `src/lms-api/`, `src/telegram-bot/`. В `main-api` HTTP маршруты находятся в `Controllers/`, бизнес-логика — в `Services/`, модели и контекст EF Core — в `Data/`. [Описание каждого файла `main-api`](src/main-api/docs/README.md) находится рядом с сервисом. Миграции лежат в `Migrations/` каждого C# сервиса, старая общая схема сохранена в `db/legacy_shared_schema.sql`; конфигурация прокси — `deploy/`.
 
 ## Локальная проверка сборки
 
