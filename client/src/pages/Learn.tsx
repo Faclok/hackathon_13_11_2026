@@ -136,7 +136,7 @@ export default function Learn() {
       <section className="surface intro-card">
         <span className="eyebrow-label">УРОВЕНЬ {history.find((item) => !item.completedAt)?.number ?? (progress?.completedLevels ?? 0) + 1}</span>
         <h2>Продолжай обучение</h2>
-        <p>В каждом уровне от 3 до 6 вопросов. Если ответ не совпал с ключом, вопрос вернётся в конец очереди.</p>
+        <p>В каждом уровне от 6 до 10 вопросов. Если ответ не совпал с ключом, вопрос вернётся в конец очереди.</p>
         {pending ? <button className="button button-primary full-width" disabled={busy} onClick={() => void send(pending)}>Восстановить ответ</button>
           : <button className="button button-primary full-width" disabled={busy} onClick={() => void start()}>{history.some((item) => !item.completedAt) ? "Продолжить уровень" : "Начать уровень"}</button>}
         {noMaterial && <p className="learning-hint" role="status">Пока нет подходящих материалов. Попробуй позже.</p>}
@@ -146,12 +146,12 @@ export default function Learn() {
     {level && <>
       <div className="round-progress"><span>Уровень {level.number} · {level.correctCount} из {level.questionCount} вопросов решено</span><ProgressBar value={level.correctCount} max={level.questionCount} /></div>
       <section className="surface task-panel">
-        {feedback ? <div className={`answer-feedback ${feedback.recognized ? "correct" : "incorrect"}`} role="status"><strong>{feedback.recognized ? "Верно!" : "Пока не совпало"}</strong><p>{feedback.recognized ? "Ответ принят. Продолжай." : "Вопрос вернётся в конец очереди. Попробуешь снова позже."}</p><button className="button button-primary full-width" onClick={() => void continueLevel()} disabled={busy}>Продолжить</button></div>
+        {feedback ? <div className={`answer-feedback ${feedback.recognized ? "correct" : "incorrect"}`} role="status"><strong>{feedback.recognized ? "Верно!" : "Пока не совпало"}</strong>{!feedback.recognized && feedback.correctAnswer && <p><strong>Правильный ответ: {feedback.correctAnswer}</strong></p>}<p>{feedback.recognized ? "Ответ принят. Продолжай." : "Вопрос вернётся в конец очереди. Попробуешь снова позже."}</p><button className="button button-primary full-width" onClick={() => void continueLevel()} disabled={busy}>Продолжить</button></div>
           : pending ? <div role="status"><p>Ответ сохранён для безопасного повтора.</p><button className="button button-primary full-width" disabled={busy} onClick={() => void send(pending)}>{busy ? "Отправляем…" : "Повторить отправку"}</button></div>
           : <LearningExercise key={`${level.question.id}:${level.question.attemptToken}`} question={level.question} busy={busy} onSubmit={submit} onRefreshAudio={() => void refreshAudio()} />}
       </section>
     </>}
-    {!level && feedback && completedNumber === null && <section className="surface task-panel"><div className={`answer-feedback ${feedback.recognized ? "correct" : "incorrect"}`} role="status"><strong>{feedback.recognized ? "Ответ принят" : "Ответ пока не совпал"}</strong><p>Обнови текущий вопрос, чтобы продолжить.</p><button className="button button-primary full-width" disabled={busy} onClick={() => void continueLevel()}>Загрузить текущий вопрос</button></div></section>}
+    {!level && feedback && completedNumber === null && <section className="surface task-panel"><div className={`answer-feedback ${feedback.recognized ? "correct" : "incorrect"}`} role="status"><strong>{feedback.recognized ? "Ответ принят" : "Ответ пока не совпал"}</strong>{!feedback.recognized && feedback.correctAnswer && <p><strong>Правильный ответ: {feedback.correctAnswer}</strong></p>}<p>Обнови текущий вопрос, чтобы продолжить.</p><button className="button button-primary full-width" disabled={busy} onClick={() => void continueLevel()}>Загрузить текущий вопрос</button></div></section>}
     {completedNumber !== null && <section className="surface result-card" role="status"><div className="result-symbol">✓</div><h2>Уровень {completedNumber} пройден!</h2><p>Все вопросы решены. Следующий уровень начнётся, когда ты нажмёшь кнопку.</p>{feedback && <p>Последний ответ принят.</p>}<button className="button button-primary full-width" disabled={busy} onClick={() => { setFeedback(null); void start(); }}>Начать следующий уровень</button><button className="button button-soft full-width" onClick={() => { setCompletedNumber(null); setFeedback(null); }} disabled={busy}>К истории уровней</button></section>}
   </>;
 }

@@ -16,11 +16,47 @@ export default function LearningExercise({ question, busy, onSubmit, onRefreshAu
   const [left, setLeft] = useState("");
   const [pairs, setPairs] = useState<{ leftId: string; rightId: string }[]>([]);
   const [audioError, setAudioError] = useState(false);
+  const [revealedWord, setRevealedWord] = useState("");
+  const [revealedPhrase, setRevealedPhrase] = useState(false);
+  const [revealedAudio, setRevealedAudio] = useState(false);
   const submitText = (event: FormEvent) => {
     event.preventDefault();
     if (text.trim()) onSubmit({ text: text.trim() });
   };
 
+  if (question.schemaVersion === 2 && question.kind === "translation-text") {
+    const words = question.prompt.text.split(/(\p{L}[\p{L}\p{M}]*(?:[-’'][\p{L}\p{M}]+)*)/gu);
+    const hints = new Map(question.prompt.wordHints.map((hint) => [hint.word.toLocaleLowerCase(), hint.translation]));
+    return <>
+      <span className="eyebrow-label">ВЫБОР ПЕРЕВОДА</span>
+      <h2 className="bashkir-text learning-source" lang={question.prompt.sourceLanguage}>{words.map((part, index) => {
+        const hint = hints.get(part.toLocaleLowerCase());
+        return hint ? <button type="button" key={index} className="learning-word-hint" onClick={() => setRevealedWord(revealedWord === part ? "" : part)} aria-expanded={revealedWord === part} disabled={busy}>{part}</button> : <span key={index}>{part}</span>;
+      })}</h2>
+      {revealedWord && <p className="learning-reveal" role="status">{revealedWord} — {hints.get(revealedWord.toLocaleLowerCase())}</p>}
+      <p className="learning-hint">Нажми на подчёркнутое слово, чтобы увидеть его перевод.</p>
+      <button type="button" className="learning-phrase-hint" onClick={() => setRevealedPhrase(!revealedPhrase)} aria-expanded={revealedPhrase} disabled={busy}>Показать перевод всей фразы</button>
+      {revealedPhrase && <p className="learning-reveal" role="status">{question.prompt.hintTranslation}</p>}
+      <div className="options-list" role="group" aria-label="Варианты перевода">
+        {question.prompt.options.map((option) => <button key={option.id} type="button" className={`option ${selectedOption === option.id ? "selected" : ""}`} aria-pressed={selectedOption === option.id} disabled={busy} onClick={() => setSelectedOption(option.id)}>{option.text}</button>)}
+      </div>
+      <button className="button button-primary full-width" disabled={busy || !selectedOption} onClick={() => onSubmit({ optionId: selectedOption })}>Проверить ответ</button>
+    </>;
+  }
+  if (question.schemaVersion === 2 && (question.kind === "audio-dictation" || question.kind === "audio-translation")) return <>
+    <span className="eyebrow-label">{question.kind === "audio-dictation" ? "АУДИОДИКТАНТ" : "ПЕРЕВОД АУДИО"}</span>
+    <h2>{question.kind === "audio-dictation" ? "Что прозвучало?" : "Выбери перевод услышанного"}</h2>
+    <div className="learning-audio-player">
+      {question.prompt.audioUrl ? <audio className="learning-audio" controls src={question.prompt.audioUrl} onPlay={() => setRevealedAudio(true)} onClick={() => setRevealedAudio(true)} onError={() => setAudioError(true)} aria-label="Аудио задания" /> : <p role="alert">Аудио временно недоступно.</p>}
+      {(audioError || !question.prompt.audioUrl) && <button className="button button-soft full-width" onClick={() => { setAudioError(false); onRefreshAudio(); }} disabled={busy}>Обновить аудио</button>}
+      <button type="button" className="learning-phrase-hint" onClick={() => setRevealedAudio(!revealedAudio)} aria-expanded={revealedAudio} disabled={busy}>{revealedAudio ? "Скрыть исходный текст" : "Показать исходный текст"}</button>
+      {revealedAudio && <p className="learning-reveal" role="status">{question.prompt.original}</p>}
+    </div>
+    <div className="options-list" role="group" aria-label={question.kind === "audio-dictation" ? "Варианты услышанного" : "Варианты перевода"}>
+      {question.prompt.options.map((option) => <button key={option.id} type="button" className={`option ${selectedOption === option.id ? "selected" : ""}`} aria-pressed={selectedOption === option.id} disabled={busy} onClick={() => setSelectedOption(option.id)}>{option.text}</button>)}
+    </div>
+    <button className="button button-primary full-width" disabled={busy || !selectedOption} onClick={() => onSubmit({ optionId: selectedOption })}>Проверить ответ</button>
+  </>;
   if (question.schemaVersion !== 1) return <p role="alert" className="error-text">Эта версия упражнения пока не поддерживается. Обновите страницу или приложение.</p>;
 
   switch (question.kind) {

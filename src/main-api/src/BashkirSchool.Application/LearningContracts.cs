@@ -4,11 +4,18 @@ public sealed record ExerciseKindResponse(string Kind, int SchemaVersion);
 public sealed record ExerciseItem(string Id, string Text);
 public sealed record WordPairAnswer(string LeftId, string RightId);
 public sealed record TextExerciseAnswer(string Text);
+public sealed record ChoiceExerciseAnswer(string OptionId);
+public sealed record ChoiceAnswerKey(string CorrectId, string CorrectText, IReadOnlyList<ExerciseItem> Options);
+public sealed record WordHint(string Word, string Translation);
 public sealed record GapExerciseAnswer(string? Text = null, string? OptionId = null);
 public sealed record WordMatchAnswer(IReadOnlyList<WordPairAnswer> Pairs);
 public sealed record SentenceOrderAnswer(IReadOnlyList<string> TokenIds);
 public sealed record TextExercisePrompt(string Text, string SourceLanguage, string TargetLanguage);
 public sealed record AudioExercisePrompt(Guid AudioId, string? AudioUrl, string SourceLanguage, string TargetLanguage);
+public sealed record ChoiceTextPrompt(string Text, string SourceLanguage, string TargetLanguage,
+    IReadOnlyList<ExerciseItem> Options, IReadOnlyList<WordHint> WordHints, string HintTranslation);
+public sealed record ChoiceAudioPrompt(Guid AudioId, string? AudioUrl, string SourceLanguage, string TargetLanguage,
+    string Original, IReadOnlyList<ExerciseItem> Options);
 public sealed record GapExercisePrompt(string Before, string After, IReadOnlyList<ExerciseItem> Options, bool AllowCustom);
 public sealed record SentenceOrderPrompt(IReadOnlyList<ExerciseItem> Tokens);
 public sealed record WordMatchPrompt(IReadOnlyList<ExerciseItem> Left, IReadOnlyList<ExerciseItem> Right, string LanguagePair);

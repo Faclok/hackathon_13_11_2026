@@ -995,17 +995,27 @@ export default function App() {
                             "Выдавайте задания и следите за прогрессом учеников."
                           : "Создайте класс, добавьте учеников и выберите первое предложение для перевода."}
                       </p>
-                      <Button
-                        variant="light"
-                        icon="arrow"
-                        onClick={() =>
-                          activeClass
-                            ? navigate("classes")
-                            : setModal({ kind: "class" })
-                        }
-                      >
-                        {activeClass ? "Открыть класс" : "Создать класс"}
-                      </Button>
+                      <div className="banner-actions">
+                        <Button
+                          variant="light"
+                          icon="arrow"
+                          onClick={() =>
+                            activeClass
+                              ? navigate("classes")
+                              : setModal({ kind: "class" })
+                          }
+                        >
+                          {activeClass ? "Открыть класс" : "Создать класс"}
+                        </Button>
+                        {activeClass && (
+                          <Button
+                            icon="plus"
+                            onClick={() => setModal({ kind: "member" })}
+                          >
+                            Добавить ученика
+                          </Button>
+                        )}
+                      </div>
                     </div>
                     <div className="banner-visual">
                       <div className="banner-orbit one" />
@@ -1241,6 +1251,13 @@ export default function App() {
                               </div>
                             </div>
                             <div className="class-cover-actions">
+                              <Button
+                                variant="light"
+                                icon="plus"
+                                onClick={() => setModal({ kind: "member" })}
+                              >
+                                Добавить ученика
+                              </Button>
                               <Button
                                 variant="light"
                                 icon="edit"
@@ -2434,6 +2451,8 @@ function EditorModal({
                 ? "Сохраняем…"
                 : editing
                   ? "Сохранить"
+                  : modal.kind === "member"
+                    ? "Добавить ученика"
                   : modal.kind === "task"
                     ? "Выдать задание"
                     : "Создать"}

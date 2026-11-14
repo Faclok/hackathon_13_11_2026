@@ -62,14 +62,18 @@ public sealed class LevelWorkflow(CoreDbContext db, IPermissionChecker permissio
         {
             if (prior.QuestionId != question.Id || prior.AnswerJson != canonical)
                 throw new ConflictException("Attempt token was already used for a different answer.");
-            return new(prior.Id, prior.Recognized, prior.LevelCompleted);
+            using var previousKey = JsonDocument.Parse(question.AnswerKeyJson);
+            var previousCorrect = prior.Recognized ? null : registry.Get(question.Kind, question.SchemaVersion).CorrectAnswer(previousKey.RootElement);
+            return new(prior.Id, prior.Recognized, prior.LevelCompleted, previousCorrect);
         }
         var questions = await Questions(level.Id, ct);
         var current = Next(questions);
         if (level.CompletedAt.HasValue || current?.Id != question.Id || request.AttemptToken != question.AttemptToken)
             throw new ConflictException("Only the current question and its current attempt token can be answered.");
         using var key = JsonDocument.Parse(question.AnswerKeyJson);
-        var recognized = registry.Get(question.Kind, question.SchemaVersion).Evaluate(key.RootElement, request.Answer);
+        var handler = registry.Get(question.Kind, question.SchemaVersion);
+        var recognized = handler.Evaluate(key.RootElement, request.Answer);
+        var correctAnswer = recognized ? null : handler.CorrectAnswer(key.RootElement);
         if (recognized) question.CompletedAt = clock.GetUtcNow();
         else question.QueueOrder = questions.Max(x => x.QueueOrder) + 1;
         question.AttemptToken = Guid.NewGuid();
@@ -79,7 +83,7 @@ public sealed class LevelWorkflow(CoreDbContext db, IPermissionChecker permissio
         db.Add(answer);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
-        return new(answer.Id, recognized, answer.LevelCompleted);
+        return new(answer.Id, recognized, answer.LevelCompleted, correctAnswer);
     }
 
     public async Task<LevelProgressResponse> ProgressAsync(Guid actor, CancellationToken ct)
@@ -212,12 +216,17 @@ public sealed class LevelWorkflow(CoreDbContext db, IPermissionChecker permissio
         if (rows.Length == 0) return [];
         var acceptedIds = rows.SelectMany(x => JsonSerializer.Deserialize<Guid[]>(x.AcceptedJson)!).Distinct().ToArray();
         var variants = await db.Variants.Where(x => acceptedIds.Contains(x.Id)).ToDictionaryAsync(x => x.Id, x => x.Text, ct);
+        var sourceAlternatives = rows.GroupBy(x => x.LanguagePair).ToDictionary(x => x.Key,
+            x => (IReadOnlyList<string>)x.Select(row => row.Text).Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
+        var translationAlternatives = rows.GroupBy(x => x.LanguagePair).ToDictionary(x => x.Key,
+            x => (IReadOnlyList<string>)x.SelectMany(row => JsonSerializer.Deserialize<Guid[]>(row.AcceptedJson)!
+                .Select(id => variants[id])).Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
         var fragmentIds = rows.Select(x => x.Id).ToArray();
         var audio = (await db.Set<SentenceAudio>().Where(x => fragmentIds.Contains(x.FragmentId)).ToArrayAsync(ct))
             .GroupBy(x => x.FragmentId).ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.CreatedAt).First().Id);
         var words = await db.Set<VocabularyEntry>().OrderBy(x => x.Id).Take(500).ToArrayAsync(ct);
         var drafts = new List<LevelQuestion>();
-        var size = Random.Shared.Next(3, 7);
+        var size = Random.Shared.Next(6, 11);
         // Cycle all available kinds/materials before reusing one; a small corpus can still
         // supply a full level, and each issued answer key remains an immutable snapshot.
         var candidates = new List<(IExerciseHandler Handler, ExerciseMaterial Material)>();
@@ -232,7 +241,8 @@ public sealed class LevelWorkflow(CoreDbContext db, IPermissionChecker permissio
                 // A placeholder permits material validation before synthesis. It is
                 // replaced with a persisted asset before any question is saved.
                 var candidate = handler.RequiresAudio && sentence.AudioId is null ? sentence with { AudioId = Guid.Empty } : sentence;
-                candidates.Add((handler, new(handler.RequiresSentence ? candidate : null, vocabulary, row.LanguagePair)));
+                candidates.Add((handler, new(handler.RequiresSentence ? candidate : null, vocabulary, row.LanguagePair,
+                    sourceAlternatives[row.LanguagePair], translationAlternatives[row.LanguagePair])));
             }
         }
         var offset = (int)((number - 1) % candidates.Count);

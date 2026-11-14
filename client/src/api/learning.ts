@@ -2,14 +2,16 @@ import { apiRequest } from "./session";
 
 export interface ExerciseItem { id: string; text: string }
 export type ExerciseQuestion =
-  | { id: string; attemptToken: string; kind: "translation-text"; schemaVersion: number; prompt: { text: string; sourceLanguage: string; targetLanguage: string } }
-  | { id: string; attemptToken: string; kind: "audio-dictation" | "audio-translation"; schemaVersion: number; prompt: { audioId: string; audioUrl: string | null; sourceLanguage: string; targetLanguage: string } }
+  | { id: string; attemptToken: string; kind: "translation-text"; schemaVersion: 1; prompt: { text: string; sourceLanguage: string; targetLanguage: string } }
+  | { id: string; attemptToken: string; kind: "audio-dictation" | "audio-translation"; schemaVersion: 1; prompt: { audioId: string; audioUrl: string | null; sourceLanguage: string; targetLanguage: string } }
+  | { id: string; attemptToken: string; kind: "translation-text"; schemaVersion: 2; prompt: { text: string; sourceLanguage: string; targetLanguage: string; options: ExerciseItem[]; wordHints: { word: string; translation: string }[]; hintTranslation: string } }
+  | { id: string; attemptToken: string; kind: "audio-dictation" | "audio-translation"; schemaVersion: 2; prompt: { audioId: string; audioUrl: string | null; sourceLanguage: string; targetLanguage: string; original: string; options: ExerciseItem[] } }
   | { id: string; attemptToken: string; kind: "missing-word"; schemaVersion: number; prompt: { before: string; after: string; options: ExerciseItem[]; allowCustom: boolean } }
   | { id: string; attemptToken: string; kind: "sentence-order"; schemaVersion: number; prompt: { tokens: ExerciseItem[] } }
   | { id: string; attemptToken: string; kind: "word-match"; schemaVersion: number; prompt: { left: ExerciseItem[]; right: ExerciseItem[]; languagePair: string } };
 export type ExerciseAnswer = { text: string } | { optionId: string } | { tokenIds: string[] } | { pairs: { leftId: string; rightId: string }[] };
 export interface Level { id: string; number: number; questionCount: number; correctCount: number; question: ExerciseQuestion }
-export interface LevelAnswerResult { attemptToken: string; recognized: boolean; levelCompleted: boolean }
+export interface LevelAnswerResult { attemptToken: string; recognized: boolean; levelCompleted: boolean; correctAnswer: string | null }
 export interface LearningProgress { completedLevels: number; completedBosses: number; availableBosses: number; attempts: number; mistakes: number }
 export interface LevelStatistic { number: number; questionCount: number; correctCount: number; attempts: number; mistakes: number; startedAt: string; completedAt: string | null }
 

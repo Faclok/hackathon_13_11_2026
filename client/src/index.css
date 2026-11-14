@@ -833,6 +833,37 @@ input:focus {
   width: 100%;
   margin: 0 0 20px;
 }
+.learning-audio-player {
+  padding: 14px;
+  margin: 14px 0 20px;
+  border: 1px solid #e4e9df;
+  border-radius: 16px;
+  background: #f7faf4;
+}
+.learning-audio-player .learning-audio { margin-bottom: 8px; }
+.learning-source { line-height: 1.7; }
+.learning-word-hint,
+.learning-phrase-hint {
+  padding: 0;
+  border: 0;
+  border-bottom: 2px dashed #72aa59;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.learning-word-hint:focus-visible,
+.learning-phrase-hint:focus-visible { outline: 2px solid #437832; outline-offset: 3px; }
+.learning-phrase-hint { color: #437832; font-size: 13px; margin-bottom: 14px; }
+.learning-reveal {
+  padding: 10px 12px;
+  margin: 10px 0 14px;
+  border-radius: 10px;
+  background: #edf6e6;
+  color: #345c2b;
+  font-size: 14px;
+  line-height: 1.5;
+}
 .learning-gap {
   display: inline-block;
   min-width: 42px;

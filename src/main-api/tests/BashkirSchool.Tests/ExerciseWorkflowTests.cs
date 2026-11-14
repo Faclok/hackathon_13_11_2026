@@ -194,9 +194,10 @@ public sealed class ExerciseWorkflowTests
         }
         var level = await CurrentLevel(student);
         Assert.Equal(kind, level.Question.Kind);
-        var prompt = ExerciseJson.Read<AudioExercisePrompt>(level.Question.Prompt);
+        var prompt = ExerciseJson.Read<ChoiceAudioPrompt>(level.Question.Prompt);
         Assert.StartsWith("https://audio.test/", prompt.AudioUrl);
-        Assert.False(level.Question.Prompt.TryGetProperty("original", out _));
+        Assert.Equal("Мин мәктәпкә барам.", prompt.Original);
+        Assert.Equal(3, prompt.Options.Count);
         Assert.Equal(1, fake.Syntheses);
         using (var scope = customized.Services.CreateScope())
         {

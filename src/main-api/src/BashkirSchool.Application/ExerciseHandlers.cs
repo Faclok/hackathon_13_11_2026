@@ -8,7 +8,8 @@ namespace BashkirSchool.Application;
 public sealed record ExerciseSentence(Guid CaseId, Guid? ResolutionId, string Original, string LanguagePair,
     IReadOnlyList<string> Accepted, Guid? AudioId);
 public sealed record ExerciseWord(Guid Id, string Word, string Translation);
-public sealed record ExerciseMaterial(ExerciseSentence? Sentence, IReadOnlyList<ExerciseWord> Words, string LanguagePair);
+public sealed record ExerciseMaterial(ExerciseSentence? Sentence, IReadOnlyList<ExerciseWord> Words, string LanguagePair,
+    IReadOnlyList<string>? SourceAlternatives = null, IReadOnlyList<string>? TranslationAlternatives = null);
 public sealed record ExerciseDraft(string Original, JsonElement Prompt, JsonElement AnswerKey);
 
 /// <summary>One kind and immutable answer schema. New versions keep old issued exercises evaluable.</summary>
@@ -21,6 +22,7 @@ public interface IExerciseHandler
     bool RequiresAcceptedTranslation => false;
     ExerciseDraft? Create(ExerciseMaterial material);
     bool Evaluate(JsonElement answerKey, JsonElement answer);
+    string? CorrectAnswer(JsonElement answerKey) => null;
 }
 
 public sealed class ExerciseRegistry
@@ -101,6 +103,104 @@ public sealed class AudioTranslationHandler : IExerciseHandler
     }
     public bool Evaluate(JsonElement key, JsonElement answer) => ExerciseJson.Read<string[]>(key)
         .Contains(ExerciseJson.Text(ExerciseJson.Read<TextExerciseAnswer>(answer).Text), StringComparer.Ordinal);
+}
+
+public static class ChoiceExercises
+{
+    private static readonly string[] BashkirFallback = ["Һаумыһығыҙ!", "Рәхмәт!", "Һау булығыҙ!", "Эйе.", "Юҡ."];
+    private static readonly string[] RussianFallback = ["Здравствуйте!", "Спасибо!", "До свидания!", "Да.", "Нет."];
+    private static readonly string[] EnglishFallback = ["Hello!", "Thank you!", "Goodbye!", "Yes.", "No."];
+
+    public static (ExerciseItem[] Options, ChoiceAnswerKey Key)? Create(string correct,
+        IEnumerable<string> accepted, IEnumerable<string>? alternatives, string language)
+    {
+        var excluded = accepted.Append(correct).Select(Normalize).ToHashSet(StringComparer.Ordinal);
+        var fallback = language switch { "ba" => BashkirFallback, "ru" => RussianFallback, "en" => EnglishFallback, _ => [] };
+        var real = ExerciseJson.Shuffle((alternatives ?? [])
+            .Where(x => !string.IsNullOrWhiteSpace(x) && !excluded.Contains(Normalize(x)))
+            .GroupBy(Normalize).Select(x => x.First()));
+        var wrong = real.Concat(ExerciseJson.Shuffle(fallback))
+            .Where(x => !excluded.Contains(Normalize(x)))
+            .GroupBy(Normalize).Select(x => x.First()).Take(2).ToArray();
+        if (wrong.Length != 2) return null;
+        var correctItem = new ExerciseItem(Guid.NewGuid().ToString("N"), correct);
+        var options = ExerciseJson.Shuffle(wrong.Select(x => new ExerciseItem(Guid.NewGuid().ToString("N"), x)).Append(correctItem));
+        return (options, new ChoiceAnswerKey(correctItem.Id, correct, options));
+    }
+
+    public static bool Evaluate(JsonElement key, JsonElement answer)
+    {
+        var issued = ExerciseJson.Read<ChoiceAnswerKey>(key);
+        var selected = ExerciseJson.Read<ChoiceExerciseAnswer>(answer).OptionId;
+        if (!issued.Options.Any(x => x.Id == selected)) throw new DomainException("Option was not issued.");
+        return selected == issued.CorrectId;
+    }
+    public static string CorrectAnswer(JsonElement key) => ExerciseJson.Read<ChoiceAnswerKey>(key).CorrectText;
+    private static string Normalize(string value) => new(value.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
+}
+
+public sealed class TranslationChoiceHandler : IExerciseHandler
+{
+    public string Kind => "translation-text";
+    public int SchemaVersion => 2;
+    public bool RequiresAcceptedTranslation => true;
+    public ExerciseDraft? Create(ExerciseMaterial material)
+    {
+        if (material.Sentence is not { Accepted.Count: > 0 } sentence) return null;
+        var languages = sentence.LanguagePair.Split('-');
+        var choices = ChoiceExercises.Create(sentence.Accepted[0], sentence.Accepted,
+            material.TranslationAlternatives, languages[1]);
+        if (choices is null) return null;
+        var tokens = Regex.Matches(sentence.Original, @"\p{L}[\p{L}\p{M}]*(?:[-’'][\p{L}\p{M}]+)*")
+            .Select(x => x.Value).ToArray();
+        var hints = material.Words.Where(x => tokens.Contains(x.Word, StringComparer.OrdinalIgnoreCase))
+            .GroupBy(x => x.Word, StringComparer.OrdinalIgnoreCase)
+            .Select(x => new WordHint(x.Key, x.First().Translation)).ToArray();
+        if (tokens.Length == 1 && hints.Length == 0)
+            hints = [new WordHint(tokens[0], sentence.Accepted[0])];
+        return new(sentence.Original, ExerciseJson.Element(new ChoiceTextPrompt(sentence.Original, languages[0], languages[1],
+            choices.Value.Options, hints, sentence.Accepted[0])), ExerciseJson.Element(choices.Value.Key));
+    }
+    public bool Evaluate(JsonElement key, JsonElement answer) => ChoiceExercises.Evaluate(key, answer);
+    public string? CorrectAnswer(JsonElement key) => ChoiceExercises.CorrectAnswer(key);
+}
+
+public sealed class DictationChoiceHandler : IExerciseHandler
+{
+    public string Kind => "audio-dictation";
+    public int SchemaVersion => 2;
+    public bool RequiresAudio => true;
+    public ExerciseDraft? Create(ExerciseMaterial material)
+    {
+        if (material.Sentence is not { AudioId: not null } sentence) return null;
+        var language = sentence.LanguagePair.Split('-')[0];
+        var choices = ChoiceExercises.Create(sentence.Original, [sentence.Original], material.SourceAlternatives, language);
+        if (choices is null) return null;
+        return new("", ExerciseJson.Element(new ChoiceAudioPrompt(sentence.AudioId.Value, null, language, language,
+            sentence.Original, choices.Value.Options)), ExerciseJson.Element(choices.Value.Key));
+    }
+    public bool Evaluate(JsonElement key, JsonElement answer) => ChoiceExercises.Evaluate(key, answer);
+    public string? CorrectAnswer(JsonElement key) => ChoiceExercises.CorrectAnswer(key);
+}
+
+public sealed class AudioTranslationChoiceHandler : IExerciseHandler
+{
+    public string Kind => "audio-translation";
+    public int SchemaVersion => 2;
+    public bool RequiresAudio => true;
+    public bool RequiresAcceptedTranslation => true;
+    public ExerciseDraft? Create(ExerciseMaterial material)
+    {
+        if (material.Sentence is not { AudioId: not null, Accepted.Count: > 0, ResolutionId: not null } sentence) return null;
+        var languages = sentence.LanguagePair.Split('-');
+        var choices = ChoiceExercises.Create(sentence.Accepted[0], sentence.Accepted,
+            material.TranslationAlternatives, languages[1]);
+        if (choices is null) return null;
+        return new("", ExerciseJson.Element(new ChoiceAudioPrompt(sentence.AudioId.Value, null, languages[0], languages[1],
+            sentence.Original, choices.Value.Options)), ExerciseJson.Element(choices.Value.Key));
+    }
+    public bool Evaluate(JsonElement key, JsonElement answer) => ChoiceExercises.Evaluate(key, answer);
+    public string? CorrectAnswer(JsonElement key) => ChoiceExercises.CorrectAnswer(key);
 }
 
 public sealed record GapAnswerKey(string Text, IReadOnlyList<ExerciseItem> Options);
