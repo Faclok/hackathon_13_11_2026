@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#183d32">
+  <title>Курсы · Башперевод LMS</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="/"><span class="brand-mark">Б</span><span>Башперевод <small>LMS · ОБУЧЕНИЕ</small></span></a>
+    <nav aria-label="Другие разделы"><a href="https://bashperevod.ru">Переводы ↗</a><a href="https://expert.bashperevod.ru">Экспертиза ↗</a></nav>
+  </header>
+  <main>
+    <section class="hero">
+      <div><span class="eyebrow">01 / УЧИТЬСЯ В СВОЁМ ТЕМПЕ</span><h1>Начните говорить<br><em>по-башкирски.</em></h1><p>Короткие уроки, знакомые слова и понятный прогресс. Читать материалы можно без входа в аккаунт.</p><a class="hero-link" href="#courses">Открыть курсы <span>↗</span></a></div>
+      <div class="hero-card" aria-hidden="true"><span>БАШКИРСКИЙ ЯЗЫК</span><strong>Һаумыһығыҙ</strong><i>Здравствуйте</i><div class="card-line"></div><small>УРОК 01 · ПЕРВЫЕ СЛОВА</small></div>
+    </section>
+    <div class="content-grid">
+      <section class="content" id="courses" aria-labelledby="courses-title">
+        <div class="section-heading"><div><span class="eyebrow">02 / КАТАЛОГ</span><h2 id="courses-title">Ваши курсы</h2></div><span id="course-count" class="count"></span></div>
+        <div id="course-list" class="course-list" aria-live="polite"><p>Загружаем курсы…</p></div>
+        <div id="course-detail" hidden><button id="back-to-courses" class="back" type="button">← Все курсы</button><div class="detail-heading"><span class="eyebrow">ПРОГРАММА КУРСА</span><h2 id="detail-title"></h2><p id="detail-description"></p><div class="progress"><span id="progress-label"></span><div class="progress-track"><div id="progress-fill"></div></div></div></div><div id="lesson-list" class="lesson-list"></div></div>
+      </section>
+      <aside class="account" aria-labelledby="account-title">
+        <span class="eyebrow">ЛИЧНЫЙ ПРОГРЕСС</span><h2 id="account-title">Учитесь с аккаунтом</h2>
+        <div id="signed-out"><p>Войдите или зарегистрируйтесь, чтобы сохранять пройденные уроки.</p><form id="auth-form"><label>Логин<input name="username" autocomplete="username" required></label><label>Пароль<input name="password" type="password" autocomplete="current-password" required></label><div class="form-actions"><button type="submit" name="mode" value="login" class="primary">Войти</button><button type="submit" name="mode" value="register" class="secondary">Создать аккаунт</button></div></form><p class="hint">Для нового аккаунта придумайте пароль от 12 символов: большие и маленькие буквы, цифра и спецсимвол.</p></div>
+        <div id="signed-in" hidden><p>Вы вошли как <strong id="username"></strong>.</p><p>Пройденные уроки сохраняются в вашем аккаунте.</p><button id="logout" type="button" class="secondary">Выйти</button></div>
+        <p id="account-message" class="message" role="status" aria-live="polite"></p>
+      </aside>
+    </div>
+  </main>
+  <footer><span>Башперевод · LMS</span><span>Изучайте язык шаг за шагом.</span></footer>
+</body>
+</html>

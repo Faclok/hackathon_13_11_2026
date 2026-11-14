@@ -10,6 +10,7 @@ services:
       retries: 6
     depends_on:
       - client
+      - lms-client
       - main-api
       - lms-api
       - expert-api
@@ -17,6 +18,10 @@ services:
 
   client:
     build: ./client
+    restart: unless-stopped
+
+  lms-client:
+    build: ./lms-client
     restart: unless-stopped
 
   expert-client:
