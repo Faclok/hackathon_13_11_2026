@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 420" width="1040" height="840" fill="none">
+  <title>Небо Акбузата — сказочный полёт над Уралом</title>
+  <defs>
+    <linearGradient id="night" x2="520" y2="420" gradientUnits="userSpaceOnUse"><stop stop-color="#31594f"/><stop offset=".65" stop-color="#547c69"/><stop offset="1" stop-color="#8ca58a"/></linearGradient>
+    <linearGradient id="wing" x1="310" y1="85" x2="290" y2="191" gradientUnits="userSpaceOnUse"><stop stop-color="#fff4d6"/><stop offset="1" stop-color="#c7d4bd"/></linearGradient>
+  </defs>
+  <path fill="url(#night)" d="M0 0h520v420H0z"/>
+  <circle cx="112" cy="87" r="43" fill="#c9c994" opacity=".12"/>
+  <circle cx="112" cy="87" r="30" fill="#e7d9a4"/>
+  <path d="M128 60a30 30 0 0 1-29 54 31 31 0 0 0 29-54Z" fill="#c9c58e"/>
+  <g fill="#e6d49a"><circle cx="47" cy="61" r="2"/><circle cx="183" cy="45" r="2"/><circle cx="225" cy="96" r="2.5"/><circle cx="400" cy="50" r="2"/><circle cx="472" cy="109" r="2"/><circle cx="437" cy="184" r="2.5"/><circle cx="61" cy="177" r="2"/><circle cx="177" cy="170" r="2"/></g>
+  <path d="m259 48 3 8 8 3-8 3-3 8-3-8-8-3 8-3Zm190 11 3 8 8 3-8 3-3 8-3-8-8-3 8-3ZM39 231l3 8 8 3-8 3-3 8-3-8-8-3 8-3Z" fill="#e6d49a"/>
+  <path d="M79 231Q214 143 411 127" stroke="#c9c994" stroke-width="2" stroke-dasharray="3 10" opacity=".45"/>
+  <path d="m-30 338 104-91 74 57 93-92 81 82 81-102 147 142v86H-30Z" fill="#7c9d85"/>
+  <path d="m212 241 29-29 36 36-24-7-12-12-13 15Zm166-18 25-31 42 40-24-7-17-17-10 16Z" fill="#bfd0af"/>
+  <path d="M0 356q119-70 254-15t266-17v96H0Z" fill="#5e826b"/>
+  <path d="M0 393q114-45 227-10t293-4v41H0Z" fill="#3e6556"/>
+  <path d="M238 420q24-37 96-62-32 32-44 62Z" fill="#9faf8c" opacity=".65"/>
+  <g stroke-linecap="round" stroke-linejoin="round">
+    <path d="M285 166c-38-2-57-24-66-47 25 8 50 5 67-6Z" fill="#becfbc" stroke="#9fb69f" stroke-width="2"/>
+    <path d="M270 175c11-17 39-24 65-17l19-26 15-7 9 9 16 11-4 12-23 2-16 32-26 7-9 23-26 10-6-7 22-16 3-20-28 1-19 22-28 3-2-8 22-9Z" fill="#f3edd5" stroke="#d3d5b9" stroke-width="2"/>
+    <path d="M287 172c-24-19-25-56-7-91 4 23 15 34 37 44-2 15-11 31-30 47Z" fill="url(#wing)" stroke="#d7d5b3" stroke-width="2"/>
+    <path d="m280 103 9 48m-13-23 11 30m8-25-2 20" stroke="#b1c3ab" stroke-width="3"/>
+    <path d="M353 132q10-22 28-9l-9 3m-22 13-12 23" stroke="#c8b77e" stroke-width="5"/>
+    <path d="M272 177q-28-16-37-1t-28 2q13 20 32 7t30 1" fill="#d3d9bf"/>
+    <path d="m351 181 20 13 19-2 2 7-25 4-28-12" fill="#f3edd5" stroke="#d3d5b9" stroke-width="2"/>
+    <path d="m333 189 15 24 22 3-2 8-29-3-20-25" fill="#e4e5cb" stroke="#d3d5b9" stroke-width="2"/>
+    <circle cx="374" cy="140" r="2" fill="#526a57"/>
+    <path d="m383 154 7-1" stroke="#b7a675" stroke-width="3"/>
+  </g>
+  <path d="m120 386 7-17 7 17m319 11 6-15 6 15" stroke="#9cb290" stroke-width="3" stroke-linecap="round"/>
+</svg>

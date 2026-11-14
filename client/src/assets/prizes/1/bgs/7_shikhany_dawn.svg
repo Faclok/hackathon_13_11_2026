@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 420" width="1040" height="840" fill="none">
+  <title>Шиханы на рассвете</title>
+  <defs>
+    <linearGradient id="sky" x2="0" y2="420" gradientUnits="userSpaceOnUse"><stop stop-color="#d9e6de"/><stop offset=".65" stop-color="#f1e6c7"/><stop offset="1" stop-color="#e4e9d7"/></linearGradient>
+    <linearGradient id="hill" x1="282" y1="157" x2="386" y2="313" gradientUnits="userSpaceOnUse"><stop stop-color="#c0ccac"/><stop offset="1" stop-color="#8ca58a"/></linearGradient>
+  </defs>
+  <path fill="url(#sky)" d="M0 0h520v420H0z"/>
+  <circle cx="391" cy="104" r="59" fill="#f4e7b8" opacity=".45"/>
+  <circle cx="391" cy="104" r="40" fill="#e8d296"/>
+  <path d="M36 98q33-14 67 0m-9 27q31-11 62 0m273 41q24-10 49 0" stroke="#f7f5e7" stroke-width="9" stroke-linecap="round" opacity=".8"/>
+  <path d="M0 249q80-52 150-18t157-6 213-4v199H0Z" fill="#cbd6be"/>
+  <path d="M-20 299c39-20 49-88 99-112 37-18 60 15 77 52 16 35 30 55 63 64Z" fill="#aebfa2"/>
+  <path d="M176 309c48-24 54-94 89-131 19-21 36-28 51-26 30 5 48 29 70 68 24 43 43 73 90 89Z" fill="url(#hill)"/>
+  <path d="M316 152c-16 28-17 62-35 86l-28 52 83-27 47 40h93c-47-16-66-46-90-89-22-39-40-58-70-62Z" fill="#809d84" opacity=".45"/>
+  <path d="m280 185 17-8m-33 31 20-8m-32 32 19-10m-32 36 19-10" stroke="#d5dcc4" stroke-width="4" stroke-linecap="round"/>
+  <path d="M0 292q128-15 255 1t265-1v24q-132-9-265 0T0 316Z" fill="#e7ecda" opacity=".7"/>
+  <path d="M0 337q102-39 233-8t287-7v98H0Z" fill="#a9c3a3"/>
+  <path d="M0 381q157-50 308-7t212-5v51H0Z" fill="#7f9f7c"/>
+  <path d="M128 420q52-39 165-57-66 28-99 57Z" fill="#d9d5ad" opacity=".8"/>
+  <g stroke="#67886a" stroke-width="3" stroke-linecap="round"><path d="M40 400v-35m0 17-9-10m9 0 9-10M465 404v-44m0 22-9-10m9 0 9-11M486 406v-27"/></g>
+  <g fill="#ead69a"><circle cx="40" cy="361" r="4"/><circle cx="465" cy="356" r="4"/><circle cx="486" cy="375" r="3"/></g>
+  <path d="m204 102 7-3 7 3m14-12 6-3 6 3" stroke="#7f9785" stroke-width="2" stroke-linecap="round"/>
+</svg>

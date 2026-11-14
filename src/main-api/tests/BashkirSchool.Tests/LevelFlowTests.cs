@@ -38,6 +38,8 @@ public sealed class LevelFlowTests
         var failed = await Post<LevelAnswerResponse>(student.Client, AnswerUrl(first), wrong);
         Assert.False(failed.Recognized);
         Assert.False(failed.LevelCompleted);
+        Assert.Equal(0, failed.XpAwarded);
+        Assert.Equal(0, failed.CoinsAwarded);
         Assert.Equal("Hello", failed.CorrectAnswer);
         Assert.Equal(failed, await Post<LevelAnswerResponse>(student.Client, AnswerUrl(first), wrong));
         Assert.Equal(HttpStatusCode.Conflict, (await student.Client.PostAsJsonAsync(AnswerUrl(first), Answer(first, "Hello"))).StatusCode);
@@ -59,6 +61,8 @@ public sealed class LevelFlowTests
         repeat = await Current(student.Client);
         var done = await Post<LevelAnswerResponse>(student.Client, AnswerUrl(repeat), Answer(repeat, "Hello"));
         Assert.True(done.LevelCompleted);
+        Assert.Equal(first.QuestionCount * 5, done.XpAwarded);
+        Assert.Equal(first.QuestionCount / 3, done.CoinsAwarded);
         Assert.Equal(done, await Post<LevelAnswerResponse>(student.Client, AnswerUrl(repeat), Answer(repeat, "Hello")));
         var second = await Current(student.Client);
         Assert.Equal(2, second.Number);
@@ -77,6 +81,7 @@ public sealed class LevelFlowTests
         Assert.NotNull(completed.CompletedAt);
         var reward = (await student.Client.GetFromJsonAsync<PlayerProfile>("/api/player/profile"))!;
         Assert.Equal(first.QuestionCount / 3, reward.Coins);
+        Assert.Equal(first.QuestionCount * 5, reward.Xp);
         Assert.Equal(0, reward.Swords);
     }
 
@@ -261,6 +266,8 @@ public sealed class LevelFlowTests
         Assert.Equal("translation-create", boss.Question!.Kind);
         var skipped = await Post<LevelBossAnswerResponse>(student.Client,
             $"{Root}/bosses/{boss.Id}/questions/{boss.Question.Id}/answer", new SubmitReviewRequest(ReviewAction.Skip));
+        Assert.Equal(0, skipped.XpAwarded);
+        Assert.Equal(0, skipped.CoinsAwarded);
         Assert.False(skipped.BossCompleted);
         var afterSkip = await Post<LevelBossResponse>(student.Client, Root + "/boss", new { });
         Assert.Equal(0, afterSkip.CompletedCount);

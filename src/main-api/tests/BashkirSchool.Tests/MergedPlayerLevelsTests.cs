@@ -23,10 +23,12 @@ public sealed class MergedPlayerLevelsTests
         Assert.False((await student.Client.GetFromJsonAsync<BossAccessResponse>("/api/boss/access"))!.CanAccess);
         Assert.Equal(HttpStatusCode.Forbidden, (await student.Client.PostAsJsonAsync("/api/boss/next", new { })).StatusCode);
         var levelCoins = 0;
+        var levelXp = 0;
         for (var number = 1; number <= 5; number++)
         {
             var level = await CurrentLevel(student.Client);
             levelCoins += level.QuestionCount / 3;
+            levelXp += level.QuestionCount * 5;
             Assert.Equal(number, level.Number);
             for (var i = 0; i < level.QuestionCount; i++)
             {
@@ -53,7 +55,7 @@ public sealed class MergedPlayerLevelsTests
         Assert.False((await student.Client.GetFromJsonAsync<BossAccessResponse>("/api/boss/access"))!.CanAccess);
         Assert.Equal(HttpStatusCode.Forbidden, (await student.Client.PostAsJsonAsync("/api/boss/next", new { })).StatusCode);
         var profile = (await student.Client.GetFromJsonAsync<PlayerProfile>("/api/player/profile"))!;
-        Assert.Equal(100, profile.Xp);
+        Assert.Equal(levelXp + 120, profile.Xp);
         Assert.Equal(levelCoins + 3, profile.Coins);
         Assert.Equal(0, profile.Swords);
         Assert.Contains("boss", profile.TrophyIds);
@@ -66,8 +68,25 @@ public sealed class MergedPlayerLevelsTests
                 new ResolveCaseRequest(0, selected, [], []));
             await ResolutionFlowTests.Process(f, selectedCase);
             Assert.Equal(levelCoins + 7, (await student.Client.GetFromJsonAsync<PlayerProfile>("/api/player/profile"))!.Coins);
+            Assert.Equal(levelXp + 140, (await student.Client.GetFromJsonAsync<PlayerProfile>("/api/player/profile"))!.Xp);
             await ResolutionFlowTests.Process(f, selectedCase);
             Assert.Equal(levelCoins + 7, (await student.Client.GetFromJsonAsync<PlayerProfile>("/api/player/profile"))!.Coins);
+            Assert.Equal(levelXp + 140, (await student.Client.GetFromJsonAsync<PlayerProfile>("/api/player/profile"))!.Xp);
+            var receipt = await Post<PlayerLevelRewardReceipt>(student.Client, "/api/player/level-rewards/claim", new { });
+            var notice = Assert.Single(receipt.Notices);
+            Assert.Equal(4, notice.Coins);
+            Assert.Equal(20, notice.Xp);
+            var replay = await Post<PlayerLevelRewardReceipt>(student.Client, "/api/player/level-rewards/claim", new { });
+            Assert.Equal(notice.Id, Assert.Single(replay.Notices).Id);
+            var outsider = await f.Student(admin, "notice-outsider");
+            (await outsider.Client.PostAsJsonAsync("/api/player/rewards/acknowledge", new[] { notice.Id })).EnsureSuccessStatusCode();
+            Assert.Single((await Post<PlayerLevelRewardReceipt>(student.Client, "/api/player/level-rewards/claim", new { })).Notices);
+            (await student.Client.PostAsJsonAsync("/api/player/rewards/acknowledge", new[] { notice.Id })).EnsureSuccessStatusCode();
+            Assert.Empty((await Post<PlayerLevelRewardReceipt>(student.Client, "/api/player/level-rewards/claim", new { })).Notices);
+            // Dismissing a notice must not erase the deduplication history.
+            await ResolutionFlowTests.Process(f, selectedCase);
+            Assert.Equal(levelXp + 140, (await student.Client.GetFromJsonAsync<PlayerProfile>("/api/player/profile"))!.Xp);
+            Assert.Empty((await Post<PlayerLevelRewardReceipt>(student.Client, "/api/player/level-rewards/claim", new { })).Notices);
         }
         Assert.Equal(6, (await CurrentLevel(student.Client)).Number);
         using var scope = f.Services.CreateScope();
@@ -107,9 +126,15 @@ public sealed class MergedPlayerLevelsTests
         Assert.NotNull(migration.TargetModel.FindEntityType(typeof(PlayerState).FullName!));
         Assert.NotNull(migration.TargetModel.FindEntityType(typeof(LearningLevel).FullName!));
         Assert.Null(migration.TargetModel.FindEntityType("BashkirSchool.Domain.DailyLesson"));
-        var sql = db.GetService<IMigrator>().GenerateScript("20261114201808_RetireDailyLearning");
+        var sql = db.GetService<IMigrator>().GenerateScript("20261114201808_RetireDailyLearning", "20261114203704_MergePlayerEconomyAndLevels");
         Assert.DoesNotContain("DROP TABLE", sql);
         Assert.DoesNotContain("CREATE TABLE", sql);
+        Assert.NotNull(migration.TargetModel.FindEntityType(typeof(PlayerRewardNotice).FullName!));
+        Assert.NotNull(migration.TargetModel.FindEntityType(typeof(LevelAnswer).FullName!)!.FindProperty("XpAwarded"));
+        var rewardSql = db.GetService<IMigrator>().GenerateScript("20261115120000_PlayerLevelRewards");
+        Assert.Contains("CREATE TABLE \"PlayerRewardNotice\"", rewardSql);
+        Assert.Contains("ADD \"XpAwarded\"", rewardSql);
+        Assert.DoesNotContain("DROP TABLE", rewardSql);
     }
 
     [PostgresFact]

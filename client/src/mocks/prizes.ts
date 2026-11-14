@@ -29,11 +29,44 @@ import wingedHat from "../assets/prizes/4/hats/3_akbuzat_wings.svg";
 import patternFrame from "../assets/prizes/5/frames/1_bashkir_pattern.svg";
 import honeyFrame from "../assets/prizes/5/frames/2_forest_honey.svg";
 import uralFrame from "../assets/prizes/5/frames/3_ural_radiance.svg";
+import shikhanyDawn from "../assets/prizes/1/bgs/7_shikhany_dawn.svg";
+import sabantuy from "../assets/prizes/1/bgs/8_sabantuy.svg";
+import akbuzatSky from "../assets/prizes/1/bgs/9_akbuzat_sky.svg";
 
 // The nested asset folders are canonical; the loose SVGs are duplicate exports.
 // Descriptions are adapted from the supplied texts into complete collection cards.
 type Prize = Omit<Decoration, "price" | "source">;
 const prizes: Prize[] = [
+  {
+    id: "prize_bg_shikhany_dawn",
+    type: "background",
+    title: "Шиханы на рассвете",
+    rarity: "rare",
+    previewUrl: "🌄",
+    imageUrl: shikhanyDawn,
+    description:
+      "Округлые силуэты шиханов поднимаются над зелёной степью. Золотистое солнце, светлый туман и мягкие склоны создают спокойный пейзаж, вдохновлённый природой Башкортостана.",
+  },
+  {
+    id: "prize_bg_sabantuy",
+    type: "background",
+    title: "Сабантуй",
+    rarity: "epic",
+    previewUrl: "🎏",
+    imageUrl: sabantuy,
+    description:
+      "Праздничная поляна с юртами, разноцветными флажками и узорчатым ковром. Иллюстрация передаёт атмосферу Сабантуя — встречи, радость и тепло летнего праздника.",
+  },
+  {
+    id: "prize_bg_akbuzat_sky",
+    type: "background",
+    title: "Небо Акбузата",
+    rarity: "legendary",
+    previewUrl: "🌌",
+    imageUrl: akbuzatSky,
+    description:
+      "Белый крылатый конь летит над уральскими горами под золотыми звёздами. Фантазийный ночной пейзаж вдохновлён Акбузатом и миром башкирских сказаний.",
+  },
   {
     id: "hat_kurai_flower",
     type: "hat",

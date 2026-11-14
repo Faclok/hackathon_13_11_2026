@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 420" width="1040" height="840" fill="none">
+  <title>Сабантуй — праздничная поляна</title>
+  <path fill="#e3ebe0" d="M0 0h520v420H0z"/>
+  <circle cx="400" cy="93" r="39" fill="#ecdfae"/>
+  <path d="M51 114q27-12 56 0m-6 22q31-10 58 0m277 12q22-10 45 0" stroke="#f6f6ec" stroke-width="10" stroke-linecap="round"/>
+  <path d="M0 242q90-66 184-26t177-7 159 14v197H0Z" fill="#c6d6bd"/>
+  <path d="M0 289q135-53 255-5t265-17v153H0Z" fill="#a9c3a3"/>
+  <path d="M0 365q147-44 285-1t235-12v68H0Z" fill="#8fac88"/>
+  <path d="M19 50q231 105 482 0" stroke="#8d8c68" stroke-width="3"/>
+  <g stroke="#f0e2b8" stroke-width="2" stroke-linejoin="round">
+    <path d="m52 63 27 9-21 30Z" fill="#ae6957"/><path d="m105 80 28 6-19 32Z" fill="#ccad68"/>
+    <path d="m160 91 28 4-17 33Z" fill="#6c957a"/><path d="m216 98 28 1-14 34Z" fill="#ae6957"/>
+    <path d="m272 98 28-2-11 35Z" fill="#ccad68"/><path d="m328 92 28-5-8 35Z" fill="#6c957a"/>
+    <path d="m383 80 28-7-6 36Z" fill="#ae6957"/><path d="m437 65 27-9-4 36Z" fill="#ccad68"/>
+  </g>
+  <g transform="translate(49 198)">
+    <path d="M0 69Q12 11 70 9q58 2 70 60v52H0Z" fill="#eadfc5" stroke="#bca780" stroke-width="3"/>
+    <path d="M-6 69Q70 4 146 69" fill="#d4c49f" stroke="#b49e77" stroke-width="3"/>
+    <path d="M0 88h140" stroke="#879d7a" stroke-width="10"/>
+    <path d="M54 121V87q16-15 32 0v34" fill="#947654"/>
+    <path d="m16 86 7-5 7 5m77 0 7-5 7 5" stroke="#e6dab1" stroke-width="3"/>
+    <path d="M70 9V0" stroke="#9c865c" stroke-width="5" stroke-linecap="round"/>
+  </g>
+  <g transform="translate(341 224) scale(.77)">
+    <path d="M0 69Q12 11 70 9q58 2 70 60v52H0Z" fill="#f0e5ca" stroke="#bca780" stroke-width="3"/>
+    <path d="M-6 69Q70 4 146 69" fill="#d4c49f" stroke="#b49e77" stroke-width="3"/>
+    <path d="M0 88h140" stroke="#ae6957" stroke-width="10"/>
+    <path d="M54 121V87q16-15 32 0v34" fill="#947654"/>
+  </g>
+  <path d="M235 327h74l15 45h-104Z" fill="#ab6353"/>
+  <path d="m271 334 15 16-15 16-15-16Z" fill="#e7cf8e"/>
+  <path d="m271 342 7 8-7 8-7-8Z" fill="#68896d"/>
+  <path d="m232 369-3 10m15-10-2 10m15-10-1 10m15-10v10m14-10 1 10m13-10 2 10m12-10 3 10" stroke="#d5bd85" stroke-width="3"/>
+  <path d="M26 244V91m468 153V91" stroke="#aa9065" stroke-width="5" stroke-linecap="round"/>
+  <path d="m26 110 25 8-25 16Zm468 0-25 8 25 16Z" fill="#719478"/>
+  <g fill="#eee0a8"><circle cx="53" cy="362" r="3"/><circle cx="82" cy="381" r="3"/><circle cx="441" cy="351" r="3"/><circle cx="464" cy="377" r="3"/></g>
+</svg>

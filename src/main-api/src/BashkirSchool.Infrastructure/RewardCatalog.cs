@@ -34,6 +34,8 @@ public static class RewardCatalog
         new("prize_bg_kurai", "background", "rare"), new("prize_bg_yurt", "background", "common"),
         new("prize_bg_agidel", "background", "common"), new("prize_bg_shulgan_tash", "background", "epic"),
         new("prize_bg_honey", "background", "rare"), new("prize_bg_koshkar", "background", "legendary"),
+        new("prize_bg_shikhany_dawn", "background", "rare"), new("prize_bg_sabantuy", "background", "epic"),
+        new("prize_bg_akbuzat_sky", "background", "legendary"),
         new("prize_pet_horse", "pet", "common"), new("prize_pet_akbuzat", "pet", "legendary"),
         new("prize_pet_bee", "pet", "rare"), new("prize_pet_eagle", "pet", "epic"),
         new("prize_pet_bear", "pet", "common"), new("prize_pet_wolf", "pet", "rare"),

@@ -17,7 +17,7 @@ public sealed class PlayerEconomyTests
     {
         Assert.Equal(["case_hat", "case_frame", "case_bg", "case_pet"], RewardCatalog.Cases.Select(x => x.Id));
         var petCase = RewardCatalog.Describe(RewardCatalog.Cases[3]);
-        Assert.Equal(12, petCase.Drops.Length);
+        Assert.Equal(18, petCase.Drops.Length);
         Assert.Contains(petCase.Drops, x => x.DecorationId == "prize_pet_akbuzat");
         Assert.Contains(petCase.Drops, x => x.DecorationId == "prize_item_kurai");
         Assert.DoesNotContain(petCase.Drops, x => x.DecorationId is "pet_bee" or "pet_none");

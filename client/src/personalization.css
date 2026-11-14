@@ -141,7 +141,7 @@
 .player-avatar.podium-avatar {
   width: 64px;
   height: 64px;
-  margin: 15px auto 10px;
+  margin: 0;
   padding: 5px;
 }
 .player-avatar.profile-avatar {
@@ -450,11 +450,15 @@ button.equipped-pet {
   top: 66px;
   bottom: auto;
 }
-.podium-card .equipped-pet {
-  right: 7px;
-  top: 83px;
-  bottom: auto;
+.podium-avatar-group .equipped-pet {
+  z-index: 2;
+  right: -17px;
+  top: auto;
+  bottom: -7px;
   width: 33px;
+}
+.podium-avatar-group .equipped-pet > small {
+  display: none;
 }
 .podium-card .equipped-pet > span {
   font-size: 25px;

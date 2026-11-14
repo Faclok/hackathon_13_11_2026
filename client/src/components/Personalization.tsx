@@ -165,16 +165,15 @@ export function ProfileBackground({ backgroundId }: { backgroundId?: string }) {
 export function FloatingItems({
   user,
   onSelect,
+  showPet = true,
 }: {
   user: User;
   onSelect?: (item: Decoration) => void;
+  showPet?: boolean;
 }) {
   const items = (user.equippedItemIds ?? user.ownedDecorationIds)
     .map((id) => decorationCatalog.find((d) => d.id === id))
     .filter((item): item is Decoration => item?.type === "item");
-  const pet = decorationCatalog.find(
-    (item) => item.id === user.petId && item.type === "pet" && !item.isDefault,
-  );
   const itemStyle = (index: number): CSSProperties | undefined => {
     if (items.length <= 4) return undefined;
     const rows = Math.ceil(items.length / 2);
@@ -184,7 +183,7 @@ export function FloatingItems({
       "--item-right": index % 2 === 1 ? "4%" : "auto",
     } as CSSProperties;
   };
-  if (!items.length && !pet) return null;
+  if (!items.length && (!showPet || !user.petId)) return null;
   return (
     <div className="floating-items" aria-label="Предметы на фоне">
       {items.map((item, index) =>
@@ -212,28 +211,41 @@ export function FloatingItems({
           </span>
         ),
       )}
-      {pet &&
-        (onSelect ? (
-          <button
-            className="equipped-pet"
-            aria-label={`О питомце: ${pet.title}`}
-            title={pet.title}
-            onClick={() => onSelect(pet)}
-          >
-            <span>
-              <DecorationArtwork item={pet} />
-            </span>
-            <small>{pet.petName}</small>
-          </button>
-        ) : (
-          <span className="equipped-pet" role="img" aria-label={pet.title}>
-            <span>
-              <DecorationArtwork item={pet} />
-            </span>
-            <small>{pet.petName}</small>
-          </span>
-        ))}
+      {showPet && <EquippedPet user={user} onSelect={onSelect} />}
     </div>
+  );
+}
+
+export function EquippedPet({
+  user,
+  onSelect,
+}: {
+  user: User;
+  onSelect?: (item: Decoration) => void;
+}) {
+  const pet = decorationCatalog.find(
+    (item) => item.id === user.petId && item.type === "pet" && !item.isDefault,
+  );
+  if (!pet) return null;
+  return onSelect ? (
+    <button
+      className="equipped-pet"
+      aria-label={`О питомце: ${pet.title}`}
+      title={pet.title}
+      onClick={() => onSelect(pet)}
+    >
+      <span>
+        <DecorationArtwork item={pet} />
+      </span>
+      <small>{pet.petName}</small>
+    </button>
+  ) : (
+    <span className="equipped-pet" role="img" aria-label={pet.title} title={pet.title}>
+      <span>
+        <DecorationArtwork item={pet} />
+      </span>
+      <small>{pet.petName}</small>
+    </span>
   );
 }
 

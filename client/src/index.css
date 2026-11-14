@@ -1441,10 +1441,18 @@ input:focus {
   padding-bottom: 23px;
   border-color: #e4deb1;
 }
+.podium-avatar-group {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  margin: 15px auto 30px;
+}
 .place-medal {
   position: absolute;
-  left: 12px;
-  top: 13px;
+  z-index: 3;
+  left: 50%;
+  bottom: -21px;
+  transform: translateX(-50%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1458,6 +1466,7 @@ input:focus {
   color: #294b2d;
   font-size: 22px;
   font-weight: 800;
+  line-height: 1;
 }
 .podium-card .personal-content .place-medal { color: #294b2d; text-shadow: 0 1px 1px #26361d35; backdrop-filter: blur(5px); }
 .boss-teacher-task { border: 2px solid #ba8a36; background: linear-gradient(160deg, #fff8e9, #fff); }

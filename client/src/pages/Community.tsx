@@ -16,6 +16,7 @@ import { Mascot, SchoolLogo } from "../components/Illustrations";
 import {
   Avatar,
   DecorationArtwork,
+  EquippedPet,
   FloatingItems,
   ProfileBackground,
 } from "../components/Personalization";
@@ -144,12 +145,15 @@ export function Leaderboard() {
             data-background={entry.user.backgroundId}
           >
             <ProfileBackground backgroundId={entry.user.backgroundId} />
-            <FloatingItems user={entry.user} />
+            <FloatingItems user={entry.user} showPet={false} />
             <div className="personal-content">
-              <span className="place-medal">
-                {["🥇", "🥈", "🥉"][entry.rank - 1] ?? `#${entry.rank}`}
-              </span>
-              <Avatar user={entry.user} className="podium-avatar" />
+              <div className="podium-avatar-group">
+                <Avatar user={entry.user} className="podium-avatar" />
+                <EquippedPet user={entry.user} />
+                <span className="place-medal" aria-label={`Место ${entry.rank}`}>
+                  {["🥇", "🥈", "🥉"][entry.rank - 1] ?? `#${entry.rank}`}
+                </span>
+              </div>
               <h2>
                 {displayName(entry.user)}
                 {entry.user.id === user.id && (

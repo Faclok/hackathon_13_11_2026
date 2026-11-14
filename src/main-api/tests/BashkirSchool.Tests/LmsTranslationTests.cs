@@ -19,10 +19,12 @@ public sealed class LmsTranslationTests
         var student = await factory.Student(admin);
         await LearningContent(admin);
         var levelCoins = 0;
+        var levelXp = 0;
         for (var number = 0; number < 5; number++)
         {
             var first = await CurrentLevel(student.Client);
             levelCoins += first.QuestionCount / 3;
+            levelXp += first.QuestionCount * 5;
             for (var question = 0; question < first.QuestionCount; question++)
                 Assert.True((await AnswerLevel(student.Client, await CurrentLevel(student.Client), new TextExerciseAnswer("Hello"))).Recognized);
         }
@@ -41,9 +43,12 @@ public sealed class LmsTranslationTests
         var attached = await Post<LevelBossAnswerResponse>(student.Client,
             $"/api/learning/boss/teacher-answers/{assignmentId}", new { });
         Assert.False(attached.BossCompleted);
+        Assert.Equal(1, attached.CoinsAwarded);
+        Assert.Equal(40, attached.XpAwarded);
         Assert.Equal(attached, await Post<LevelBossAnswerResponse>(student.Client,
             $"/api/learning/boss/teacher-answers/{assignmentId}", new { }));
         Assert.Equal(levelCoins + 1, (await student.Client.GetFromJsonAsync<PlayerProfile>("/api/player/profile"))!.Coins);
+        Assert.Equal(levelXp + 40, (await student.Client.GetFromJsonAsync<PlayerProfile>("/api/player/profile"))!.Xp);
         using var expert = await ResolutionFlowTests.Staff(factory, admin, "expert");
         var view = (await expert.GetFromJsonAsync<ExpertCaseResponse>($"/api/expert/cases/{caseId}"))!;
         await Post<ResolutionResponse>(expert, $"/api/expert/cases/{caseId}/resolution",
@@ -51,6 +56,7 @@ public sealed class LmsTranslationTests
         await ResolutionFlowTests.Process(factory, caseId);
         await ResolutionFlowTests.Process(factory, caseId);
         Assert.Equal(levelCoins + 5, (await student.Client.GetFromJsonAsync<PlayerProfile>("/api/player/profile"))!.Coins);
+        Assert.Equal(levelXp + 60, (await student.Client.GetFromJsonAsync<PlayerProfile>("/api/player/profile"))!.Xp);
     }
 
     [Fact]
