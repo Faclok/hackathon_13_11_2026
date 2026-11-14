@@ -18,15 +18,19 @@ public sealed class UsernameLoginTests
         client.DefaultRequestHeaders.Authorization = new("Bearer", first.AccessToken);
         var profile = await client.GetFromJsonAsync<PlayerProfile>("/api/player/profile");
         Assert.Equal("Денис", profile!.Nick);
+        Assert.Equal(40, profile.Coins);
         var second = await Post<AccessTokenResponse>(client, "/auth/username", new { username = "Денис" });
         client.DefaultRequestHeaders.Authorization = new("Bearer", second.AccessToken);
-        Assert.Equal(profile.Id, (await client.GetFromJsonAsync<PlayerProfile>("/api/player/profile"))!.Id);
+        var resumed = (await client.GetFromJsonAsync<PlayerProfile>("/api/player/profile"))!;
+        Assert.Equal(profile.Id, resumed.Id);
+        Assert.Equal(40, resumed.Coins);
         var assignedStudent = await f.Student(admin);
         using var schoolLogin = f.CreateClient();
         var schoolToken = await Post<AccessTokenResponse>(schoolLogin, "/auth/username", new { username = "student1" });
         schoolLogin.DefaultRequestHeaders.Authorization = new("Bearer", schoolToken.AccessToken);
         Assert.Equal(assignedStudent.Id,
             (await schoolLogin.GetFromJsonAsync<PlayerProfile>("/api/player/profile"))!.Id);
+        Assert.Equal(0, (await schoolLogin.GetFromJsonAsync<PlayerProfile>("/api/player/profile"))!.Coins);
         Assert.Equal(HttpStatusCode.Forbidden,
             (await client.PostAsJsonAsync("/auth/username", new { username = "admin" })).StatusCode);
     }

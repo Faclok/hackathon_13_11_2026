@@ -24,6 +24,7 @@ public sealed class IndependentAccounts(CoreDbContext db, UserManager<Account> u
             account = new Account { Id = Guid.NewGuid(), UserName = username, SelfRegistered = true };
             Check(await users.CreateAsync(account));
             db.Participants.Add(new() { Id = account.Id });
+            db.PlayerStates.Add(PlayerState.ForNewRegistration(account.Id));
             db.Access.AddRange(new AccessAssignment { SubjectId = account.Id, ProfileId = "account", Scope = AccessScope.Own },
                 new AccessAssignment { SubjectId = account.Id, ProfileId = "participant", Scope = AccessScope.Own });
             db.Audit.Add(new() { ActorId = account.Id, TargetId = account.Id,
@@ -44,6 +45,7 @@ public sealed class IndependentAccounts(CoreDbContext db, UserManager<Account> u
         var account = new Account { Id = Guid.NewGuid(), UserName = request.Username, SelfRegistered = true };
         Check(await users.CreateAsync(account, request.Password));
         db.Participants.Add(new() { Id = account.Id });
+        db.PlayerStates.Add(PlayerState.ForNewRegistration(account.Id));
         db.Access.AddRange(new AccessAssignment { SubjectId = account.Id, ProfileId = "account", Scope = AccessScope.Own },
             new AccessAssignment { SubjectId = account.Id, ProfileId = "participant", Scope = AccessScope.Own });
         db.Audit.Add(new() { ActorId = account.Id, TargetId = account.Id, Action = "account.self.registered", At = clock.GetUtcNow() });

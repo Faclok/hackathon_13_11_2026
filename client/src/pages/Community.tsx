@@ -74,7 +74,7 @@ export function Login() {
           </button>
         </form>
         {error && <p className="form-error" role="alert">{error}</p>}
-        <p className="demo-note">Временный вход по username. Профиль, монеты и инвентарь хранятся на сервере.</p>
+        <p className="demo-note">Временный вход по username. При создании нового профиля — 40 бонусных монет. Профиль, монеты и инвентарь хранятся на сервере.</p>
       </section>
     </div>
   );

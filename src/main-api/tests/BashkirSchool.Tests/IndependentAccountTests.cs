@@ -20,6 +20,9 @@ public sealed class IndependentAccountTests
         var profile = await person.GetFromJsonAsync<MyProfileResponse>("/api/me");
         Assert.Equal(registered.Id, profile!.Id); Assert.Equal("independent", profile.Username);
         Assert.Null(profile.SchoolId); Assert.Null(profile.ClassId);
+        Assert.Equal(40, (await person.GetFromJsonAsync<PlayerProfile>("/api/player/profile"))!.Coins);
+        await Login(person, registered.Username);
+        Assert.Equal(40, (await person.GetFromJsonAsync<PlayerProfile>("/api/player/profile"))!.Coins);
         using var scope = f.Services.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<CoreDbContext>();
         var account = await db.Users.SingleAsync(x => x.Id == registered.Id);
         Assert.True(account.SelfRegistered); Assert.Null(account.Email);
@@ -45,6 +48,7 @@ public sealed class IndependentAccountTests
         Assert.Equal(2, await db.Users.CountAsync()); Assert.Equal(1, await db.Participants.CountAsync());
         Assert.False(await db.Users.AnyAsync(x => x.UserName == "weak" || x.UserName == "forged"));
         Assert.Equal(1, await db.Audit.CountAsync(x => x.Action == "account.self.registered" && x.TargetId == valid.Id));
+        Assert.Equal(40, (await db.PlayerStates.SingleAsync(x => x.ParticipantId == valid.Id)).Coins);
     }
 
     [Fact]

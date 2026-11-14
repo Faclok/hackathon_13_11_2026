@@ -8,6 +8,16 @@ namespace BashkirSchool.Infrastructure;
 
 public sealed class PlayerState
 {
+    public const int RegistrationBonusCoins = 40;
+
+    public static PlayerState ForNewRegistration(Guid participantId) => new()
+    {
+        ParticipantId = participantId,
+        Coins = RegistrationBonusCoins,
+        OwnedJson = JsonSerializer.Serialize(RewardCatalog.Items.Where(x => x.IsDefault).Select(x => x.Id)),
+        BackgroundId = "bg_default"
+    };
+
     public Guid ParticipantId { get; set; }
     public int Xp { get; set; }
     public int Coins { get; set; }
