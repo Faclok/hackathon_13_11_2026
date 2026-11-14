@@ -1604,6 +1604,10 @@ a {
   font-weight: 800;
   margin-top: 12px;
 }
+.catalog-pagination {
+  display: flex;
+  gap: 10px;
+}
 .no-search {
   color: #94a4a2;
   font-size: 11px;
@@ -1753,6 +1757,80 @@ a {
 .editor-form textarea::placeholder,
 .auth-form input::placeholder {
   color: #b1bdbb;
+}
+.source-picker {
+  margin-bottom: 16px;
+}
+.source-picker > label {
+  margin-bottom: 0;
+}
+.source-picker > input {
+  margin-top: 7px;
+}
+.source-selected {
+  position: relative;
+  display: grid;
+  gap: 5px;
+  padding: 12px 36px 12px 13px;
+  border: 1px solid #86b897;
+  border-radius: 10px;
+  background: #edf7f0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.source-selected strong,
+.source-selected span,
+.source-result strong,
+.source-result span {
+  overflow-wrap: anywhere;
+}
+.source-selected span,
+.source-result span {
+  color: #647c7e;
+}
+.source-selected button {
+  position: absolute;
+  top: 8px;
+  right: 9px;
+  border: 0;
+  background: transparent;
+  color: #526c70;
+  font-size: 20px;
+  cursor: pointer;
+}
+.source-results {
+  max-height: 290px;
+  overflow-y: auto;
+  margin-top: 8px;
+  border: 1px solid #e1e7e4;
+  border-radius: 10px;
+}
+.source-results > p {
+  margin: 12px;
+}
+.source-result {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 1px solid #edf1ee;
+  background: #fff;
+  color: #233c4a;
+  text-align: left;
+  font-size: 12px;
+  cursor: pointer;
+}
+.source-result:last-child {
+  border-bottom: 0;
+}
+.source-result:hover,
+.source-result:focus-visible {
+  background: #f0f7f1;
+}
+.source-result small {
+  color: #658e71;
+  font-weight: 800;
 }
 .optional {
   font-size: 10px;

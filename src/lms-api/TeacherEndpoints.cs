@@ -174,10 +174,11 @@ public static class TeacherEndpoints
             await db.SaveChangesAsync();
             return Results.NoContent();
         });
-        api.MapGet("/teacher/catalog", async (int? offset, int? limit, HttpRequest request, IHttpClientFactory factory) =>
+        api.MapGet("/teacher/catalog", async (int? offset, int? limit, string? query, HttpRequest request, IHttpClientFactory factory) =>
         {
             if (await Identity(request, factory) is null) return Results.Unauthorized();
-            using var response = await MainGet(request, factory, $"/api/lms-source/translations?offset={offset ?? 0}&limit={limit ?? 50}");
+            var path = $"/api/lms-source/translations?offset={offset ?? 0}&limit={limit ?? 50}&query={Uri.EscapeDataString(query ?? "")}";
+            using var response = await MainGet(request, factory, path);
             if (!response.IsSuccessStatusCode) return Results.StatusCode((int)response.StatusCode);
             return Results.Content(await response.Content.ReadAsStringAsync(), "application/json");
         });
