@@ -103,4 +103,33 @@ public sealed class TelegramStudentsTests
         using var bot = f.CreateClient(); bot.DefaultRequestHeaders.Add("X-Internal-Key", Key);
         Assert.Equal(HttpStatusCode.Unauthorized, (await bot.GetAsync("/internal/telegram/101/profile")).StatusCode);
     }
+
+    [Fact]
+    public async Task BotIssuesRequestedExerciseAndReviewAndOnlyLinkedOwnerCanSubmit()
+    {
+        using var f = new CoreFactory(telegramKey: Key);
+        using var admin = await f.Bootstrap(); var student = await f.Student(admin); var other = await f.Student(admin, "2");
+        using var producer = await f.Producer(admin);
+        await Deliver(producer);
+        using var bot = f.CreateClient(); bot.DefaultRequestHeaders.Add("X-Internal-Key", Key);
+        foreach (var (client, id) in new[] { (student.Client, 101), (other.Client, 102) })
+        {
+            var link = await Post<TelegramLinkResponse>(client, "/api/me/telegram-link", new { });
+            Assert.Equal(HttpStatusCode.NoContent, (await bot.PostAsJsonAsync($"/internal/telegram/{id}/link", new { link.Code })).StatusCode);
+        }
+        var review = await Post<AssignmentResponse>(bot, "/internal/telegram/101/reviews/next?kind=translation-choice", new { });
+        Assert.Equal("translation-choice", review.Kind);
+        var option = Assert.Single(review.Options);
+        var answer = new SubmitReviewRequest(BashkirSchool.Domain.ReviewAction.Confirm) { SelectedVariantId = option.Id };
+        Assert.Equal(HttpStatusCode.NotFound, (await bot.PostAsJsonAsync($"/internal/telegram/102/reviews/{review.Id}/response", answer, Json)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await bot.PostAsJsonAsync($"/internal/telegram/101/reviews/{review.Id}/response",
+            answer with { SelectedVariantId = Guid.NewGuid() }, Json)).StatusCode);
+        var receipt = await Post<ReviewReceipt>(bot, $"/internal/telegram/101/reviews/{review.Id}/response", answer);
+        Assert.Equal(receipt.ResponseId, (await Post<ReviewReceipt>(bot, $"/internal/telegram/101/reviews/{review.Id}/response", answer)).ResponseId);
+        Assert.Equal(HttpStatusCode.NoContent, (await bot.PostAsJsonAsync("/internal/telegram/101/lesson/exercises", new IssueExerciseRequest("word-match"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await bot.PostAsJsonAsync("/internal/telegram/999/lesson/exercises", new IssueExerciseRequest("missing-word"))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await bot.PostAsJsonAsync("/internal/telegram/101/lesson/exercises", new IssueExerciseRequest("unknown"))).StatusCode);
+        using var anonymous = f.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsJsonAsync("/internal/telegram/101/reviews/next", new { })).StatusCode);
+    }
 }
