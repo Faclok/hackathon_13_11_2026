@@ -37,7 +37,7 @@ Telegram бот → bot-db (PostgreSQL)
 
 1. Направьте DNS `A` запись `bashperevod.ru` на тот же публичный IP, что и `vinokurov-it.ru`. Если есть `AAAA`, она должна указывать на рабочий IPv6 этого сервера; иначе удалите её. `www` добавляйте только при наличии отдельной DNS записи.
 2. В Coolify выберите Git репозиторий `Faclok/hackathon_13_11_2026`, ветку `main`, стратегию **Docker Compose**, путь `/compose.yaml`.
-3. В Environment Variables задайте `POSTGRES_USER`, случайный `POSTGRES_PASSWORD` и отдельный случайный `INTERNAL_API_KEY`. Для генерации двух секретов можно дважды выполнить `openssl rand -hex 32`. `TELEGRAM_BOT_TOKEN` нужен только для работающего Telegram бота; при пустом значении контейнер остаётся в режиме ожидания. Три контейнера PostgreSQL используют раздельные базы и тома.
+3. В Environment Variables задайте случайный `POSTGRES_PASSWORD` и отдельный случайный `INTERNAL_API_KEY`. Для генерации двух секретов можно дважды выполнить `openssl rand -hex 32`. Роль PostgreSQL `app` задана в Compose. `TELEGRAM_BOT_TOKEN` нужен только для работающего Telegram бота; при пустом значении контейнер остаётся в режиме ожидания. Три контейнера PostgreSQL используют раздельные базы и тома.
 4. В Domains назначьте **сервису `nginx`** адрес `https://bashperevod.ru`, внутренний порт **80**. Удалите старую запись `https://bashperevod.ru:8088` у сервиса `caddy`: `8088` был портом хоста в прежней конфигурации, а не внутренним портом Nginx. Запись `www.bashperevod.ru` удалите, если она пока не нужна или не имеет DNS записи.
 5. После обновления исходников выполните Deploy. Проверьте логи сборки и адреса `https://bashperevod.ru/api/health` и `https://bashperevod.ru/api/lms/health`. Работающий маршрут `vinokurov-it.ru` не меняйте.
 
@@ -84,9 +84,9 @@ docker compose -f compose.yaml -f compose.standalone.yaml up -d --build
 ```bash
 git pull
 docker compose -f compose.yaml -f compose.host-caddy.yaml up -d --build
-docker compose exec -T main-db sh -c 'pg_dump -U "$POSTGRES_USER" main' > main-backup.sql
-docker compose exec -T lms-db sh -c 'pg_dump -U "$POSTGRES_USER" lms' > lms-backup.sql
-docker compose exec -T bot-db sh -c 'pg_dump -U "$POSTGRES_USER" bot' > bot-backup.sql
+docker compose exec -T main-db pg_dump -U app main > main-backup.sql
+docker compose exec -T lms-db pg_dump -U app lms > lms-backup.sql
+docker compose exec -T bot-db pg_dump -U app bot > bot-backup.sql
 ```
 
 Если вы использовали другое дополнение Compose, при обновлении повторите тот же набор `-f` файлов.

@@ -16,7 +16,7 @@ services:
     restart: unless-stopped
     environment:
       ASPNETCORE_URLS: http://+:8080
-      ConnectionStrings__Default: Host=main-db;Database=main;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      ConnectionStrings__Default: Host=main-db;Database=main;Username=app;Password=${POSTGRES_PASSWORD}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:?set INTERNAL_API_KEY in .env}
     depends_on:
       main-db:
@@ -27,7 +27,7 @@ services:
     restart: unless-stopped
     environment:
       ASPNETCORE_URLS: http://+:8080
-      ConnectionStrings__Default: Host=lms-db;Database=lms;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      ConnectionStrings__Default: Host=lms-db;Database=lms;Username=app;Password=${POSTGRES_PASSWORD}
       MAIN_API_URL: http://main-api:8080
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:?set INTERNAL_API_KEY in .env}
     depends_on:
@@ -43,7 +43,7 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:?set INTERNAL_API_KEY in .env}
       MAIN_API_URL: http://main-api:8080
-      ConnectionStrings__Default: Host=bot-db;Database=bot;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      ConnectionStrings__Default: Host=bot-db;Database=bot;Username=app;Password=${POSTGRES_PASSWORD}
     depends_on:
       main-api:
         condition: service_started
@@ -55,12 +55,12 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_DB: main
-      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_USER: app
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
     volumes:
-      - main_data:/var/lib/postgresql/data
+      - main_data_v2:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      test: ["CMD", "pg_isready", "-q"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -70,12 +70,12 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_DB: lms
-      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_USER: app
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
     volumes:
-      - lms_data:/var/lib/postgresql/data
+      - lms_data_v2:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      test: ["CMD", "pg_isready", "-q"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -85,17 +85,17 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_DB: bot
-      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_USER: app
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
     volumes:
-      - bot_data:/var/lib/postgresql/data
+      - bot_data_v2:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      test: ["CMD", "pg_isready", "-q"]
       interval: 5s
       timeout: 3s
       retries: 20
 
 volumes:
-  main_data:
-  lms_data:
-  bot_data:
+  main_data_v2:
+  lms_data_v2:
+  bot_data_v2:
