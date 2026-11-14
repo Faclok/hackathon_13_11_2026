@@ -59,6 +59,19 @@ INTERNAL_API_KEY=отдельный-длинный-случайный-секре
 STUDENT_PORTAL_URL=https://bashperevod.ru/telegram.html
 ```
 
+Если сервер не может подключиться к Telegram, задайте в `.env` доступный извне прокси:
+
+```dotenv
+TELEGRAM_HTTPS_PROXY=http://user:password@proxy.example:3128
+```
+
+Поддерживается также `socks5://user:password@host:port`. Прокси получает только контейнер
+`telegram-bot`; внутренний `http://main-api:8080` остаётся прямым. После изменения `.env`
+достаточно `docker compose up -d --no-deps --force-recreate telegram-bot`. Проверяйте
+`docker compose logs --tail=50 telegram-bot`. Если лог сообщает `Telegram bot is disabled`,
+проверьте, что `TELEGRAM_BOT_TOKEN` в `.env` сервера непустой. Не вставляйте токен в логи
+или публичные сообщения.
+
 Также нужны обычные настройки приложения: `POSTGRES_PASSWORD`, `JWT_SIGNING_KEY` и данные администратора первого запуска. Один `INTERNAL_API_KEY` Compose передаёт боту и ядру (`Telegram:InternalKey`). Вне Compose задайте эти настройки обоим процессам самостоятельно, а боту — `MAIN_API_URL` и `ConnectionStrings__Default`.
 
 ```sh

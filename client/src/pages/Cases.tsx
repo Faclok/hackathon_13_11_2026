@@ -34,9 +34,16 @@ export default function Cases() {
   const [quantity, setQuantity] = useState(1);
   const [contents, setContents] = useState<RewardCase | null>(null);
   const [animatedId, setAnimatedId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const toast = useToast();
   useEffect(() => {
-    getCases().then(setCases);
+    void useUserStore.getState().refreshProfile().catch((cause) =>
+      setError(cause instanceof Error ? cause.message : "Не удалось обновить баланс."),
+    );
+    getCases().then(setCases).catch((cause) =>
+      setError(cause instanceof Error ? cause.message : "Не удалось загрузить кейсы."),
+    );
   }, []);
   return (
     <>
@@ -70,10 +77,15 @@ export default function Cases() {
         </div>
         <button
           className="button button-primary full-width"
-          disabled={user.coins < quantity * KEY_PRICE}
-          onClick={() => {
-            if (buyKeys(quantity))
-              toast(`В твоём инвентаре +${keyCount(quantity)}`);
+          disabled={busy || user.coins < quantity * KEY_PRICE}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              if (await buyKeys(quantity)) toast(`В твоём инвентаре +${keyCount(quantity)}`);
+              else toast("Недостаточно монет");
+            } catch (cause) {
+              toast(cause instanceof Error ? cause.message : "Не удалось купить ключи.");
+            } finally { setBusy(false); }
           }}
         >
           {user.coins < quantity * KEY_PRICE
@@ -123,10 +135,15 @@ export default function Cases() {
             </button>
             <button
               className="button button-primary full-width"
-              disabled={user.caseKeys < 1 || !!opening}
-              onClick={() => {
-                const result = openCase(caseItem.id);
-                if (result) setAnimatedId(result.id);
+              disabled={busy || user.caseKeys < 1 || !!opening}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  const result = await openCase(caseItem.id);
+                  if (result) setAnimatedId(result.id);
+                } catch (cause) {
+                  toast(cause instanceof Error ? cause.message : "Не удалось открыть кейс.");
+                } finally { setBusy(false); }
               }}
             >
               {user.caseKeys < 1 ? "Нужен ключ" : "Открыть кейс"}
@@ -137,6 +154,7 @@ export default function Cases() {
       <p className="case-duplicate-note">
         Повторный предмет принесёт {DUPLICATE_COMPENSATION} монет.
       </p>
+      {error && <p role="alert">{error}</p>}
       <Link to="/inventory" className="button button-soft full-width">
         Мой инвентарь <Icon name="bag" size={18} />
       </Link>

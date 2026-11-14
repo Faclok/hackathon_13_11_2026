@@ -31,7 +31,7 @@ public sealed class CaseEvidence(CoreDbContext db)
     public static ResolutionResponse ToResponse(ResolutionRevision r) => new(r.Id, r.Revision, r.Kind, r.PrimaryVariantId, r.Accepted, r.Rejected, r.CreatedAt);
 }
 
-internal static class CaseWriteLock
+public static class CaseWriteLock
 {
     public static async Task Acquire(CoreDbContext db, CancellationToken ct)
     {

@@ -1212,6 +1212,97 @@ namespace BashkirSchool.Infrastructure.Migrations
                     b.ToTable("Outbox");
                 });
 
+            modelBuilder.Entity("BashkirSchool.Infrastructure.PlayerCaseOpening", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CaseId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("Compensation")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("DecorationId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<bool>("Duplicate")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset>("OpenedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ParticipantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParticipantId", "OpenedAt");
+
+                    b.ToTable("PlayerCaseOpenings");
+                });
+
+            modelBuilder.Entity("BashkirSchool.Infrastructure.PlayerState", b =>
+                {
+                    b.Property<Guid>("ParticipantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BackgroundId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("BossAnswers")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("BossRewarded")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("CaseKeys")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Coins")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("EquippedItemsJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("[]");
+
+                    b.Property<string>("FrameId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("HatId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateOnly?>("LastDailyRewardDay")
+                        .HasColumnType("date");
+
+                    b.Property<string>("OwnedJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("[]");
+
+                    b.Property<string>("PetId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("Xp")
+                        .HasColumnType("integer");
+
+                    b.HasKey("ParticipantId");
+
+                    b.ToTable("PlayerStates");
+                });
+
             modelBuilder.Entity("BashkirSchool.Infrastructure.RefreshCredential", b =>
                 {
                     b.Property<string>("Hash")
@@ -1606,6 +1697,24 @@ namespace BashkirSchool.Infrastructure.Migrations
                     b.HasOne("BashkirSchool.Infrastructure.Account", null)
                         .WithMany()
                         .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BashkirSchool.Infrastructure.PlayerCaseOpening", b =>
+                {
+                    b.HasOne("BashkirSchool.Domain.Participant", null)
+                        .WithMany()
+                        .HasForeignKey("ParticipantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BashkirSchool.Infrastructure.PlayerState", b =>
+                {
+                    b.HasOne("BashkirSchool.Domain.Participant", null)
+                        .WithOne()
+                        .HasForeignKey("BashkirSchool.Infrastructure.PlayerState", "ParticipantId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

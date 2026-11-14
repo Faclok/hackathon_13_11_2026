@@ -25,7 +25,11 @@ public sealed record AssignmentResponse(Guid Id, Guid CaseId, Guid VariantId, st
     public IReadOnlyList<ReviewOptionResponse> Options { get; init; } = [];
     public bool AllowCustom => true;
 }
-public sealed record ReviewOptionResponse(Guid Id, string Text);
+public sealed record ReviewOptionResponse(Guid Id, string Text)
+{
+    /// <summary>Current share of participants supporting this variant, in percent.</summary>
+    public int Votes { get; init; }
+}
 /// <summary>An opinion on the issued translation, without client supplied author or trust.</summary>
 public sealed record SubmitReviewRequest([property: JsonRequired] ReviewAction Action, string? Correction = null)
 {
@@ -46,6 +50,7 @@ public interface IReviewWorkflow
     Task<AssignmentResponse?> ReceiveAsync(Guid participant, CancellationToken cancellationToken);
     Task<AssignmentResponse?> ReceiveAsync(Guid participant, string kind, CancellationToken cancellationToken);
     Task<AssignmentResponse?> ReceiveAsync(Guid participant, string kind, IReadOnlyCollection<Guid> excludedCaseIds, CancellationToken cancellationToken);
+    Task<AssignmentResponse?> ReceiveBossAsync(Guid participant, CancellationToken cancellationToken);
     Task<ReviewReceipt> SubmitAsync(Guid participant, Guid assignment, SubmitReviewRequest request, CancellationToken cancellationToken);
     Task<CaseStatisticsResponse> StatisticsAsync(Guid participant, Guid caseId, CancellationToken cancellationToken);
 }

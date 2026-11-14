@@ -44,6 +44,8 @@ public sealed class CoreDbContext(DbContextOptions<CoreDbContext> options) : Ide
     public DbSet<ProfilePermission> Permissions => Set<ProfilePermission>();
     public DbSet<AuditEntry> Audit => Set<AuditEntry>();
     public DbSet<OutboxMessage> Outbox => Set<OutboxMessage>();
+    public DbSet<PlayerState> PlayerStates => Set<PlayerState>();
+    public DbSet<PlayerCaseOpening> PlayerCaseOpenings => Set<PlayerCaseOpening>();
     public DbSet<ResolutionRevision> Resolutions => Set<ResolutionRevision>();
     public DbSet<TrustAssessment> TrustAssessments => Set<TrustAssessment>();
     public DbSet<TrustContribution> TrustContributions => Set<TrustContribution>();
@@ -137,6 +139,18 @@ public sealed class CoreDbContext(DbContextOptions<CoreDbContext> options) : Ide
         b.Entity<DistributionPolicy>().HasIndex(x => x.Version).IsUnique();
         b.Entity<OutboxMessage>().HasIndex(x => x.ResponseId).IsUnique();
         b.Entity<OutboxMessage>().HasIndex(x => x.ProcessedAt);
+        b.Entity<PlayerState>().HasKey(x => x.ParticipantId);
+        b.Entity<PlayerState>().HasOne<Participant>().WithOne().HasForeignKey<PlayerState>(x => x.ParticipantId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<PlayerState>().Property(x => x.OwnedJson).HasDefaultValue("[]");
+        b.Entity<PlayerState>().Property(x => x.EquippedItemsJson).HasDefaultValue("[]");
+        b.Entity<PlayerState>().Property(x => x.BackgroundId).HasMaxLength(100);
+        b.Entity<PlayerState>().Property(x => x.FrameId).HasMaxLength(100);
+        b.Entity<PlayerState>().Property(x => x.HatId).HasMaxLength(100);
+        b.Entity<PlayerState>().Property(x => x.PetId).HasMaxLength(100);
+        b.Entity<PlayerCaseOpening>().HasOne<Participant>().WithMany().HasForeignKey(x => x.ParticipantId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<PlayerCaseOpening>().Property(x => x.CaseId).HasMaxLength(100);
+        b.Entity<PlayerCaseOpening>().Property(x => x.DecorationId).HasMaxLength(100);
+        b.Entity<PlayerCaseOpening>().HasIndex(x => new { x.ParticipantId, x.OpenedAt });
         foreach (var entity in b.Model.GetEntityTypes())
             foreach (var property in entity.GetProperties().Where(p => p.ClrType == typeof(decimal)))
             {

@@ -47,6 +47,64 @@ public static class LmsCatalogEndpoints
             var item = await db.Cases.AsNoTracking().SingleOrDefaultAsync(x => x.Id == caseId, ct);
             return item is null ? Results.NotFound() : Results.Ok(await ReadTranslation(item, db, evidence, ct));
         });
+        // LMS has already checked the class membership and task. A student's answer is
+        // evidence for a variant; it never replaces the fragment or an expert decision.
+        api.MapPost("/translations/{caseId:guid}/student-answer", async (Guid caseId, StudentAnswerInput input,
+            ClaimsPrincipal principal, HttpRequest request, IConfiguration configuration, CoreDbContext db, TimeProvider clock,
+            PlayerEconomy economy, CancellationToken ct) =>
+        {
+            if (!LmsAuthorized(request, configuration)) return Results.Unauthorized();
+            if (string.IsNullOrWhiteSpace(input.Text) || input.Text.Trim().Length > 5000)
+                return Results.BadRequest(new { title = "A translation of up to 5000 characters is required." });
+            if (input.TaskId == Guid.Empty) return Results.BadRequest(new { title = "Task ID is required." });
+            var actor = Guid.Parse(principal.FindFirstValue("sub")!);
+            if (!await db.Participants.AnyAsync(x => x.Id == actor, ct)) return Results.Forbid();
+            await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+            await CaseWriteLock.Acquire(db, ct);
+            var translationCase = await db.Cases.SingleOrDefaultAsync(x => x.Id == caseId, ct);
+            if (translationCase is null) return Results.NotFound();
+            var text = input.Text.Trim();
+            var answerKey = $"{caseId}:{text}";
+            var latest = await db.Audit.Where(x => x.ActorId == actor && x.TargetId == input.TaskId && x.Action == "lms.student-answer")
+                .OrderByDescending(x => x.At).ThenByDescending(x => x.Id).FirstOrDefaultAsync(ct);
+            if (latest?.Reason == answerKey)
+            {
+                var existing = await db.Variants.FirstAsync(x => x.CaseId == caseId && x.Text == text, ct);
+                return Results.Ok(new { variantId = existing.Id, archived = translationCase.ExpertClosed });
+            }
+            var variant = await db.Variants.FirstOrDefaultAsync(x => x.CaseId == caseId && x.Text == text, ct);
+            if (variant is null)
+            {
+                variant = TranslationVariant.Create(caseId, text, false, createdBy: actor, createdAt: clock.GetUtcNow());
+                db.Variants.Add(variant);
+            }
+            if (!translationCase.ExpertClosed)
+            {
+                var policy = await db.Policies.OrderByDescending(x => x.Version).FirstAsync(ct);
+                var enrollment = await (from e in db.Enrollments where e.ParticipantId == actor
+                                        join c in db.Classes on e.ClassId equals c.Id
+                                        select new { ClassId = c.Id, c.SchoolId }).FirstOrDefaultAsync(ct);
+                var now = clock.GetUtcNow();
+                var assignment = ReviewAssignment.Issue(actor, translationCase, enrollment?.SchoolId, enrollment?.ClassId,
+                    policy.Id, now, TimeSpan.FromMinutes(policy.AssignmentMinutes));
+                var shown = await db.Variants.SingleAsync(x => x.Id == translationCase.ShownVariantId, ct);
+                var action = text == shown.Text ? ReviewAction.Confirm : ReviewAction.Correct;
+                var trust = await db.Participants.Where(x => x.Id == actor).Select(x => x.Trust).SingleAsync(ct);
+                var response = ReviewResponse.Submit(assignment, actor, action, action == ReviewAction.Correct ? text : null,
+                    trust, now, false);
+                db.Assignments.Add(assignment);
+                db.Responses.Add(response);
+                db.Judgments.AddRange(response.Judgments(assignment.ShownVariantId,
+                    action == ReviewAction.Correct ? variant.Id : null));
+                db.Outbox.Add(new() { CaseId = caseId, ResponseId = response.Id, CreatedAt = now });
+                await economy.RewardReviewAsync(actor, false, ct);
+            }
+            db.Audit.Add(new() { ActorId = actor, TargetId = input.TaskId, Action = "lms.student-answer",
+                Reason = answerKey, At = clock.GetUtcNow() });
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            return Results.Ok(new { variantId = variant.Id, archived = translationCase.ExpertClosed });
+        });
         api.MapPost("/teacher/translations", async (TeacherCandidateInput input, ClaimsPrincipal principal,
             HttpRequest request, IConfiguration configuration, CoreDbContext db, CancellationToken ct) =>
         {
@@ -112,12 +170,24 @@ public static class LmsCatalogEndpoints
             resolution?.Kind == ResolutionKind.Community ? "community" : "pending";
         var accepted = resolution?.Accepted.Select(id => variants.Single(x => x.Id == id).Text).ToArray() ?? [];
         var requested = await db.Audit.AsNoTracking().AnyAsync(x => x.TargetId == item.Id && x.Action == "lms.expert.requested", ct);
-        return new(item.Id, fragment.Text, selected.Text, fragment.LanguagePair, rating, status, accepted, requested);
+        return new(item.Id, fragment.Text, selected.Text, fragment.LanguagePair, rating, status, accepted, requested)
+        {
+            TopTranslations = statistics.Variants.Where(x => variants.Any(v => v.Id == x.VariantId && v.Text != ""))
+                .OrderByDescending(x => x.Supports).ThenByDescending(x => x.VariantId == item.ShownVariantId)
+                .ThenBy(x => x.VariantId).Take(4)
+                .Select(x => new PopularTranslation(x.VariantId, variants.Single(v => v.Id == x.VariantId).Text,
+                    x.Supports, (int)Math.Round((x.SupportRatio ?? 0m) * 100m))).ToArray()
+        };
     }
 
     private sealed record CatalogRow(Guid Id, string SourceText, string TranslationText, string LanguagePair, int Rating,
-        string Status, string[] AcceptedTranslations, bool ExpertRequested);
+        string Status, string[] AcceptedTranslations, bool ExpertRequested)
+    {
+        public PopularTranslation[] TopTranslations { get; init; } = [];
+    }
+    private sealed record PopularTranslation(Guid Id, string Text, int Supports, int Votes);
     private sealed record TeacherCandidateInput(Guid ExternalId, string SourceText, string TranslationText, string LanguagePair);
+    private sealed record StudentAnswerInput(Guid TaskId, string Text);
     private sealed record ExpertRequestInput(string Note);
     private static bool LmsAuthorized(HttpRequest request, IConfiguration configuration)
     {

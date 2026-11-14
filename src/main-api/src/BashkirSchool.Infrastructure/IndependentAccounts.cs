@@ -4,11 +4,39 @@ using BashkirSchool.Domain;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace BashkirSchool.Infrastructure;
 
-public sealed class IndependentAccounts(CoreDbContext db, UserManager<Account> users, IPermissionChecker permissions, TimeProvider clock)
+public sealed class IndependentAccounts(CoreDbContext db, UserManager<Account> users, IPermissionChecker permissions,
+    TimeProvider clock, Sessions sessions, IConfiguration configuration)
 {
+    public async Task<AccessTokenResponse> UsernameLoginAsync(string username, CancellationToken ct)
+    {
+        if (!configuration.GetValue("Demo:UsernameLoginEnabled", false)) throw new AccessDeniedException();
+        username = Guard.Text(username, "username", 20);
+        if (username.Length < 3) throw new DomainException("Username must contain at least three characters.");
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+        await CaseWriteLock.Acquire(db, ct);
+        var account = await users.FindByNameAsync(username);
+        if (account is null)
+        {
+            account = new Account { Id = Guid.NewGuid(), UserName = username, SelfRegistered = true };
+            Check(await users.CreateAsync(account));
+            db.Participants.Add(new() { Id = account.Id });
+            db.PlayerStates.Add(PlayerState.ForNewRegistration(account.Id));
+            db.Access.AddRange(new AccessAssignment { SubjectId = account.Id, ProfileId = "account", Scope = AccessScope.Own },
+                new AccessAssignment { SubjectId = account.Id, ProfileId = "participant", Scope = AccessScope.Own });
+            db.Audit.Add(new() { ActorId = account.Id, TargetId = account.Id,
+                Action = "account.demo.registered", At = clock.GetUtcNow() });
+            await db.SaveChangesAsync(ct);
+        }
+        if (!account.Active || !await db.Participants.AnyAsync(x => x.Id == account.Id, ct))
+            throw new AccessDeniedException();
+        var token = await sessions.OpenAsync(account, ct);
+        await transaction.CommitAsync(ct);
+        return token;
+    }
     public async Task<AccountResponse> RegisterAsync(RegisterAccountRequest request, CancellationToken ct)
     {
         Guard.Text(request.Username, "username", 100); Guard.Text(request.Password, "password", 1000);
@@ -17,6 +45,7 @@ public sealed class IndependentAccounts(CoreDbContext db, UserManager<Account> u
         var account = new Account { Id = Guid.NewGuid(), UserName = request.Username, SelfRegistered = true };
         Check(await users.CreateAsync(account, request.Password));
         db.Participants.Add(new() { Id = account.Id });
+        db.PlayerStates.Add(PlayerState.ForNewRegistration(account.Id));
         db.Access.AddRange(new AccessAssignment { SubjectId = account.Id, ProfileId = "account", Scope = AccessScope.Own },
             new AccessAssignment { SubjectId = account.Id, ProfileId = "participant", Scope = AccessScope.Own });
         db.Audit.Add(new() { ActorId = account.Id, TargetId = account.Id, Action = "account.self.registered", At = clock.GetUtcNow() });

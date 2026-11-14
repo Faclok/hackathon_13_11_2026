@@ -29,9 +29,16 @@ export default function Inventory() {
   const [catalog, setCatalog] = useState<Decoration[]>([]);
   const [tab, setTab] = useState<string>("all");
   const [info, setInfo] = useState<Decoration | null>(null);
+  const [error, setError] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
   const toast = useToast();
   useEffect(() => {
-    getDecorations().then(setCatalog);
+    void useUserStore.getState().refreshProfile().catch((cause) =>
+      setError(cause instanceof Error ? cause.message : "Не удалось обновить профиль."),
+    );
+    getDecorations().then(setCatalog).catch((cause) =>
+      setError(cause instanceof Error ? cause.message : "Не удалось загрузить инвентарь."),
+    );
   }, []);
   const owned = catalog.filter((item) =>
     user.ownedDecorationIds.includes(item.id),
@@ -43,6 +50,7 @@ export default function Inventory() {
         Инвентарь
       </PageTitle>
       <EconomyBalance />
+      {error && <p role="alert">{error}</p>}
       <section
         className="shop-preview personal-card inventory-preview"
         aria-label="Текущее оформление"
@@ -119,19 +127,20 @@ export default function Inventory() {
                 </button>
                 <button
                   className={`button ${equipped ? "button-soft" : "button-primary"} full-width`}
-                  disabled={equipped && !canRemove}
-                  onClick={() => {
-                    if (canRemove) {
-                      unequip(item.id);
-                      toast("Предмет снят");
-                    } else {
-                      equip(item.id);
-                      toast(
-                        item.type === "item"
-                          ? "Предмет размещён на фоне"
-                          : "Образ обновлён",
-                      );
-                    }
+                  disabled={!!busyId || (equipped && !canRemove)}
+                  onClick={async () => {
+                    setBusyId(item.id);
+                    try {
+                      if (canRemove) {
+                        await unequip(item.id);
+                        toast("Предмет снят");
+                      } else {
+                        await equip(item.id);
+                        toast(item.type === "item" ? "Предмет размещён на фоне" : "Образ обновлён");
+                      }
+                    } catch (cause) {
+                      toast(cause instanceof Error ? cause.message : "Не удалось обновить образ.");
+                    } finally { setBusyId(null); }
                   }}
                 >
                   {label}

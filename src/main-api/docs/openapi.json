@@ -431,6 +431,45 @@
         }
       }
     },
+    "/auth/username": {
+      "post": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UsernameLoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessTokenResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/auth/register": {
       "post": {
         "tags": [
@@ -584,6 +623,294 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MyProfileResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or session revoked."
+          },
+          "403": {
+            "description": "Permission or resource scope denied."
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/player/profile": {
+      "get": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerProfile"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or session revoked."
+          },
+          "403": {
+            "description": "Permission or resource scope denied."
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/player/decorations": {
+      "get": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Authentication required or session revoked."
+          },
+          "403": {
+            "description": "Permission or resource scope denied."
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/player/cases": {
+      "get": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Authentication required or session revoked."
+          },
+          "403": {
+            "description": "Permission or resource scope denied."
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/player/cases/history": {
+      "get": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PlayerCaseOpening"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or session revoked."
+          },
+          "403": {
+            "description": "Permission or resource scope denied."
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/player/keys": {
+      "post": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuyCaseKeysRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerProfile"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or session revoked."
+          },
+          "403": {
+            "description": "Permission or resource scope denied."
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/player/cases/{caseId}/open": {
+      "post": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerCaseOpening"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or session revoked."
+          },
+          "403": {
+            "description": "Permission or resource scope denied."
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/player/equipment/{itemId}": {
+      "put": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "parameters": [
+          {
+            "name": "itemId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EquipDecorationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerProfile"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or session revoked."
+          },
+          "403": {
+            "description": "Permission or resource scope denied."
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/leaderboard": {
+      "get": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "parameters": [
+          {
+            "name": "period",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "metric",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PlayerLeaderboardEntry"
+                  }
                 }
               }
             }
@@ -2275,6 +2602,69 @@
         ]
       }
     },
+    "/api/boss/access": {
+      "get": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BossAccessResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or session revoked."
+          },
+          "403": {
+            "description": "Permission or resource scope denied."
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/boss/next": {
+      "post": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssignmentResponse"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Authentication required or session revoked."
+          },
+          "403": {
+            "description": "Permission or resource scope denied."
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/reviews/{assignmentId}/response": {
       "post": {
         "tags": [
@@ -3247,6 +3637,50 @@
         ]
       }
     },
+    "/api/lms-source/translations/{caseId}/student-answer": {
+      "post": {
+        "tags": [
+          "BashkirSchool.Host"
+        ],
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StudentAnswerInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Authentication required or session revoked."
+          },
+          "403": {
+            "description": "Permission or resource scope denied."
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/lms-source/teacher/translations": {
       "post": {
         "tags": [
@@ -3536,6 +3970,53 @@
           "fragmentId": {
             "type": "string",
             "format": "uuid"
+          }
+        },
+        "additionalProperties": false
+      },
+      "BossAccessResponse": {
+        "required": [
+          "tasksSolved",
+          "streak",
+          "canAccess"
+        ],
+        "type": "object",
+        "properties": {
+          "tasksSolved": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "streak": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "canAccess": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "BuyCaseKeysRequest": {
+        "required": [
+          "quantity"
+        ],
+        "type": "object",
+        "properties": {
+          "quantity": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         },
         "additionalProperties": false
@@ -3970,6 +4451,18 @@
           },
           "settings": {
             "$ref": "#/components/schemas/DistributionPolicyRequest"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EquipDecorationRequest": {
+        "required": [
+          "equipped"
+        ],
+        "type": "object",
+        "properties": {
+          "equipped": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false
@@ -4756,6 +5249,207 @@
         },
         "additionalProperties": false
       },
+      "PlayerCaseOpening": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "participantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "caseId": {
+            "type": "string"
+          },
+          "decorationId": {
+            "type": "string"
+          },
+          "duplicate": {
+            "type": "boolean"
+          },
+          "compensation": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "openedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "PlayerLeaderboardEntry": {
+        "required": [
+          "user",
+          "value",
+          "rank"
+        ],
+        "type": "object",
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/PlayerProfile"
+          },
+          "value": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "rank": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "PlayerProfile": {
+        "required": [
+          "id",
+          "nick",
+          "level",
+          "xp",
+          "coins",
+          "streak",
+          "tasksSolved",
+          "accuracy",
+          "trophyIds",
+          "ownedDecorationIds",
+          "backgroundId",
+          "frameId",
+          "hatId",
+          "petId",
+          "caseKeys",
+          "equippedItemIds"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "nick": {
+            "type": "string"
+          },
+          "level": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "xp": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "coins": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "streak": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "tasksSolved": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "accuracy": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "trophyIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ownedDecorationIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "backgroundId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "frameId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "hatId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "petId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "caseKeys": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "equippedItemIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "langPair": {
+            "type": "string",
+            "default": "ba-ru"
+          },
+          "avatarUrl": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
       "ProblemDetails": {
         "type": "object",
         "properties": {
@@ -5007,6 +5701,14 @@
           },
           "text": {
             "type": "string"
+          },
+          "votes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         },
         "additionalProperties": false
@@ -5130,6 +5832,23 @@
               "string"
             ],
             "format": "double"
+          }
+        },
+        "additionalProperties": false
+      },
+      "StudentAnswerInput": {
+        "required": [
+          "taskId",
+          "text"
+        ],
+        "type": "object",
+        "properties": {
+          "taskId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "text": {
+            "type": "string"
           }
         },
         "additionalProperties": false
@@ -5279,6 +5998,18 @@
           },
           "source": {
             "$ref": "#/components/schemas/SourceReference"
+          }
+        },
+        "additionalProperties": false
+      },
+      "UsernameLoginRequest": {
+        "required": [
+          "username"
+        ],
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string"
           }
         },
         "additionalProperties": false

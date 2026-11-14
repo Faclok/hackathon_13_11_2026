@@ -56,6 +56,12 @@ public sealed class ReviewAssignment
         if (Completed) throw new DomainException("Assignment has already been completed.");
         Kind = "translation-create";
     }
+
+    public void SetBoss()
+    {
+        if (Kind != "translation-choice" || Completed) throw new DomainException("Boss needs translation choices.");
+        Kind = "boss";
+    }
 }
 
 public sealed class ReviewResponse

@@ -1,14 +1,14 @@
 import {
   bossPhrases,
   dailyFragments,
-  leaderboardUsers,
   lessons,
 } from "../mocks/data";
 import type { DailyAnswer, User } from "../types";
 import { schoolDay, dayNumber } from "../utils/calendar";
 import { decorationCatalog, rewardCases } from "../mocks/customization";
 import { canAccessBoss } from "../utils/ranks";
-// Replace mock implementations with fetch calls when the API is connected.
+import { apiRequest } from "./session";
+// Boss and Learn keep their existing local data until those screens are in scope.
 export const getLessons = async () => lessons;
 export const getDaily = async () =>
   dailyFragments[dayNumber(schoolDay()) % dailyFragments.length];
@@ -19,28 +19,20 @@ export const getBossPhrases = async (
   if (!canAccessBoss(user)) throw new Error("BOSS_RANK_REQUIRED");
   return bossPhrases;
 };
-export const getDecorations = async () => decorationCatalog;
-export const getCases = async () => rewardCases;
+export const getDecorations = async () => {
+  const catalog = await apiRequest<{ id: string }[]>("/api/player/decorations");
+  const ids = new Set(catalog.map((item) => item.id));
+  return decorationCatalog.filter((item) => ids.has(item.id));
+};
+export const getCases = async () => {
+  const catalog = await apiRequest<{ id: string }[]>("/api/player/cases");
+  const ids = new Set(catalog.map((item) => item.id));
+  return rewardCases.filter((item) => ids.has(item.id));
+};
 export const getLeaderboard = async (
-  user: User,
+  _user: User,
   period: "global" | "monthly",
   metric: "tasks" | "streak",
-) =>
-  [...leaderboardUsers, user]
-    .map((entry, i) => ({
-      user: entry,
-      value:
-        metric === "streak"
-          ? period === "global"
-            ? entry.streak
-            : Math.min(entry.streak, Number(schoolDay().slice(-2)))
-          : period === "global"
-            ? entry.tasksSolved
-            : Math.round(entry.tasksSolved * (0.25 + (i % 4) * 0.15)),
-    }))
-    .sort(
-      (a, b) =>
-        b.value - a.value ||
-        Number(b.user.id === user.id) - Number(a.user.id === user.id),
-    )
-    .map((entry, i) => ({ ...entry, rank: i + 1 }));
+) => apiRequest<{ user: User; value: number; rank: number }[]>(
+  `/api/leaderboard?period=${period}&metric=${metric}`,
+);

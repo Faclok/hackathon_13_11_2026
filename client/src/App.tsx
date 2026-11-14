@@ -19,7 +19,10 @@ import { Leaderboard, Login, NotFound, Profile } from "./pages/Community";
 import "./index.css";
 
 function AuthGuard() {
-  return useUserStore((s) => s.user) ? (
+  const ready = useUserStore((s) => s.ready);
+  const user = useUserStore((s) => s.user);
+  if (!ready) return <div className="school-app">Загружаем профиль…</div>;
+  return user ? (
     <Outlet />
   ) : (
     <Navigate to="/login" replace />
@@ -27,6 +30,7 @@ function AuthGuard() {
 }
 export default function App() {
   useEffect(() => {
+    void useUserStore.getState().bootstrap();
     document.title = "Башкирская языковая школа";
     document
       .querySelector('meta[name="theme-color"]')

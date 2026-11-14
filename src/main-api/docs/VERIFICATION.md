@@ -1,5 +1,21 @@
 # Проверка школьного MVP ядра
 
+## Слияние уровней и экономики игрока — 14 ноября 2026
+
+Текущий итог main-api: **113 пройдено, 0 ошибок, 1 пропущен** (настоящий Silero без настроенной модели). PostgreSQL-проверки включены на отдельном временном кластере `127.0.0.1:55436`; каждая создаёт и удаляет только свою тестовую базу. LMS: **5 пройдено, 0 ошибок, 0 пропусков**. TRX `merge-final.trx` проверен: total=114, executed=passed=113, failed=0; `merge-lms.trx`: passed=5, failed=0. Ниже сохранены исторические запуски.
+
+Сборка `dotnet build BashkirSchool.slnx --no-restore --no-incremental -v:q`: 0 предупреждений/ошибок. Полный запуск из `src/main-api`: `dotnet test tests/BashkirSchool.Tests/BashkirSchool.Tests.csproj --no-build --logger 'trx;LogFileName=merge-final.trx' --results-directory ../../.data/merge-results -v:q`, с `BASHKIR_TEST_POSTGRES` на тестовый кластер и `Logging__EventLog__LogLevel__Default=None`. LMS из корня: `dotnet test src/lms-api.tests/LmsApi.Tests.csproj --no-restore --logger 'trx;LogFileName=merge-lms.trx' --results-directory .data/merge-results -v:q`.
+
+| Requirement | Evidence |
+| --- | --- |
+| Последняя миграция содержит общую модель экономики и уровней, без дневных сущностей и повторного создания таблиц | `LatestMigrationIncludesEconomyAndLevelsWithoutResurrectingDailyEntities` |
+| Обновление версии экономики сохраняет баланс и добавляет уровни — настоящий PostgreSQL | `EconomyDeploymentUpgradesToMergedLevelsWithoutLosingBalance` |
+| Версия уровней применяет ранее отсутствовавшую миграцию экономики, сохраняя прогресс — настоящий PostgreSQL | `LevelDeploymentAppliesEarlierEconomyMigrationWithoutLosingProgress` |
+| Маршруты игрока используют боссов за пять уровней; три ответа дают однократную награду | `PlayerBossRoutesUseFiveLevelCreditsAndRewardThreeAnswersExactlyOnce` |
+| Рейтинг считает правильные учебные вопросы, исключая ошибки и повторы HTTP | `LeaderboardCountsCorrectLevelQuestionsAndIgnoresFailedAndReplayedAttempts` |
+
+`MergePlayerEconomyAndLevels` фиксирует объединённый TargetModel без SQL-изменений таблиц. Исправлена историческая подготовка `MigrationPreservesAccountsAndEnforcesOnePendingInvitationPerClass`: до обновления создаются только существующие на тот момент поля аккаунта; все прежние проверки сохранены. Этот сценарий, архив дневных уроков и остальные PostgreSQL-проверки прошли. OpenAPI повторно получен с локального Host и содержит `/learning/*`, профиль игрока и актуальные DTO без дневных маршрутов.
+
 ## Удаление дневного сценария — 14 ноября 2026
 
 Текущий итог: **94 пройдено, 0 ошибок, 9 пропущено**. `retirement-final.trx` проверен отдельно: total=103, executed=passed=94, failed=0, девять `NotExecuted` — 8 проверок PostgreSQL без настроенного сервера и 1 настоящий Silero без модели/Python. Ниже сохранены исторические результаты до очистки.
