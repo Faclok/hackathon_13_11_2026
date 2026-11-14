@@ -87,6 +87,8 @@ function selectActor(id) {
   for (const target of ['variants', 'exercises', 'sessions', 'lms-lessons', 'access-list', 'queue']) $(`#${target}`).replaceChildren();
   $('#case-view').textContent = 'Откройте случай под текущим экспертом.';
   show('profile-result', 'Нажмите «Мой профиль», чтобы прочитать актуальные данные.');
+  for (const target of ['review-result', 'expert-result', 'learning-result', 'lms-result', 'manage-result', 'directory-result']) show(target, 'Прочитайте данные под выбранным аккаунтом.');
+  $('#setup-token').value = '';
 }
 function remember(username, session) {
   const known = state.actors.find(item => item.username === username);
@@ -184,7 +186,7 @@ const actions = {
   async profile() { show('profile-result', await request('/api/me')); },
   async refresh() { await refresh(requireActor()); show('profile-result', 'Сессия обновлена, refresh-секрет заменён.'); },
   async logout() { const current = requireActor(); await request(`/api/sessions/${current.sessionId}`, { method: 'DELETE' }); removeActor(current); },
-  forget() { state = freshState(); save(); context({ schoolId: '', classId: '', caseId: '', accountId: '' }); selectActor(''); show('manage-result', 'Локальные сессии забыты. Для отзыва на сервере используйте управление сессиями.'); },
+  forget() { state = freshState(); save(); context({ schoolId: '', classId: '', caseId: '', accountId: '' }); selectActor(''); document.querySelectorAll('input[type="password"]').forEach(item => { item.value = ''; }); $('#log').textContent = ''; show('manage-result', 'Локальные сессии забыты. Для отзыва на сервере используйте управление сессиями.'); },
   'clear-log'() { $('#log').textContent = ''; },
   async prepare(values) {
     const owner = requireActor(); const lines = []; const done = (label, value) => { lines.push(`${label}: ${value}`); show('prepare-result', lines.join('\n')); };
