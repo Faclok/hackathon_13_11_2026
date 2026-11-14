@@ -158,9 +158,9 @@ api.MapGet("/translations/export", (ClaimsPrincipal user, int? offset, int? limi
 api.MapGet("/exercises/kinds", (ExerciseRegistry registry) => registry.Kinds)
     .WithName("ListExerciseKinds").WithSummary("Supported learning exercise kinds and answer schema versions.")
     .Produces<IReadOnlyList<ExerciseKindResponse>>();
-api.MapPost("/vocabulary", (ClaimsPrincipal user, DeliverVocabularyRequest request, LearningMaterials materials, CancellationToken ct) =>
-    materials.DeliverAsync(Subject(user), request, ct))
-    .WithName("DeliverVocabulary").WithSummary("Idempotently import prepared word pairs as an authorized content producer.")
+api.MapPost("/vocabulary", (DeliverVocabularyRequest request, LearningMaterials materials, CancellationToken ct) =>
+    materials.DeliverAsync(request, ct))
+    .WithName("DeliverVocabulary").WithSummary("Idempotently import prepared word pairs as an authenticated user.")
     .Produces<VocabularyDeliveryResponse>().ProducesProblem(400);
 api.MapPost("/cases/{caseId:guid}/audio", (ClaimsPrincipal user, Guid caseId, AudioPreparation audio, CancellationToken ct) =>
     audio.PrepareAsync(Subject(user), caseId, ct))

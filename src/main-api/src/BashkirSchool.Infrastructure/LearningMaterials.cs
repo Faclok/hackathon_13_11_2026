@@ -7,11 +7,11 @@ using Microsoft.Extensions.Configuration;
 
 namespace BashkirSchool.Infrastructure;
 
-public sealed class LearningMaterials(CoreDbContext db, IPermissionChecker permissions)
+public sealed class LearningMaterials(CoreDbContext db)
 {
-    public async Task<VocabularyDeliveryResponse> DeliverAsync(Guid actor, DeliverVocabularyRequest request, CancellationToken ct)
+    public async Task<VocabularyDeliveryResponse> DeliverAsync(DeliverVocabularyRequest request, CancellationToken ct)
     {
-        if (!await permissions.HasAsync(actor, "content.deliver", AccessScope.Own, actor, ct)) throw new AccessDeniedException();
+        // Temporary CSV uploader: the endpoint requires a session, without a producer role.
         var pair = Guard.Text(request.LanguagePair, "languagePair", 7);
         var languages = pair.Split('-');
         if (languages.Length != 2 || languages.Any(x => x.Length is < 2 or > 3 || !x.All(char.IsAsciiLetterLower)) || languages[0] == languages[1])

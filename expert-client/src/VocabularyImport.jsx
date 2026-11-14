@@ -50,10 +50,7 @@ export default function VocabularyImport({ api }) {
             })
           });
         } catch (issue) {
-          const message = issue.status === 403
-            ? 'У аккаунта нет права загрузки словаря (content.deliver). Используйте аккаунт поставщика данных или администратора с этим правом.'
-            : issue.message;
-          throw new Error(`Строки ${batch[0].line}–${batch.at(-1).line}: ${message}`);
+          throw new Error(`Строки ${batch[0].line}–${batch.at(-1).line}: ${issue.message}`);
         }
         done += batch.length;
         if (!stop.current) setProgress({ done, total });
