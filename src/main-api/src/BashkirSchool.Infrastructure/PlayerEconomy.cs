@@ -9,18 +9,25 @@ namespace BashkirSchool.Infrastructure;
 public sealed class PlayerState
 {
     public const int RegistrationBonusCoins = 50;
+    public const int ProfileCompletionBonusCoins = 50;
 
-    public static PlayerState ForNewRegistration(Guid participantId) => new()
+    public static PlayerState ForExistingParticipant(Guid participantId) => new()
     {
         ParticipantId = participantId,
-        Coins = RegistrationBonusCoins,
         OwnedJson = JsonSerializer.Serialize(RewardCatalog.Items.Where(x => x.IsDefault).Select(x => x.Id)),
         BackgroundId = "bg_default"
     };
+    public static PlayerState ForNewRegistration(Guid participantId)
+    {
+        var state = ForExistingParticipant(participantId);
+        state.Coins = RegistrationBonusCoins;
+        return state;
+    }
 
     public Guid ParticipantId { get; set; }
     public int Xp { get; set; }
     public int Coins { get; set; }
+    public bool ProfileCompletionRewarded { get; set; }
     public int CaseKeys { get; set; }
     public int BossAnswers { get; set; }
     public bool BossRewarded { get; set; }

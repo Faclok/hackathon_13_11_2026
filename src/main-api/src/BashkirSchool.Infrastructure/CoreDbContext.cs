@@ -145,6 +145,7 @@ public sealed class CoreDbContext(DbContextOptions<CoreDbContext> options) : Ide
         b.Entity<OutboxMessage>().HasIndex(x => x.ProcessedAt);
         b.Entity<PlayerState>().HasKey(x => x.ParticipantId);
         b.Entity<PlayerState>().HasOne<Participant>().WithOne().HasForeignKey<PlayerState>(x => x.ParticipantId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<PlayerState>().Property(x => x.ProfileCompletionRewarded).HasDefaultValue(false);
         b.Entity<PlayerState>().Property(x => x.OwnedJson).HasDefaultValue("[]");
         b.Entity<PlayerState>().Property(x => x.EquippedItemsJson).HasDefaultValue("[]");
         b.Entity<PlayerState>().Property(x => x.BackgroundId).HasMaxLength(100);

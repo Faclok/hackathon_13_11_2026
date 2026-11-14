@@ -37,6 +37,30 @@ public sealed class IndependentAccountTests
     }
 
     [Fact]
+    public async Task CompletingProfilePersistsNamesAndAwardsCoinsOnlyOnce()
+    {
+        using var f = new CoreFactory(); using var admin = await f.Bootstrap(); using var person = f.CreateClient();
+        var account = await Post<AccountResponse>(person, "/auth/register", new RegisterAccountRequest("profile-user", Password));
+        await Login(person, account.Username);
+        var incomplete = await person.PutAsJsonAsync("/api/me", new UpdateMyProfileRequest("Айгуль", null));
+        Assert.Equal(HttpStatusCode.BadRequest, incomplete.StatusCode);
+        var first = await person.PutAsJsonAsync("/api/me", new UpdateMyProfileRequest("  Айгуль  ", " Иванова "));
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        var completed = await first.Content.ReadFromJsonAsync<MyProfileResponse>();
+        Assert.Equal("Айгуль Иванова", completed!.DisplayName);
+        Assert.Equal(50, completed.BonusCoinsAwarded);
+        Assert.Equal(100, (await person.GetFromJsonAsync<PlayerProfile>("/api/player/profile"))!.Coins);
+        var repeat = await person.PutAsJsonAsync("/api/me", new UpdateMyProfileRequest("Айгуль", "Иванова"));
+        Assert.Equal(0, (await repeat.Content.ReadFromJsonAsync<MyProfileResponse>())!.BonusCoinsAwarded);
+        await Login(person, account.Username);
+        Assert.Equal("Айгуль Иванова", (await person.GetFromJsonAsync<MyProfileResponse>("/api/me"))!.DisplayName);
+        Assert.Equal(100, (await person.GetFromJsonAsync<PlayerProfile>("/api/player/profile"))!.Coins);
+        using var scope = f.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<CoreDbContext>();
+        Assert.True((await db.PlayerStates.SingleAsync(x => x.ParticipantId == account.Id)).ProfileCompletionRewarded);
+    }
+
+    [Fact]
     public async Task RegistrationRejectsWeakPasswordDuplicateLoginAndPrivilegeInjectionWithoutPartialAccount()
     {
         using var f = new CoreFactory(); using var admin = await f.Bootstrap(); using var person = f.CreateClient();

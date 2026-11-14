@@ -74,10 +74,11 @@ public static class TeacherEndpoints
             var user = await Identity(request, factory);
             if (user is null) return Results.Unauthorized();
             if (await OwnClass(db, id, user.Id) is null) return Results.NotFound();
-            var members = await db.ClassMembers.AsNoTracking().Where(x => x.ClassId == id).OrderBy(x => x.Username).ToListAsync();
+            var members = await db.ClassMembers.Where(x => x.ClassId == id).OrderBy(x => x.Username).ToListAsync();
             var names = await CurrentNames(request, factory, members.Select(x => x.UserId));
             foreach (var member in members)
-                if (names.TryGetValue(member.UserId, out var name)) member.DisplayName = name;
+                if (names.TryGetValue(member.UserId, out var name) && member.DisplayName != name) member.DisplayName = name;
+            if (db.ChangeTracker.HasChanges()) await db.SaveChangesAsync();
             return Results.Ok(members);
         });
         api.MapPost("/teacher/classes/{id:guid}/members", async (Guid id, HttpRequest request, IHttpClientFactory factory, LmsDbContext db, MemberInput input) =>

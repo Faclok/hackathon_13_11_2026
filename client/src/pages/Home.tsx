@@ -45,8 +45,10 @@ export default function Home() {
   return (
     <>
       <h1 className="home-greeting">Привет, {displayName(user)}</h1>
-      {(!user.firstName || !user.lastName) && <Link to="/profile" className="surface profile-prompt">
-        Заполни имя и фамилию, чтобы тебя узнали в классе и рейтинге →
+      {(!user.firstName || !user.lastName) && <Link to="/profile" className="profile-prompt">
+        <span className="profile-prompt-coin" aria-hidden="true">+50</span>
+        <span className="profile-prompt-copy"><strong>Заполни профиль</strong><small>Имя и фамилия · +50 монет</small></span>
+        <Icon name="arrow" size={18} />
       </Link>}
       <div className="home-cards">
         <section className="daily-card">

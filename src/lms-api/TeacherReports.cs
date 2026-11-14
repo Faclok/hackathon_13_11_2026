@@ -72,8 +72,11 @@ public static class TeacherReports
     {
         var studyClass = await db.TeacherClasses.AsNoTracking().SingleOrDefaultAsync(x => x.Id == classId && x.TeacherId == teacherId);
         if (studyClass is null) return null;
-        var members = await db.ClassMembers.AsNoTracking().Where(x => x.ClassId == classId).OrderBy(x => x.DisplayName).ToArrayAsync();
+        var members = await db.ClassMembers.Where(x => x.ClassId == classId).OrderBy(x => x.DisplayName).ToArrayAsync();
         var currentNames = await TeacherEndpoints.CurrentNames(request, factory, members.Select(x => x.UserId));
+        foreach (var member in members)
+            if (currentNames.TryGetValue(member.UserId, out var name) && member.DisplayName != name) member.DisplayName = name;
+        if (db.ChangeTracker.HasChanges()) await db.SaveChangesAsync();
         var tasks = await db.ClassTasks.AsNoTracking().Where(x => x.ClassId == classId).OrderByDescending(x => x.CreatedAt).ToArrayAsync();
         var taskIds = tasks.Select(x => x.Id).ToArray();
         var submissions = await db.TaskSubmissions.AsNoTracking().Where(x => taskIds.Contains(x.TaskId)).ToArrayAsync();

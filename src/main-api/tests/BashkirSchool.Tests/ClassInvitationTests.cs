@@ -60,7 +60,7 @@ public sealed class ClassInvitationTests
         Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
         var player = await person.GetFromJsonAsync<PlayerProfile>("/api/player/profile");
         Assert.Equal("Айгуль", player!.FirstName); Assert.Equal("Иванова", player.LastName);
-        Assert.Equal(50, player.Coins);
+        Assert.Equal(100, player.Coins);
         using (var lookup = await teacher.GetAsync("/api/lms-source/participants/lookup?username=INDEPENDENT"))
         {
             Assert.Equal(HttpStatusCode.OK, lookup.StatusCode);

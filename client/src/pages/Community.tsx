@@ -17,7 +17,7 @@ import {
   FloatingItems,
   ProfileBackground,
 } from "../components/Personalization";
-import { Icon, Modal, PageTitle, ProgressBar } from "../components/ui";
+import { Icon, Modal, PageTitle, ProgressBar, useToast } from "../components/ui";
 import { displayName } from "../utils/displayName";
 
 export function Login() {
@@ -211,6 +211,7 @@ export function Profile() {
   const [lastName, setLastName] = useState(user.lastName ?? "");
   const [saving, setSaving] = useState(false);
   const [profileMessage, setProfileMessage] = useState("");
+  const toast = useToast();
   const currentRank = getCurrentRank(user);
   const [itemInfo, setItemInfo] = useState<Decoration | null>(null);
   useEffect(() => {
@@ -223,6 +224,38 @@ export function Profile() {
   return (
     <>
       <PageTitle>Профиль</PageTitle>
+      {(!user.firstName || !user.lastName) && <section className="surface profile-completion">
+        <div className="profile-completion-heading">
+          <div>
+            <span className="profile-completion-eyebrow">ТВОЙ ПРОФИЛЬ</span>
+            <h2>Давай познакомимся</h2>
+          </div>
+          <span className="profile-completion-reward">+50 монет</span>
+        </div>
+        <p>Укажи имя и фамилию. Преподаватель найдёт тебя в классе, а мы подарим 50 монет.</p>
+        <form onSubmit={async (event) => {
+          event.preventDefault();
+          setSaving(true);
+          setProfileMessage("");
+          try {
+            const bonus = await useUserStore.getState().updateProfile(firstName, lastName);
+            toast(bonus > 0 ? "Профиль заполнен · +50 монет" : "Профиль сохранён");
+          } catch (error) {
+            setProfileMessage(error instanceof Error ? error.message : "Не удалось сохранить профиль.");
+          } finally { setSaving(false); }
+        }}>
+          <label className="field-label" htmlFor="profile-first-name">Имя</label>
+          <input id="profile-first-name" value={firstName} maxLength={100} autoComplete="given-name"
+            onChange={(event) => setFirstName(event.target.value)} placeholder="Имя" required />
+          <label className="field-label" htmlFor="profile-last-name">Фамилия</label>
+          <input id="profile-last-name" value={lastName} maxLength={100} autoComplete="family-name"
+            onChange={(event) => setLastName(event.target.value)} placeholder="Фамилия" required />
+          <button className="button button-primary full-width" disabled={saving || !firstName.trim() || !lastName.trim()}>
+            {saving ? "Сохраняем…" : "Сохранить и получить 50 монет"} <Icon name="arrow" size={17} />
+          </button>
+        </form>
+        {profileMessage && <p className="form-error" role="alert">{profileMessage}</p>}
+      </section>}
       <section
         className="surface profile-header personal-card"
         data-background={user.backgroundId}
@@ -244,34 +277,6 @@ export function Profile() {
             Изменить оформление <Icon name="arrow" size={13} />
           </Link>
         </div>
-      </section>
-      <section className="surface profile-section">
-        <h2>Имя и фамилия</h2>
-        <p>{user.firstName && user.lastName
-          ? "Тебя видят под этим именем в рейтинге и классе."
-          : "Заполни профиль, чтобы преподаватель и другие участники узнали тебя."}</p>
-        <form onSubmit={async (event) => {
-          event.preventDefault();
-          setSaving(true);
-          setProfileMessage("");
-          try {
-            await useUserStore.getState().updateProfile(firstName, lastName);
-            setProfileMessage("Профиль сохранён.");
-          } catch (error) {
-            setProfileMessage(error instanceof Error ? error.message : "Не удалось сохранить профиль.");
-          } finally { setSaving(false); }
-        }}>
-          <label className="field-label" htmlFor="profile-first-name">Имя</label>
-          <input id="profile-first-name" value={firstName} maxLength={100} autoComplete="given-name"
-            onChange={(event) => setFirstName(event.target.value)} placeholder="Имя" required />
-          <label className="field-label" htmlFor="profile-last-name">Фамилия</label>
-          <input id="profile-last-name" value={lastName} maxLength={100} autoComplete="family-name"
-            onChange={(event) => setLastName(event.target.value)} placeholder="Фамилия" required />
-          <button className="button button-primary full-width" disabled={saving || !firstName.trim() || !lastName.trim()}>
-            Сохранить профиль
-          </button>
-        </form>
-        {profileMessage && <p role="status">{profileMessage}</p>}
       </section>
       {itemInfo && (
         <Modal title={itemInfo.title} onClose={() => setItemInfo(null)}>
