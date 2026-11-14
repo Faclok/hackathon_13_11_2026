@@ -89,6 +89,7 @@ export interface Decoration {
 export interface RewardCase {
   id: string;
   type: "hat" | "frame" | "background" | "pet" | "item";
+  dropTypes?: Decoration["type"][];
   title: string;
   description: string;
   imageUrl: string;

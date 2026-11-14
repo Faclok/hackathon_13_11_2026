@@ -4,7 +4,6 @@ import hatsCase from "../assets/cases/hats-case.png";
 import framesCase from "../assets/cases/frames-case.png";
 import backgroundsCase from "../assets/cases/backgrounds-case.png";
 import petsCase from "../assets/cases/pets-case.png";
-import itemsCase from "../assets/cases/items-case.svg";
 import { culturalPrizes } from "./prizes";
 
 // Catalog, artwork and drop weights adapted from castomization-page.
@@ -188,6 +187,11 @@ export const caseDecorations: Decoration[] = [
     price: 0,
     source: "wheel",
   },
+];
+
+// Retired pets stay resolvable for existing inventories and opening history,
+// but are not included in any case's reward pool.
+const retiredPets: Decoration[] = [
   {
     id: "pet_bee",
     type: "pet",
@@ -242,6 +246,7 @@ export const decorationCatalog: Decoration[] = [
     rarity: "common" as const,
   })),
   ...caseDecorations,
+  ...retiredPets,
 ];
 export const defaultDecorationIds = caseDecorations
   .filter((item) => item.isDefault)
@@ -271,21 +276,17 @@ export const rewardCases: RewardCase[] = [
   {
     id: "case_pet",
     type: "pet",
-    title: "Питомцы",
-    description: "От лесной пчелы до легендарного Акбузата",
+    dropTypes: ["pet", "item"],
+    title: "Питомцы и предметы",
+    description: "Акбузат, курай и другие открытия о Башкортостане",
     imageUrl: petsCase,
-  },
-  {
-    id: "case_item",
-    type: "item",
-    title: "Культурная коллекция",
-    description: "Курай, кубыз и другие открытия о Башкортостане",
-    imageUrl: itemsCase,
   },
 ];
 export const getCaseDrops = (caseItem: RewardCase) =>
   caseDecorations.filter(
-    (item) => item.type === caseItem.type && !item.isDefault,
+    (item) =>
+      (caseItem.dropTypes ?? [caseItem.type]).includes(item.type) &&
+      !item.isDefault,
   );
 // Rarity weights apply to the whole tier, then split equally among its items.
 // If a case has no items of a tier, the remaining weights are normalized.
