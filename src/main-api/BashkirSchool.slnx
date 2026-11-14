@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/BashkirSchool.Application/BashkirSchool.Application.csproj" />
+    <Project Path="src/BashkirSchool.Domain/BashkirSchool.Domain.csproj" />
+    <Project Path="src/BashkirSchool.Host/BashkirSchool.Host.csproj" />
+    <Project Path="src/BashkirSchool.Infrastructure/BashkirSchool.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/BashkirSchool.Tests/BashkirSchool.Tests.csproj" />
+  </Folder>
+</Solution>

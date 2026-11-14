@@ -4,3 +4,12 @@
 **/node_modules/
 client/dist/
 .DS_Store
+.vs/
+.dotnet/
+.data/
+TestResults/
+*.user
+appsettings.Local.json
+.env.*
+*.pfx
+*.pem

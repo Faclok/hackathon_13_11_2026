@@ -1,0 +1,121 @@
+using BashkirSchool.Application;
+using BashkirSchool.Domain;
+using Microsoft.EntityFrameworkCore;
+
+namespace BashkirSchool.Infrastructure;
+
+public sealed class ReviewWorkflow(CoreDbContext db, IPermissionChecker permissions, TimeProvider clock) : IReviewWorkflow
+{
+    public async Task<AssignmentResponse?> ReceiveAsync(Guid participant, CancellationToken ct)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+        // One small application's allocator serializes reservations; no external lock service is needed.
+        if (db.Database.IsNpgsql()) await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(71830421)", ct);
+        await Require(participant, "reviews.receive", ct);
+        var now = clock.GetUtcNow();
+        var active = await db.Assignments.SingleOrDefaultAsync(x => x.ParticipantId == participant && !x.Completed && x.ExpiresAt > now, ct);
+        if (active is not null) return await View(active, ct);
+        var group = await (from e in db.Enrollments where e.ParticipantId == participant
+                           join c in db.Classes on e.ClassId equals c.Id
+                           select new { ClassId = c.Id, c.SchoolId }).SingleOrDefaultAsync(ct);
+        var policy = await db.Policies.OrderByDescending(x => x.Version).FirstOrDefaultAsync(ct)
+            ?? throw new ConflictException("An administrator must configure distribution first.");
+        var candidates = await db.Cases.Where(x => !x.ExpertClosed).OrderBy(x => x.CreatedAt).ThenBy(x => x.Id)
+            .Take(policy.WorkingSetSize).ToArrayAsync(ct);
+        var ids = candidates.Select(x => x.Id).ToArray();
+        var assignments = await db.Assignments.Where(x => ids.Contains(x.CaseId)).ToArrayAsync(ct);
+        var skipped = await db.Responses.Where(x => ids.Contains(x.CaseId) && x.Action == ReviewAction.Skip)
+            .Select(x => x.AssignmentId).ToArrayAsync(ct);
+        var eligible = candidates.Where(c => !assignments.Any(a => a.CaseId == c.Id && a.ParticipantId == participant && a.IssuedAt > now.AddHours(-policy.RepeatHours)))
+            .Select(c =>
+            {
+                var coverage = assignments.Where(a => a.CaseId == c.Id && (a.Completed && !skipped.Contains(a.Id) || !a.Completed && a.ExpiresAt > now))
+                    .GroupBy(a => a.ParticipantId).Select(g => g.OrderByDescending(a => a.IssuedAt).First()).ToArray();
+                return new { Case = c, SchoolCount = group is null ? 0 : coverage.Count(a => a.SchoolId == group.SchoolId),
+                    ClassCount = group is null ? 0 : coverage.Count(a => a.ClassId == group.ClassId),
+                    CoverageCount = coverage.Length,
+                    AlreadyCounted = coverage.Any(a => a.ParticipantId == participant),
+                    Repeats = assignments.Count(a => a.CaseId == c.Id && a.ParticipantId == participant) };
+            })
+            .Where(x => group is null || x.AlreadyCounted || x.SchoolCount < Math.Floor(policy.RequiredParticipants * policy.MaximumSchoolShare)
+                && x.ClassCount < Math.Floor(policy.RequiredParticipants * policy.MaximumClassShare))
+            .OrderBy(x => x.SchoolCount).ThenBy(x => x.ClassCount).ThenBy(x => x.Repeats)
+            .ThenBy(x => group is null ? x.CoverageCount : 0).ThenBy(x => x.Case.CreatedAt).ThenBy(x => x.Case.Id).FirstOrDefault();
+        if (eligible is null) return null;
+        var variants = await db.Variants.Where(x => x.CaseId == eligible.Case.Id && x.CreatedBy != participant).ToArrayAsync(ct);
+        var shownVariant = variants.OrderBy(v => assignments.Count(a => a.CaseId == eligible.Case.Id && a.ShownVariantId == v.Id && (a.Completed || a.ExpiresAt > now)))
+            .ThenBy(v => v.CreatedAt).ThenBy(v => v.Id).FirstOrDefault();
+        if (shownVariant is null) return null;
+        var issued = ReviewAssignment.Issue(participant, eligible.Case, group?.SchoolId, group?.ClassId, policy.Id, now, TimeSpan.FromMinutes(policy.AssignmentMinutes), shownVariant.Id);
+        db.Assignments.Add(issued);
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+        return await View(issued, ct);
+    }
+
+    public async Task<ReviewReceipt> SubmitAsync(Guid participant, Guid assignmentId, SubmitReviewRequest request, CancellationToken ct)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+        await CaseWriteLock.Acquire(db, ct);
+        await Require(participant, "reviews.submit", ct);
+        var assignment = await db.Assignments.SingleOrDefaultAsync(x => x.Id == assignmentId && x.ParticipantId == participant, ct) ?? throw new MissingResourceException();
+        var previous = await db.Responses.SingleOrDefaultAsync(x => x.AssignmentId == assignmentId, ct);
+        if (previous is not null)
+        {
+            if (previous.Action != request.Action || previous.Correction != request.Correction)
+                throw new ConflictException("An assignment cannot be resubmitted with a different answer.");
+            return new(previous.Id, previous.Archived);
+        }
+        var translationCase = await db.Cases.SingleAsync(x => x.Id == assignment.CaseId, ct);
+        var shown = await db.Variants.SingleAsync(x => x.Id == assignment.ShownVariantId, ct);
+        if (request.Action == ReviewAction.Correct && request.Correction == shown.Text)
+            throw new DomainException("Correction must differ from the shown text.");
+        var profile = await db.Participants.SingleAsync(x => x.Id == participant, ct);
+        var response = ReviewResponse.Submit(assignment, participant, request.Action, request.Correction, profile.Trust, clock.GetUtcNow(), translationCase.ExpertClosed);
+        Guid? correctionId = null;
+        if (request.Action == ReviewAction.Correct)
+        {
+            // Exact text identity only; linguistic normalization/merging is not assumed.
+            var variant = await db.Variants.FirstOrDefaultAsync(x => x.CaseId == assignment.CaseId && x.Text == request.Correction, ct);
+            if (variant is null)
+            {
+                variant = TranslationVariant.Create(assignment.CaseId, request.Correction!, false, createdBy: participant, createdAt: clock.GetUtcNow());
+                db.Variants.Add(variant);
+            }
+            correctionId = variant.Id;
+        }
+        db.Responses.Add(response);
+        db.Judgments.AddRange(response.Judgments(assignment.ShownVariantId, correctionId));
+        if (!response.Archived && request.Action != ReviewAction.Skip)
+            db.Outbox.Add(new() { CaseId = response.CaseId, ResponseId = response.Id, CreatedAt = clock.GetUtcNow() });
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+        return new(response.Id, response.Archived);
+    }
+
+    public async Task<CaseStatisticsResponse> StatisticsAsync(Guid participant, Guid caseId, CancellationToken ct)
+    {
+        await Require(participant, "reviews.submit", ct);
+        if (!await db.Assignments.AnyAsync(x => x.ParticipantId == participant && x.CaseId == caseId, ct)) throw new MissingResourceException();
+        var opinions = await (from r in db.Responses where r.CaseId == caseId && !r.Archived
+                              join j in db.Judgments on r.Id equals j.ResponseId
+                              select new Opinion(r.ParticipantId, j.VariantId, j.Kind, r.SubmittedAt, r.Id)).ToArrayAsync(ct);
+        var variants = await db.Variants.Where(x => x.CaseId == caseId).Select(x => x.Id).ToArrayAsync(ct);
+        var stats = ReviewStatisticsCalculator.Calculate(opinions, variants);
+        var policy = await db.Policies.OrderByDescending(x => x.Version).FirstAsync(ct);
+        return new(stats.UniqueParticipants, policy.RequiredParticipants,
+            Math.Min(1m, (decimal)stats.UniqueParticipants / policy.RequiredParticipants), stats.Variants);
+    }
+
+    private async Task Require(Guid subject, string permission, CancellationToken ct)
+    {
+        if (!await permissions.HasAsync(subject, permission, AccessScope.Own, subject, ct)) throw new AccessDeniedException();
+    }
+    private async Task<AssignmentResponse> View(ReviewAssignment assignment, CancellationToken ct)
+    {
+        var translationCase = await db.Cases.AsNoTracking().SingleAsync(x => x.Id == assignment.CaseId, ct);
+        var fragment = await db.Fragments.AsNoTracking().SingleAsync(x => x.Id == translationCase.FragmentId, ct);
+        var variant = await db.Variants.AsNoTracking().SingleAsync(x => x.Id == assignment.ShownVariantId, ct);
+        return new(assignment.Id, assignment.CaseId, variant.Id, fragment.Text, variant.Text, assignment.ExpiresAt);
+    }
+}

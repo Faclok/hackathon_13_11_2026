@@ -1,4 +1,15 @@
-# Keep local build output and IDE files out of the Docker build context.
-bin
-obj
-*.user
+.git
+.github
+.vscode
+.vs
+**/bin
+**/obj
+**/.data
+TestResults
+tests
+docs
+**/appsettings.Local.json
+.env
+.env.*
+*.pfx
+*.pem

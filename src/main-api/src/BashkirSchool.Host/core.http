@@ -1,0 +1,186 @@
+@base = https://localhost:7032
+@adminToken = paste-admin-access-token
+@teacherToken = paste-teacher-access-token
+@studentToken = paste-student-access-token
+@producerToken = paste-producer-access-token
+@schoolId = 00000000-0000-0000-0000-000000000000
+@teacherId = 00000000-0000-0000-0000-000000000000
+@studentId = 00000000-0000-0000-0000-000000000000
+@classId = 00000000-0000-0000-0000-000000000000
+@assignmentId = 00000000-0000-0000-0000-000000000000
+@caseId = 00000000-0000-0000-0000-000000000000
+@expertToken = paste-expert-access-token
+@exportToken = paste-exporter-access-token
+@primaryVariantId = 00000000-0000-0000-0000-000000000000
+@exerciseId = 00000000-0000-0000-0000-000000000000
+
+### Independent participant: no email, Telegram, school or role selection.
+POST {{base}}/auth/register
+Content-Type: application/json
+
+{"username":"independent1","password":"choose-your-own-strong-password"}
+
+### Sign in through /auth/sign-in after registration; only the caller's profile is returned.
+GET {{base}}/api/me
+Authorization: Bearer {{studentToken}}
+
+### Administrator recovery for an ordinary independent account after manual identity verification.
+### Set studentId to that independent account's ID; this does not reset school students or staff.
+POST {{base}}/api/accounts/{{studentId}}/recovery-link
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{"verificationNote":"Личность проверена администратором, обращение №123; секреты в примечание не включать."}
+
+### Sign in after password setup; repeat this for each actor.
+POST {{base}}/auth/sign-in
+Content-Type: application/json
+
+{"username":"admin","password":"replace-with-your-password"}
+
+### Administrator creates a school.
+POST {{base}}/api/schools
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{"name":"Школа №1"}
+
+### Administrator appoints a teacher. Expert: profile=expert without schoolId.
+POST {{base}}/api/staff
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{"username":"teacher1","profile":"teacher","schoolId":"{{schoolId}}"}
+
+### Administrator issues a teacher password setup token.
+POST {{base}}/api/accounts/{{teacherId}}/password-link
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{}
+
+### The client builds its password form link from accountId and token.
+### This POST consumes the token; GET/opening a link does not consume it.
+POST {{base}}/auth/password
+Content-Type: application/json
+
+{"accountId":"{{teacherId}}","token":"paste-setup-token","password":"choose-your-own-strong-password"}
+
+### Teacher creates a class in the assigned school.
+POST {{base}}/api/classes
+Authorization: Bearer {{teacherToken}}
+Content-Type: application/json
+
+{"schoolId":"{{schoolId}}","name":"5А"}
+
+### Repeat the same username/class to get the same student.
+POST {{base}}/api/classes/{{classId}}/students
+Authorization: Bearer {{teacherToken}}
+Content-Type: application/json
+
+{"username":"student1"}
+
+### Teacher issues initial/reset link only for their own student.
+POST {{base}}/api/accounts/{{studentId}}/password-link
+Authorization: Bearer {{teacherToken}}
+Content-Type: application/json
+
+{}
+
+### Administrator creates a data producer; set its password and sign in as above.
+POST {{base}}/api/staff
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{"username":"producer1","profile":"producer"}
+
+### Atomic intake item. Repeat the same key/body for the same result.
+POST {{base}}/api/deliveries
+Authorization: Bearer {{producerToken}}
+Idempotency-Key: initial-fragment-1
+Content-Type: application/json
+
+{
+  "fragment_id":"fragment-1",
+  "text_ba":"Һаумы!",
+  "lang_pair":"ba-ru",
+  "translation":"Здравствуйте!",
+  "source":{"document_id":"book-1","title":"Учебник","chapter":"1"}
+}
+
+### Administrator creates another version. Empty body uses initial settings.
+GET {{base}}/api/policies/distribution
+Authorization: Bearer {{adminToken}}
+
+### Create a version; existing assignments keep the old version ID.
+POST {{base}}/api/policies/distribution
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{}
+
+### Returns an existing live reservation; 204 means no eligible assignment.
+POST {{base}}/api/reviews/next
+Authorization: Bearer {{studentToken}}
+
+### Alternatives: {"action":"Correct","correction":"..."} or {"action":"Skip"}.
+POST {{base}}/api/reviews/{{assignmentId}}/response
+Authorization: Bearer {{studentToken}}
+Content-Type: application/json
+
+{"action":"Confirm"}
+
+### Unique people / N and independent support for each variant.
+GET {{base}}/api/cases/{{caseId}}/statistics
+Authorization: Bearer {{studentToken}}
+
+### Development OpenAPI document; no Swagger UI dependency.
+GET {{base}}/openapi/v1.json
+
+### Refresh is an explicit JSON secret; every successful use rotates it.
+POST {{base}}/auth/refresh
+Content-Type: application/json
+
+{"refreshToken":"paste-current-refresh-token"}
+
+### List/revoke only the caller's sessions.
+GET {{base}}/api/sessions
+Authorization: Bearer {{studentToken}}
+
+### Schools/classes/students are filtered by the current permission assignment.
+GET {{base}}/api/classes
+Authorization: Bearer {{teacherToken}}
+
+### Expert queue; read caseId/revision/variant IDs before resolving.
+GET {{base}}/api/expert/cases
+Authorization: Bearer {{expertToken}}
+
+### Source, current decision and per-variant acceptance statistics.
+GET {{base}}/api/expert/cases/{{caseId}}
+Authorization: Bearer {{expertToken}}
+
+### Final decision; supply the revision from the current expert case response.
+POST {{base}}/api/expert/cases/{{caseId}}/resolution
+Authorization: Bearer {{expertToken}}
+Content-Type: application/json
+
+{"expectedRevision":0,"primaryVariantId":"{{primaryVariantId}}","additionalVariantIds":[],"rejectedVariantIds":[],"comment":"Проверено экспертом"}
+
+### Historical decisions remain available after closure.
+GET {{base}}/api/expert/cases/{{caseId}}/history
+Authorization: Bearer {{expertToken}}
+
+### Original integration columns; confirmed is a count, not a Boolean.
+GET {{base}}/api/translations/export?offset=0&limit=100
+Authorization: Bearer {{exportToken}}
+
+### Stable daily lesson; accepted answers are never in the exercise DTO.
+GET {{base}}/api/lessons/today
+Authorization: Bearer {{studentToken}}
+
+### Ordinary practice never creates a review vote or trust contribution.
+POST {{base}}/api/exercises/{{exerciseId}}/attempt
+Authorization: Bearer {{studentToken}}
+Content-Type: application/json
+
+{"answer":"Здравствуйте!"}
