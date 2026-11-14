@@ -17,6 +17,7 @@ export interface User {
   hatId?: string;
   petId?: string;
   caseKeys: number;
+  swords: number;
   equippedItemIds: string[];
   langPair: "ba-ru";
 }

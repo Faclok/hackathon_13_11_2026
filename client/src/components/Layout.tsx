@@ -8,15 +8,25 @@ import { Icon } from "./ui";
 const navigation = [
   ["/", "home", "Главная"],
   ["/learn", "book", "Учить"],
-  ["/boss", "swords", "Босс"],
+  ["/cases", "case", "Кейсы"],
   ["/leaderboard", "trophy", "Рейтинг"],
   ["/profile", "user", "Профиль"],
 ];
+const pageTitles: Record<string, string> = {
+  "/": "Главная",
+  "/learn": "Учить башкирский",
+  "/boss": "Испытание Босса",
+  "/leaderboard": "Рейтинг",
+  "/profile": "Профиль",
+  "/inventory": "Инвентарь",
+  "/cases": "Кейсы",
+};
 export default function Layout() {
   const user = useUserStore((s) => s.user);
   const { pathname } = useLocation();
   useEffect(() => {
     window.scrollTo(0, 0);
+    document.title = `${pageTitles[pathname] ?? "Страница не найдена"} — Башкирская языковая школа`;
   }, [pathname]);
   return (
     <div className="school-app">
@@ -48,7 +58,8 @@ export default function Layout() {
             to={to}
             end={to === "/"}
             className={({ isActive }) =>
-              isActive ? "nav-item active" : "nav-item"
+              isActive || (to === "/profile" && pathname === "/inventory")
+                ? "nav-item active" : "nav-item"
             }
           >
             <Icon name={icon} />

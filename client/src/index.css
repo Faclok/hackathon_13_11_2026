@@ -357,6 +357,14 @@ button:active:not(:disabled),
   height: 57px;
   z-index: 1;
 }
+.mini-case-art {
+  width: 53px;
+  height: 57px;
+  object-fit: contain;
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 1;
+}
 .mini-game-copy {
   position: relative;
   z-index: 1;
@@ -551,8 +559,8 @@ button:active:not(:disabled),
   flex-direction: column;
   justify-content: center;
   gap: 5px;
-  color: #a0a99e;
-  font-size: 9px;
+  color: #5d6b5c;
+  font-size: 10px;
   font-weight: 500;
 }
 .nav-item.active {
@@ -606,7 +614,9 @@ button:active:not(:disabled),
     transform 0.2s;
 }
 .button:disabled {
-  opacity: 0.45;
+  opacity: 1;
+  background: #e8eee3;
+  color: #526650;
 }
 .button-primary {
   background: var(--primary);
@@ -1027,8 +1037,25 @@ input:focus {
 .option.matched {
   background: #edf6e6;
   border-color: #cce1b9;
-  color: #87a371;
-  opacity: 0.8;
+  color: #446d3e;
+}
+.option.incorrect {
+  border-color: #b45e47;
+  background: #fff0e9;
+  color: #8f3d2b;
+}
+.pair-feedback {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #eaf6df;
+  color: #36662c;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.pair-feedback.incorrect {
+  background: #fff0e9;
+  color: #8f3d2b;
 }
 .option:hover:not(:disabled) {
   border-color: #9cbc85;
@@ -1278,8 +1305,8 @@ input:focus {
 }
 .profile-boss-link small {
   display: block;
-  font-size: 10px;
-  color: #92a17e;
+  font-size: 11px;
+  color: #596c55;
   line-height: 16px;
   margin-top: 5px;
 }
@@ -1296,7 +1323,7 @@ input:focus {
   border-radius: 99px;
   padding: 10px 8px;
   font-size: 12px;
-  color: #8c987e;
+  color: #5b6d52;
   background: transparent;
 }
 .tabs button.active {
@@ -1341,8 +1368,24 @@ input:focus {
   position: absolute;
   left: 12px;
   top: 13px;
-  font-size: 23px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 35px;
+  height: 35px;
+  padding: 0 5px;
+  border: 1px solid #d8e5c5;
+  border-radius: 12px;
+  background: #fffffff2;
+  box-shadow: 0 3px 9px #243d202a;
+  color: #294b2d;
+  font-size: 22px;
+  font-weight: 800;
 }
+.podium-card .personal-content .place-medal { color: #294b2d; text-shadow: 0 1px 1px #26361d35; backdrop-filter: blur(5px); }
+.boss-teacher-task { border: 2px solid #ba8a36; background: linear-gradient(160deg, #fff8e9, #fff); }
+.boss-teacher-task .eyebrow-label { color: #7b5018; }
+.boss-random-task { border: 2px solid #80b699; background: linear-gradient(160deg, #f4fff8, #fff); }
 .podium-avatar {
   width: 64px;
   height: 64px;
@@ -1548,8 +1591,8 @@ input:focus {
   letter-spacing: -0.5px;
 }
 .stat small {
-  font-size: 10px;
-  color: #9ba48f;
+  font-size: 11px;
+  color: #596b55;
 }
 .language-card {
   padding: 20px;
@@ -1659,7 +1702,7 @@ input:focus {
 }
 .rank-list small {
   display: block;
-  font-size: 9px;
+  font-size: 11px;
   margin-top: 4px;
 }
 .rank-list .progress-track {
@@ -1667,13 +1710,13 @@ input:focus {
   height: 4px;
 }
 .future-rank {
-  color: #b8bfac;
+  color: #596a58;
 }
 .current-rank {
-  color: #6b934d;
+  color: #3f7138;
 }
 .earned-rank {
-  color: #8c9e7a;
+  color: #4b6d45;
 }
 .trophy-grid {
   display: grid;
@@ -1682,12 +1725,17 @@ input:focus {
 }
 .trophy {
   text-align: center;
-  filter: grayscale(1);
-  opacity: 0.45;
+  color: #536450;
+  background: #f7f9f5;
+  border-radius: 14px;
+  padding: 10px 5px;
 }
 .trophy.earned {
-  filter: none;
-  opacity: 1;
+  background: #edf6e9;
+}
+.trophy:not(.earned) > span {
+  filter: grayscale(1);
+  opacity: 0.65;
 }
 .trophy > span {
   font-size: 31px;
@@ -1697,14 +1745,14 @@ input:focus {
 .trophy strong {
   display: block;
   font-size: 11px;
-  color: #687859;
+  color: #435943;
   font-weight: 600;
 }
 .trophy small {
   display: block;
-  font-size: 8px;
-  line-height: 13px;
-  color: #96a088;
+  font-size: 10px;
+  line-height: 15px;
+  color: #5c6d58;
   margin-top: 4px;
 }
 .logout-button {

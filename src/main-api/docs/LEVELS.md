@@ -31,6 +31,8 @@
 | `GET /api/learning/progress` | Общие числа пройденных уровней, боссов, доступных боссов, попыток и ошибок |
 | `GET /api/learning/statistics?offset=0&limit=20` | Статистика уровней от новых к старым; максимум 100 строк |
 | `POST /api/learning/boss` | Начать или возобновить доступного босса; `204`, если ещё не заработан |
+| `POST /api/learning/boss/start` | Начать или возобновить Босса без выдачи случайного вопроса; используется перед заданием преподавателя |
+| `POST /api/learning/boss/teacher-answers/{assignmentId}` | Учесть уже сохранённый ответ на задание преподавателя в прогрессе Босса |
 | `POST /api/learning/bosses/{bossId}/questions/{assignmentId}/answer` | Ответить на предложение босса |
 
 Уровень возвращает `id`, `number`, `questionCount`, `correctCount` и `question` с полями `id`, `attemptToken`, `kind`, `schemaVersion`, `prompt`. Правильные ответы клиенту не передаются. Форматы `prompt` и типизированного `answer` соответствуют [договору упражнений](EXERCISE-API.md).

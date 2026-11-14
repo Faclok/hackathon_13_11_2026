@@ -11,6 +11,7 @@ import type { CaseOpening } from "../types";
 import { DecorationPreview } from "./Personalization";
 import { RarityBadge } from "./CustomizationUI";
 import { Modal, useToast } from "./ui";
+import { plural } from "../utils/plural";
 
 export default function CaseOpeningModal({
   opening,
@@ -89,7 +90,7 @@ export default function CaseOpeningModal({
           <p>{winner.description}</p>
           {opening.duplicate ? (
             <div className="duplicate-notice">
-              Уже есть в коллекции · +{opening.compensation} монет
+              Уже есть в коллекции · +{plural(opening.compensation, "монета", "монеты", "монет")}
             </div>
           ) : (
             <div className="new-item-notice">Добавлено в твой инвентарь</div>

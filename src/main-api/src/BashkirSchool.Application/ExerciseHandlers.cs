@@ -74,6 +74,7 @@ public sealed class TranslationTextHandler : IExerciseHandler
     }
     public bool Evaluate(JsonElement key, JsonElement answer) => ExerciseJson.Read<string[]>(key)
         .Contains(ExerciseJson.Text(ExerciseJson.Read<TextExerciseAnswer>(answer).Text), StringComparer.Ordinal);
+    public string? CorrectAnswer(JsonElement key) => ExerciseJson.Read<string[]>(key).FirstOrDefault();
 }
 
 public sealed class DictationHandler : IExerciseHandler
@@ -88,6 +89,7 @@ public sealed class DictationHandler : IExerciseHandler
     }
     public bool Evaluate(JsonElement key, JsonElement answer) => ExerciseJson.Read<string[]>(key)
         .Contains(ExerciseJson.Text(ExerciseJson.Read<TextExerciseAnswer>(answer).Text), StringComparer.Ordinal);
+    public string? CorrectAnswer(JsonElement key) => ExerciseJson.Read<string[]>(key).FirstOrDefault();
 }
 
 public sealed class AudioTranslationHandler : IExerciseHandler
@@ -103,6 +105,7 @@ public sealed class AudioTranslationHandler : IExerciseHandler
     }
     public bool Evaluate(JsonElement key, JsonElement answer) => ExerciseJson.Read<string[]>(key)
         .Contains(ExerciseJson.Text(ExerciseJson.Read<TextExerciseAnswer>(answer).Text), StringComparer.Ordinal);
+    public string? CorrectAnswer(JsonElement key) => ExerciseJson.Read<string[]>(key).FirstOrDefault();
 }
 
 public static class ChoiceExercises
@@ -119,13 +122,18 @@ public static class ChoiceExercises
         var real = ExerciseJson.Shuffle((alternatives ?? [])
             .Where(x => !string.IsNullOrWhiteSpace(x) && !excluded.Contains(Normalize(x)))
             .GroupBy(Normalize).Select(x => x.First()));
+        var acceptedChoices = accepted.Where(x => !string.Equals(x, correct, StringComparison.Ordinal))
+            .Distinct(StringComparer.Ordinal).Take(1)
+            .Select(x => new ExerciseItem(Guid.NewGuid().ToString("N"), x)).ToArray();
         var wrong = real.Concat(ExerciseJson.Shuffle(fallback))
             .Where(x => !excluded.Contains(Normalize(x)))
-            .GroupBy(Normalize).Select(x => x.First()).Take(2).ToArray();
-        if (wrong.Length != 2) return null;
+            .GroupBy(Normalize).Select(x => x.First()).Take(2 - acceptedChoices.Length).ToArray();
+        if (wrong.Length != 2 - acceptedChoices.Length) return null;
         var correctItem = new ExerciseItem(Guid.NewGuid().ToString("N"), correct);
-        var options = ExerciseJson.Shuffle(wrong.Select(x => new ExerciseItem(Guid.NewGuid().ToString("N"), x)).Append(correctItem));
-        return (options, new ChoiceAnswerKey(correctItem.Id, correct, options));
+        var options = ExerciseJson.Shuffle(wrong.Select(x => new ExerciseItem(Guid.NewGuid().ToString("N"), x))
+            .Append(correctItem).Concat(acceptedChoices));
+        return (options, new ChoiceAnswerKey(correctItem.Id, correct, options,
+            acceptedChoices.Select(x => x.Id).Append(correctItem.Id).ToArray()));
     }
 
     public static bool Evaluate(JsonElement key, JsonElement answer)
@@ -133,7 +141,7 @@ public static class ChoiceExercises
         var issued = ExerciseJson.Read<ChoiceAnswerKey>(key);
         var selected = ExerciseJson.Read<ChoiceExerciseAnswer>(answer).OptionId;
         if (!issued.Options.Any(x => x.Id == selected)) throw new DomainException("Option was not issued.");
-        return selected == issued.CorrectId;
+        return selected == issued.CorrectId || (issued.AcceptedIds?.Contains(selected) ?? false);
     }
     public static string CorrectAnswer(JsonElement key) => ExerciseJson.Read<ChoiceAnswerKey>(key).CorrectText;
     private static string Normalize(string value) => new(value.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
@@ -230,6 +238,7 @@ public sealed class MissingWordHandler : IExerciseHandler
             ?? throw new DomainException("Option was not issued.");
         return text == k.Text;
     }
+    public string? CorrectAnswer(JsonElement key) => ExerciseJson.Read<GapAnswerKey>(key).Text;
 }
 
 public sealed class SentenceOrderHandler : IExerciseHandler
@@ -252,6 +261,7 @@ public sealed class SentenceOrderHandler : IExerciseHandler
         // Swapping identical words is linguistically the same answer, even with separate token identities.
         return ids.Select(id => tokens.Single(t => t.Id == id).Text).SequenceEqual(tokens.Select(t => t.Text));
     }
+    public string? CorrectAnswer(JsonElement key) => string.Join(" ", ExerciseJson.Read<ExerciseItem[]>(key).Select(t => t.Text));
 }
 
 public sealed class WordMatchHandler : IExerciseHandler
@@ -281,5 +291,13 @@ public sealed class WordMatchHandler : IExerciseHandler
             pairs.Any(p => !expected.Any(e => e.LeftId == p.LeftId) || !expected.Any(e => e.RightId == p.RightId)))
             throw new DomainException("Return five pairs using every issued word and translation exactly once.");
         return pairs.All(expected.Contains);
+    }
+    public bool CheckPair(JsonElement key, WordPairAnswer pair)
+    {
+        var expected = ExerciseJson.Read<WordPairAnswer[]>(key);
+        if (string.IsNullOrWhiteSpace(pair.LeftId) || string.IsNullOrWhiteSpace(pair.RightId) ||
+            !expected.Any(x => x.LeftId == pair.LeftId) || !expected.Any(x => x.RightId == pair.RightId))
+            throw new DomainException("Pair must use the issued word and translation.");
+        return expected.Contains(pair);
     }
 }

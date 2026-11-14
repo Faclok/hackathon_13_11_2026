@@ -41,6 +41,12 @@ const paths: Record<string, ReactNode> = {
       <path d="M4 7h16l1 14H3L4 7Zm4 1V6a4 4 0 0 1 8 0v2" />
     </>
   ),
+  case: (
+    <>
+      <rect x="3" y="8" width="18" height="13" rx="2" />
+      <path d="M2 8h20M12 8v13M7 8c-2-1-2-4 0-5 2-1 4 2 5 5 1-3 3-6 5-5 2 1 2 4 0 5" />
+    </>
+  ),
   key: (
     <>
       <circle cx="8" cy="8" r="5" />

@@ -4,10 +4,11 @@ import { displayName } from "../utils/displayName";
 import {
   BookArt,
   FlameArt,
-  GamepadArt,
   Ornament,
 } from "../components/Illustrations";
+import hatsCase from "../assets/cases/hats-case.png";
 import { Icon } from "../components/ui";
+import { plural, pluralWord } from "../utils/plural";
 const quickActions = [
   {
     to: "/boss",
@@ -31,10 +32,10 @@ const quickActions = [
     color: "purple",
   },
   {
-    to: "/wheel",
-    icon: "wheel",
-    title: "Барабан",
-    detail: "Испытай удачу",
+    to: "/profile",
+    icon: "user",
+    title: "Мой прогресс",
+    detail: "Звания и достижения",
     color: "blue",
   },
 ];
@@ -55,28 +56,28 @@ export default function Home() {
           <div className="daily-heading">
             <Icon name="calendar" size={31} />
             <div>
-              <h2>Ежедневные задания</h2>
+              <h2>Уровни обучения</h2>
               <p>
-                Пройди короткий урок
-                <br />и узнай что-то новое
+                Проходи вопросы
+                <br />в своём темпе
               </p>
             </div>
           </div>
           <BookArt />
           <Link className="daily-button" to="/learn">
-            Начать задание
+            Начать уровень
             <Icon name="arrow" size={15} />
           </Link>
         </section>
         <section
           className="streak-card surface"
-          aria-label={`Серия занятий: ${user.streak} дней подряд`}
+          aria-label={`Серия занятий: ${plural(user.streak, "день", "дня", "дней")} подряд`}
         >
           <div className="streak-description">
             <FlameArt />
             <div>
               <strong>{user.streak}</strong>
-              <span>дней подряд</span>
+              <span>{pluralWord(user.streak, "день", "дня", "дней")} подряд</span>
             </div>
           </div>
           <div className="week-dots" aria-label={`${weekProgress} из 7 дней`}>
@@ -92,16 +93,16 @@ export default function Home() {
           </div>
         </section>
         <section className="mini-game-card surface">
-          <GamepadArt />
+          <img className="mini-case-art" src={hatsCase} alt="" />
           <div className="mini-game-copy">
-            <h2>Мини-игра</h2>
+            <h2>Кейсы</h2>
             <p>
-              Проверь свои знания
-              <br />в увлекательной игре
+              Собирай украшения
+              <br />для своего образа
             </p>
           </div>
-          <Link to="/learn" className="play-button">
-            Играть
+          <Link to="/cases" className="play-button">
+            Открыть
             <Icon name="arrow" size={15} />
           </Link>
           <span className="game-bubble bubble-one" />

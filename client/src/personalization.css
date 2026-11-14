@@ -229,6 +229,7 @@ button.floating-item:hover {
   align-items: center;
   gap: 5px;
 }
+.podium-card .personal-content { z-index: 4; }
 .you-label {
   font-size: 8px;
   padding: 2px 5px;
@@ -423,9 +424,16 @@ button.equipped-pet {
   color: #728a60;
   font-size: 8px;
 }
+.profile-header .equipped-pet {
+  right: auto;
+  left: calc(50% + 43px);
+  top: 66px;
+  bottom: auto;
+}
 .podium-card .equipped-pet {
-  right: 5px;
-  bottom: 78px;
+  right: 7px;
+  top: 83px;
+  bottom: auto;
   width: 33px;
 }
 .podium-card .equipped-pet > span {
@@ -436,8 +444,10 @@ button.equipped-pet {
   font-size: 7px;
 }
 .shop-preview .equipped-pet {
-  right: 14px;
-  bottom: 7px;
+  right: auto;
+  left: 62px;
+  top: 57px;
+  bottom: auto;
   width: 28px;
 }
 .shop-preview .equipped-pet > span {

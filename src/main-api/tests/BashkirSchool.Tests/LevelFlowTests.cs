@@ -75,6 +75,9 @@ public sealed class LevelFlowTests
         Assert.Equal(first.QuestionCount + 2, completed.Attempts);
         Assert.Equal(2, completed.Mistakes);
         Assert.NotNull(completed.CompletedAt);
+        var reward = (await student.Client.GetFromJsonAsync<PlayerProfile>("/api/player/profile"))!;
+        Assert.Equal(first.QuestionCount / 3, reward.Coins);
+        Assert.Equal(0, reward.Swords);
     }
 
     [Fact]

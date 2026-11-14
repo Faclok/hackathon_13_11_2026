@@ -336,7 +336,7 @@ public static class TeacherEndpoints
             var task = await (from member in db.ClassMembers.AsNoTracking() where member.UserId == user.Id
                               join studyClass in db.TeacherClasses on member.ClassId equals studyClass.Id
                               join item in db.ClassTasks on studyClass.Id equals item.ClassId
-                              where (item.DueAt == null || item.DueAt >= now) &&
+                              where item.CatalogCaseId != null && (item.DueAt == null || item.DueAt >= now) &&
                                   !db.TaskSubmissions.Any(x => x.TaskId == item.Id && x.UserId == user.Id)
                               orderby item.DueAt == null, item.DueAt, item.CreatedAt, item.Id
                               select new { item.Id, item.CatalogCaseId, item.Title, item.SourceText,
@@ -358,14 +358,26 @@ public static class TeacherEndpoints
             if (task is null || !await db.ClassMembers.AnyAsync(x => x.ClassId == task.ClassId && x.UserId == user.Id)) return Results.NotFound();
             if (task.DueAt is not null && task.DueAt < DateTimeOffset.UtcNow) return Results.Conflict(new { title = "Срок сдачи истёк." });
             if (task.CatalogCaseId is not Guid caseId) return Results.Conflict(new { title = "Перевод задания ещё не синхронизирован с общим каталогом." });
-            using var contribution = await MainPost(request, factory, $"/api/lms-source/translations/{caseId}/student-answer", new { taskId, text = answer });
+            using var contribution = await MainPost(request, factory, $"/api/lms-source/translations/{caseId}/student-answer", new { taskId, text = answer, boss = input.Boss });
             if (!contribution.IsSuccessStatusCode) return Results.StatusCode(502);
+            bool bossCompleted = false;
+            if (input.Boss)
+            {
+                using var contributionJson = JsonDocument.Parse(await contribution.Content.ReadAsStringAsync());
+                if (!contributionJson.RootElement.TryGetProperty("assignmentId", out var assignmentElement) || assignmentElement.ValueKind != JsonValueKind.String)
+                    return Results.Conflict(new { title = "Ответ на задание уже закрыт; выбери другое задание Босса." });
+                using var attached = await MainPost(request, factory,
+                    $"/api/learning/boss/teacher-answers/{assignmentElement.GetGuid()}", new { });
+                if (!attached.IsSuccessStatusCode) return Results.StatusCode(502);
+                using var attachedJson = JsonDocument.Parse(await attached.Content.ReadAsStringAsync());
+                bossCompleted = attachedJson.RootElement.GetProperty("bossCompleted").GetBoolean();
+            }
             var submission = await db.TaskSubmissions.SingleOrDefaultAsync(x => x.TaskId == taskId && x.UserId == user.Id);
             if (submission is null) { submission = new TaskSubmission { TaskId = taskId, UserId = user.Id }; db.TaskSubmissions.Add(submission); }
             submission.Answer = answer; submission.SubmittedAt = DateTimeOffset.UtcNow;
             submission.TeacherCorrect = null; submission.TeacherComment = ""; submission.ReviewedAt = null;
             await db.SaveChangesAsync();
-            return Results.Ok(submission);
+            return Results.Ok(new { submission, bossCompleted });
         });
     }
 
@@ -456,7 +468,7 @@ public sealed record MemberInput(string Username);
 public sealed record MemberEditInput(string DisplayName);
 public sealed record TranslationInput(string SourceText, string TranslationText, string LanguagePair);
 public sealed record TaskInput(string Title, string SourceType, Guid TranslationId, DateTimeOffset? DueAt);
-public sealed record SubmissionInput(string Answer);
+public sealed record SubmissionInput(string Answer, bool Boss = false);
 public sealed record CatalogTranslation(Guid Id, string SourceText, string TranslationText, string LanguagePair, int Rating,
     string Status, string[] AcceptedTranslations, bool ExpertRequested);
 public sealed record CoreCandidateResponse(Guid CaseId);

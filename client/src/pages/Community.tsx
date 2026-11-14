@@ -17,6 +17,7 @@ import {
 } from "../components/Personalization";
 import { Icon, Modal, PageTitle, ProgressBar, useToast } from "../components/ui";
 import { displayName } from "../utils/displayName";
+import { plural, pluralWord } from "../utils/plural";
 
 export function Login() {
   const [nick, setNick] = useState("");
@@ -25,6 +26,7 @@ export function Login() {
   const user = useUserStore((state) => state.user);
   const navigate = useNavigate();
   useEffect(() => {
+    document.title = "Вход — Башкирская языковая школа";
     if (user) navigate("/", { replace: true });
   }, [user, navigate]);
   return (
@@ -94,6 +96,8 @@ export function Leaderboard() {
     }).catch((cause) => setError(cause instanceof Error ? cause.message : "Не удалось загрузить рейтинг."));
   }, [user, period, metric]);
   const own = entries.find((e) => e.user.id === user.id);
+  const ownInPodium = entries.slice(0, 5).some((entry) => entry.user.id === user.id);
+  const otherEntries = entries.slice(5).filter((entry) => entry.user.id !== user.id);
   return (
     <>
       <PageTitle subtitle="Вдохновляем друг друга учиться">
@@ -148,7 +152,9 @@ export function Leaderboard() {
               <p>Уровень {entry.user.level}</p>
               <strong className="podium-value">{entry.value}</strong>
               <span className="podium-label">
-                {metric === "tasks" ? "заданий" : "дней подряд"}
+                {metric === "tasks"
+                  ? pluralWord(entry.value, "задание", "задания", "заданий")
+                  : `${pluralWord(entry.value, "день", "дня", "дней")} подряд`}
               </span>
               <div className="trophy-strip">
                 {entry.user.trophyIds.slice(0, 5).map((id) => (
@@ -164,10 +170,10 @@ export function Leaderboard() {
           </article>
         ))}
       </div>
-      <div className="surface leader-list">
-        {entries.slice(5).map((entry) => (
+      {otherEntries.length > 0 && <div className="surface leader-list">
+        {otherEntries.map((entry) => (
           <div
-            className={`leader-row ${entry.user.id === user.id ? "is-you" : ""}`}
+            className="leader-row"
             key={entry.user.id}
           >
             <span className="leader-rank">{entry.rank}</span>
@@ -175,26 +181,27 @@ export function Leaderboard() {
             <div>
               <strong>
                 {displayName(entry.user)}
-                {entry.user.id === user.id ? " · Вы" : ""}
               </strong>
               <span>
-                Уровень {entry.user.level} ·{" "}
-                {entry.user.trophyIds
+                Уровень {entry.user.level}
+                {entry.user.trophyIds.length > 0 && <> · {entry.user.trophyIds
                   .slice(0, 2)
                   .map((id) => trophies.find((t) => t.id === id)?.icon)
-                  .join(" ")}
+                  .join(" ")}</>}
               </span>
             </div>
             <b>{entry.value}</b>
           </div>
         ))}
-      </div>
-      {own && (
+      </div>}
+      {own && !ownInPodium && (
         <div className="your-rank">
           <span>#{own.rank}</span>
           <strong>{displayName(user)} · Вы</strong>
           <b>
-            {own.value} {metric === "tasks" ? "заданий" : "дней"}
+            {metric === "tasks"
+              ? plural(own.value, "задание", "задания", "заданий")
+              : plural(own.value, "день", "дня", "дней")}
           </b>
         </div>
       )}
@@ -208,10 +215,12 @@ export function Profile() {
   const [firstName, setFirstName] = useState(user.firstName ?? "");
   const [lastName, setLastName] = useState(user.lastName ?? "");
   const [saving, setSaving] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(!user.firstName || !user.lastName);
   const [profileMessage, setProfileMessage] = useState("");
   const toast = useToast();
   const currentRank = getCurrentRank(user);
   const [itemInfo, setItemInfo] = useState<Decoration | null>(null);
+  const profileComplete = !!user.firstName && !!user.lastName;
   useEffect(() => {
     void useUserStore.getState().refreshProfile().catch(() => {});
   }, []);
@@ -222,21 +231,22 @@ export function Profile() {
   return (
     <>
       <PageTitle>Профиль</PageTitle>
-      {(!user.firstName || !user.lastName) && <section className="surface profile-completion">
+      {editingProfile && <section className="surface profile-completion" id="profile-name-form">
         <div className="profile-completion-heading">
           <div>
             <span className="profile-completion-eyebrow">ТВОЙ ПРОФИЛЬ</span>
-            <h2>Давай познакомимся</h2>
+            <h2>{profileComplete ? "Изменить имя и фамилию" : "Давай познакомимся"}</h2>
           </div>
-          <span className="profile-completion-reward">+50 монет</span>
+          {!profileComplete && <span className="profile-completion-reward">+50 монет</span>}
         </div>
-        <p>Укажи имя и фамилию. Преподаватель найдёт тебя в классе, а мы подарим 50 монет.</p>
+        <p>{profileComplete ? "Исправь данные, которые видны преподавателю и в рейтинге." : "Укажи имя и фамилию. Преподаватель найдёт тебя в классе, а мы подарим 50 монет."}</p>
         <form onSubmit={async (event) => {
           event.preventDefault();
           setSaving(true);
           setProfileMessage("");
           try {
             const bonus = await useUserStore.getState().updateProfile(firstName, lastName);
+            setEditingProfile(false);
             toast(bonus > 0 ? "Профиль заполнен · +50 монет" : "Профиль сохранён");
           } catch (error) {
             setProfileMessage(error instanceof Error ? error.message : "Не удалось сохранить профиль.");
@@ -249,8 +259,9 @@ export function Profile() {
           <input id="profile-last-name" value={lastName} maxLength={100} autoComplete="family-name"
             onChange={(event) => setLastName(event.target.value)} placeholder="Фамилия" required />
           <button className="button button-primary full-width" disabled={saving || !firstName.trim() || !lastName.trim()}>
-            {saving ? "Сохраняем…" : "Сохранить и получить 50 монет"} <Icon name="arrow" size={17} />
+            {saving ? "Сохраняем…" : profileComplete ? "Сохранить изменения" : "Сохранить и получить 50 монет"} <Icon name="arrow" size={17} />
           </button>
+          {profileComplete && <button type="button" className="button button-soft full-width" onClick={() => { setEditingProfile(false); setFirstName(user.firstName ?? ""); setLastName(user.lastName ?? ""); }} disabled={saving}>Отмена</button>}
         </form>
         {profileMessage && <p className="form-error" role="alert">{profileMessage}</p>}
       </section>}
@@ -271,6 +282,7 @@ export function Profile() {
             <span>{user.xp % 100} / 100 XP</span>
           </div>
           <ProgressBar value={user.xp % 100} max={100} />
+          {profileComplete && <button type="button" className="customize-link profile-edit-link" aria-expanded={editingProfile} onClick={() => { setEditingProfile(true); requestAnimationFrame(() => document.getElementById("profile-name-form")?.scrollIntoView({ behavior: "smooth", block: "start" })); }}>Изменить имя и фамилию <Icon name="arrow" size={13} /></button>}
           <Link to="/inventory" className="customize-link">
             Изменить оформление <Icon name="arrow" size={13} />
           </Link>
@@ -292,9 +304,9 @@ export function Profile() {
       )}
       <div className="stats-grid">
         {[
-          ["🔥", user.streak, "дней подряд"],
-          ["🪙", user.coins, "монет"],
-          ["✓", user.tasksSolved, "решено задач"],
+          ["🔥", user.streak, `${pluralWord(user.streak, "день", "дня", "дней")} подряд`],
+          ["🪙", user.coins, pluralWord(user.coins, "монета", "монеты", "монет")],
+          ["✓", user.tasksSolved, pluralWord(user.tasksSolved, "задача решена", "задачи решены", "задач решено")],
           ["◎", `${user.accuracy}%`, "точность"],
         ].map(([icon, value, label]) => (
           <div className="surface stat" key={label}>
@@ -335,7 +347,7 @@ export function Profile() {
               <div>
                 <strong lang="ba">{name}</strong>
                 <small>
-                  {tasks} задач{streak > 0 && ` · серия ${streak} дней`}
+                  {plural(tasks, "задача", "задачи", "задач")}{streak > 0 && ` · серия ${plural(streak, "день", "дня", "дней")}`}
                 </small>
                 {user.tasksSolved < tasks && (
                   <ProgressBar

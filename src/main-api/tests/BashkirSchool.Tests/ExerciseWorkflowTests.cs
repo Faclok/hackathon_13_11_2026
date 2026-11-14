@@ -29,11 +29,20 @@ public sealed class ExerciseWorkflowTests
         Assert.False(exercise.Prompt.TryGetProperty("pairs", out _));
         var prompt = ExerciseJson.Read<WordMatchPrompt>(exercise.Prompt);
         var pairs = prompt.Left.Select(l => new WordPairAnswer(l.Id, prompt.Right.Single(r => r.Text == entries.Single(e => e.Word == l.Text).Translation).Id)).ToArray();
+        var checkUrl = $"/api/learning/levels/{level.Id}/questions/{exercise.Id}/pairs/check";
+        var correctPair = new CheckWordPairRequest(exercise.AttemptToken, pairs[0].LeftId, pairs[0].RightId);
+        var wrongPair = correctPair with { RightId = pairs[1].RightId };
+        Assert.Equal(HttpStatusCode.NotFound, (await other.Client.PostAsJsonAsync(checkUrl, correctPair)).StatusCode);
+        Assert.False((await Post<CheckWordPairResponse>(student.Client, checkUrl, wrongPair)).Correct);
+        Assert.True((await Post<CheckWordPairResponse>(student.Client, checkUrl, correctPair)).Correct);
+        Assert.Equal(HttpStatusCode.BadRequest, (await student.Client.PostAsJsonAsync(checkUrl,
+            correctPair with { RightId = "not-issued" })).StatusCode);
         var answer = new AnswerLevelRequest(exercise.AttemptToken, ExerciseJson.Element(new WordMatchAnswer(pairs)));
         Assert.Equal(HttpStatusCode.NotFound, (await other.Client.PostAsJsonAsync(LevelAnswerUrl(level), answer)).StatusCode);
         var result = await Post<LevelAnswerResponse>(student.Client, LevelAnswerUrl(level), answer);
         Assert.True(result.Recognized);
         Assert.Equal(result, await Post<LevelAnswerResponse>(student.Client, LevelAnswerUrl(level), answer));
+        Assert.Equal(HttpStatusCode.Conflict, (await student.Client.PostAsJsonAsync(checkUrl, correctPair)).StatusCode);
         using var scope = f.Services.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<CoreDbContext>();
         Assert.Equal(5, await db.Set<VocabularyEntry>().CountAsync()); Assert.Single(await db.Set<LevelAnswer>().ToArrayAsync());
         Assert.False(await db.Judgments.AnyAsync());

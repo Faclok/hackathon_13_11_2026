@@ -8,7 +8,7 @@ import { culturalPrizes } from "./prizes";
 
 // Catalog, artwork and drop weights adapted from castomization-page.
 export const KEY_PRICE = 10;
-export const DUPLICATE_COMPENSATION = 5;
+export const DUPLICATE_COMPENSATION = 3;
 export const rarities = {
   common: { label: "Обычный", weight: 45 },
   rare: { label: "Редкий", weight: 30 },

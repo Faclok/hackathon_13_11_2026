@@ -54,7 +54,9 @@ public sealed class ResolutionProcessor(CoreDbContext db, TimeProvider clock)
     {
         var claims = await (from r in db.Responses where r.CaseId == caseId && !r.Archived
                             join j in db.Judgments on r.Id equals j.ResponseId where j.Kind == JudgmentKind.Support
-                            select new { Judgment = j, r.ParticipantId }).ToArrayAsync(ct);
+                            join a in db.Assignments on r.AssignmentId equals a.Id
+                            select new { Judgment = j, r.ParticipantId,
+                                IsBoss = a.Kind == "boss-teacher" || db.Set<LevelBossQuestion>().Any(x => x.AssignmentId == a.Id) }).ToArrayAsync(ct);
         var accepted = resolution.Accepted.ToHashSet();
         var rejected = resolution.Rejected.ToHashSet();
         foreach (var claim in claims)
@@ -66,6 +68,9 @@ public sealed class ResolutionProcessor(CoreDbContext db, TimeProvider clock)
             var total = outcome == AssessmentOutcome.Pending ? 0 : 1;
             var deltaCorrect = correct - (prior?.Correct ?? 0);
             var deltaTotal = total - (prior?.Total ?? 0);
+            if (deltaCorrect != 0 && claim.IsBoss)
+                await db.Set<PlayerState>().Where(x => x.ParticipantId == claim.ParticipantId)
+                    .ExecuteUpdateAsync(s => s.SetProperty(x => x.Coins, x => x.Coins + 4 * deltaCorrect), ct);
             await db.Participants.Where(x => x.Id == claim.ParticipantId).ExecuteUpdateAsync(s =>
                 s.SetProperty(x => x.Correct, x => x.Correct + deltaCorrect).SetProperty(x => x.Total, x => x.Total + deltaTotal), ct);
             if (prior is null)

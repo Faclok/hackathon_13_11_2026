@@ -24,6 +24,8 @@ export interface BossQuestion {
 export interface BossLevel { id: string; checkpoint: number; questionCount: number; completedCount: number; question: BossQuestion | null }
 export type BossAnswer = { action: "Confirm"; selectedVariantId?: string } | { action: "Correct"; correction: string } | { action: "Skip" };
 export interface BossAnswerResult { responseId: string; archived: boolean; bossCompleted: boolean }
+export interface TeacherBossTask { id: string; title: string; sourceText: string; className: string; dueAt: string | null }
+export type BossSource = { source: "teacher"; task: TeacherBossTask } | { source: "random"; assignment: BossQuestion };
 
 export const getLearningProgress = () => apiRequest<LearningProgress>("/api/learning/progress");
 export const getLevelStatistics = (offset = 0, limit = 20) =>
@@ -33,7 +35,17 @@ export const answerLevel = (levelId: string, questionId: string, attemptToken: s
   apiRequest<LevelAnswerResult>(`/api/learning/levels/${encodeURIComponent(levelId)}/questions/${encodeURIComponent(questionId)}/answer`, {
     method: "POST", body: JSON.stringify({ attemptToken, answer }),
   });
+export const checkWordPair = (levelId: string, questionId: string, attemptToken: string, leftId: string, rightId: string) =>
+  apiRequest<{ correct: boolean }>(`/api/learning/levels/${encodeURIComponent(levelId)}/questions/${encodeURIComponent(questionId)}/pairs/check`, {
+    method: "POST", body: JSON.stringify({ attemptToken, leftId, rightId }),
+  });
 export const getBossLevel = () => apiRequest<BossLevel | null>("/api/learning/boss", { method: "POST" });
+export const getNextBossSource = () => apiRequest<BossSource | null>("/api/lms/me/next-translation", { method: "POST" });
+export const startBoss = () => apiRequest<{ id: string; checkpoint: number } | null>("/api/learning/boss/start", { method: "POST" });
+export const answerTeacherBoss = (taskId: string, answer: string) =>
+  apiRequest<{ bossCompleted: boolean }>(`/api/lms/me/tasks/${encodeURIComponent(taskId)}/submission`, {
+    method: "PUT", body: JSON.stringify({ answer, boss: true }),
+  });
 export const answerBoss = (bossId: string, assignmentId: string, answer: BossAnswer) =>
   apiRequest<BossAnswerResult>(`/api/learning/bosses/${encodeURIComponent(bossId)}/questions/${encodeURIComponent(assignmentId)}/answer`, {
     method: "POST", body: JSON.stringify(answer),

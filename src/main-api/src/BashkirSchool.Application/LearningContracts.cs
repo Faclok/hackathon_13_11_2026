@@ -5,7 +5,8 @@ public sealed record ExerciseItem(string Id, string Text);
 public sealed record WordPairAnswer(string LeftId, string RightId);
 public sealed record TextExerciseAnswer(string Text);
 public sealed record ChoiceExerciseAnswer(string OptionId);
-public sealed record ChoiceAnswerKey(string CorrectId, string CorrectText, IReadOnlyList<ExerciseItem> Options);
+public sealed record ChoiceAnswerKey(string CorrectId, string CorrectText, IReadOnlyList<ExerciseItem> Options,
+    IReadOnlyList<string>? AcceptedIds = null);
 public sealed record WordHint(string Word, string Translation);
 public sealed record GapExerciseAnswer(string? Text = null, string? OptionId = null);
 public sealed record WordMatchAnswer(IReadOnlyList<WordPairAnswer> Pairs);

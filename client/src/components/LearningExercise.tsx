@@ -1,23 +1,26 @@
 import { useState, type FormEvent } from "react";
-import type { ExerciseAnswer, ExerciseQuestion } from "../api/learning";
+import { checkWordPair, type ExerciseAnswer, type ExerciseQuestion } from "../api/learning";
 
 interface Props {
+  levelId: string;
   question: ExerciseQuestion;
   busy: boolean;
   onSubmit: (answer: ExerciseAnswer) => void;
   onRefreshAudio: () => void;
 }
 
-export default function LearningExercise({ question, busy, onSubmit, onRefreshAudio }: Props) {
+export default function LearningExercise({ levelId, question, busy, onSubmit, onRefreshAudio }: Props) {
   const [text, setText] = useState("");
   const [selectedOption, setSelectedOption] = useState("");
   const [custom, setCustom] = useState(false);
   const [ordered, setOrdered] = useState<string[]>([]);
   const [left, setLeft] = useState("");
   const [pairs, setPairs] = useState<{ leftId: string; rightId: string }[]>([]);
+  const [checkingPair, setCheckingPair] = useState(false);
+  const [pairFeedback, setPairFeedback] = useState("");
+  const [wrongRight, setWrongRight] = useState("");
   const [audioError, setAudioError] = useState(false);
   const [revealedWord, setRevealedWord] = useState("");
-  const [revealedPhrase, setRevealedPhrase] = useState(false);
   const [revealedAudio, setRevealedAudio] = useState(false);
   const submitText = (event: FormEvent) => {
     event.preventDefault();
@@ -34,9 +37,6 @@ export default function LearningExercise({ question, busy, onSubmit, onRefreshAu
         return hint ? <button type="button" key={index} className="learning-word-hint" onClick={() => setRevealedWord(revealedWord === part ? "" : part)} aria-expanded={revealedWord === part} disabled={busy}>{part}</button> : <span key={index}>{part}</span>;
       })}</h2>
       {revealedWord && <p className="learning-reveal" role="status">{revealedWord} — {hints.get(revealedWord.toLocaleLowerCase())}</p>}
-      <p className="learning-hint">Нажми на подчёркнутое слово, чтобы увидеть его перевод.</p>
-      <button type="button" className="learning-phrase-hint" onClick={() => setRevealedPhrase(!revealedPhrase)} aria-expanded={revealedPhrase} disabled={busy}>Показать перевод всей фразы</button>
-      {revealedPhrase && <p className="learning-reveal" role="status">{question.prompt.hintTranslation}</p>}
       <div className="options-list" role="group" aria-label="Варианты перевода">
         {question.prompt.options.map((option) => <button key={option.id} type="button" className={`option ${selectedOption === option.id ? "selected" : ""}`} aria-pressed={selectedOption === option.id} disabled={busy} onClick={() => setSelectedOption(option.id)}>{option.text}</button>)}
       </div>
@@ -118,22 +118,42 @@ export default function LearningExercise({ question, busy, onSubmit, onRefreshAu
     case "word-match": {
       const usedLeft = new Set(pairs.map((pair) => pair.leftId));
       const usedRight = new Set(pairs.map((pair) => pair.rightId));
+      const chooseRight = async (rightId: string) => {
+        if (!left || checkingPair || busy) return;
+        setCheckingPair(true);
+        setWrongRight("");
+        setPairFeedback("");
+        try {
+          const result = await checkWordPair(levelId, question.id, question.attemptToken, left, rightId);
+          if (result.correct) {
+            setPairs((current) => [...current, { leftId: left, rightId }]);
+            setLeft("");
+            setPairFeedback("Верная пара! Выбери следующее слово.");
+          } else {
+            setWrongRight(rightId);
+            setPairFeedback("Неверная пара. Выбери другой перевод.");
+          }
+        } catch {
+          setPairFeedback("Не удалось проверить пару. Повтори попытку.");
+        } finally { setCheckingPair(false); }
+      };
       return <>
         <span className="eyebrow-label">СОПОСТАВЛЕНИЕ</span>
         <h2>Соедини пять пар</h2>
-        <p className="learning-hint">Выбери слово слева, затем подходящий перевод справа.</p>
+        <p className="learning-hint">Выбери слово слева, затем перевод справа. Каждая пара проверяется сразу.</p>
         <div className="match-columns">
           <div role="group" aria-label="Слова">
-            {question.prompt.left.map((item) => <button type="button" key={item.id} className={`option ${left === item.id ? "selected" : ""} ${usedLeft.has(item.id) ? "matched" : ""}`} aria-pressed={left === item.id} disabled={busy || usedLeft.has(item.id)} onClick={() => setLeft(item.id)}>{item.text}</button>)}
+            {question.prompt.left.map((item) => <button type="button" key={item.id} className={`option ${left === item.id ? "selected" : ""} ${usedLeft.has(item.id) ? "matched" : ""}`} aria-pressed={left === item.id} disabled={busy || checkingPair || usedLeft.has(item.id)} onClick={() => { setLeft(item.id); setWrongRight(""); setPairFeedback(""); }}>{item.text}</button>)}
           </div>
           <div role="group" aria-label="Переводы">
-            {question.prompt.right.map((item) => <button type="button" key={item.id} className={`option ${usedRight.has(item.id) ? "matched" : ""}`} disabled={busy || usedRight.has(item.id) || !left} onClick={() => { setPairs([...pairs, { leftId: left, rightId: item.id }]); setLeft(""); }}>{item.text}</button>)}
+            {question.prompt.right.map((item) => <button type="button" key={item.id} className={`option ${usedRight.has(item.id) ? "matched" : ""} ${wrongRight === item.id ? "incorrect" : ""}`} disabled={busy || checkingPair || usedRight.has(item.id) || !left} onClick={() => void chooseRight(item.id)}>{item.text}</button>)}
           </div>
         </div>
+        {pairFeedback && <p className={wrongRight ? "pair-feedback incorrect" : "pair-feedback"} role="status">{pairFeedback}</p>}
         <div className="learning-pairs" aria-label="Составленные пары">
           {pairs.map((pair) => <button key={pair.leftId} type="button" className="word-chip" disabled={busy} onClick={() => setPairs(pairs.filter((value) => value !== pair))}>{question.prompt.left.find((item) => item.id === pair.leftId)?.text} — {question.prompt.right.find((item) => item.id === pair.rightId)?.text} ×</button>)}
         </div>
-        <button className="button button-primary full-width" disabled={busy || pairs.length !== 5} onClick={() => onSubmit({ pairs })}>Проверить ответ</button>
+        <button className="button button-primary full-width" disabled={busy || checkingPair || pairs.length !== 5} onClick={() => onSubmit({ pairs })}>Завершить задание</button>
       </>;
     }
   }

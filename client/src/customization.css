@@ -44,6 +44,7 @@
   gap: 0 13px;
   padding: 23px 21px;
   margin-bottom: 26px;
+  scroll-margin-top: 18px;
 }
 .keys-card-icon {
   width: 45px;
@@ -94,8 +95,8 @@
 .key-price-note {
   grid-column: 1/-1;
   text-align: center;
-  color: #a1aa94;
-  font-size: 10px;
+  color: #5d6e59;
+  font-size: 11px;
   margin-top: 10px;
 }
 .cases-caption {
@@ -137,9 +138,9 @@
   min-height: 36px;
 }
 .reward-case-card > p {
-  font-size: 10px;
+  font-size: 11px;
   line-height: 15px;
-  color: #8a9480;
+  color: #596a55;
   margin: 4px 0 12px;
   min-height: 30px;
 }
@@ -149,42 +150,37 @@
   font-size: 11px;
   margin-top: 11px;
 }
-.case-rarity-dots {
+.case-rarity-list {
   display: flex;
-  gap: 5px;
+  flex-wrap: wrap;
+  gap: 4px;
   margin-bottom: 11px;
 }
-.rarity-dot {
-  height: 6px;
-  width: 18px;
-  border-radius: 8px;
+.case-rarity-item {
+  padding: 3px 5px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
 }
-.rarity-dot.rarity-common {
-  background: #abc3aa;
-}
-.rarity-dot.rarity-rare {
-  background: #9cbde4;
-}
-.rarity-dot.rarity-epic {
-  background: #b59dd6;
-}
-.rarity-dot.rarity-legendary {
-  background: #e4c26d;
-}
+.case-rarity-item.rarity-common { background: #e9f1e7; color: #3f6042; }
+.case-rarity-item.rarity-rare { background: #e9f0fb; color: #375c8f; }
+.case-rarity-item.rarity-epic { background: #f0e9fa; color: #684b88; }
+.case-rarity-item.rarity-legendary { background: #f8efd0; color: #765815; }
 .case-contents-button {
   display: flex;
   align-items: center;
   justify-content: space-between;
   width: 100%;
   background: transparent;
-  font-size: 10px;
-  color: #8a9a7a;
+  font-size: 11px;
+  color: #53664e;
   margin-top: auto;
   padding: 4px 0;
 }
 .case-duplicate-note {
-  font-size: 10px;
-  color: #a1ab95;
+  font-size: 11px;
+  color: #586b55;
   text-align: center;
   margin: 19px 0 5px;
 }
@@ -194,26 +190,26 @@
   justify-content: center;
   border-radius: 7px;
   padding: 4px 6px;
-  font-size: 8px;
+  font-size: 10px;
   font-weight: 600;
   line-height: 12px;
   white-space: nowrap;
 }
 .rarity-label.rarity-common {
   background: #eef3e9;
-  color: #879b77;
+  color: #426045;
 }
 .rarity-label.rarity-rare {
   background: #eaf1fc;
-  color: #7498c5;
+  color: #355b8b;
 }
 .rarity-label.rarity-epic {
   background: #f1eafb;
-  color: #a18abd;
+  color: #684b89;
 }
 .rarity-label.rarity-legendary {
   background: #fbf0d1;
-  color: #b99c4d;
+  color: #765815;
 }
 .case-contents-intro {
   font-size: 12px;
@@ -502,15 +498,28 @@
   align-items: center;
   gap: 5px;
   background: #edf1e6;
-  color: #95a086;
+  color: #53664f;
   border: 1px solid transparent;
   border-radius: 12px;
   padding: 10px 3px;
-  font-size: 10px;
+  font-size: 11px;
 }
 .inventory-tabs button > span {
-  font-size: 8px;
-  opacity: 0.7;
+  font-size: 10px;
+}
+.inventory-section-title {
+  margin: 18px 4px 12px;
+  color: #243b29;
+  font-size: 17px;
+  font-weight: 700;
+}
+.inventory-base-section {
+  margin-top: 24px;
+}
+.inventory-base-section > p {
+  margin: -5px 4px 14px;
+  color: #586b57;
+  font-size: 12px;
 }
 .inventory-tabs button.active {
   background: #fff;
@@ -609,3 +618,7 @@
     transition: none;
   }
 }
+.sword-card .decoration-preview { position: relative; display: grid; place-items: center; }
+.sword-art { font-size: 62px; line-height: 1; }
+.sword-stack { position: absolute; right: 12px; bottom: 10px; padding: 3px 8px; border-radius: 12px; background: #294b2d; color: white; font-size: 16px; }
+.sword-card > p { min-height: 56px; margin: 7px 0 13px; color: #536b50; font-size: 12px; line-height: 1.4; }

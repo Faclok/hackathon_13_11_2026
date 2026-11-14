@@ -84,14 +84,21 @@ public static class LmsCatalogEndpoints
             if (latest?.Reason == answerKey)
             {
                 var existing = await db.Variants.FirstAsync(x => x.CaseId == caseId && x.Text == text, ct);
-                return Results.Ok(new { variantId = existing.Id, archived = translationCase.ExpertClosed });
+                var prior = await db.Audit.Where(x => x.ActorId == actor && x.TargetId == input.TaskId && x.Action == "lms.boss-answer")
+                    .OrderByDescending(x => x.At).FirstOrDefaultAsync(ct);
+                return input.Boss && prior is null ? Results.Conflict(new { title = "This task was already answered outside the boss." })
+                    : Results.Ok(new { variantId = existing.Id, archived = translationCase.ExpertClosed,
+                        assignmentId = prior is null ? (Guid?)null : Guid.Parse(prior.Reason!) });
             }
+            if (input.Boss && !await db.Set<LevelBoss>().AnyAsync(x => x.ParticipantId == actor && x.CompletedAt == null, ct))
+                return Results.Forbid();
             var variant = await db.Variants.FirstOrDefaultAsync(x => x.CaseId == caseId && x.Text == text, ct);
             if (variant is null)
             {
                 variant = TranslationVariant.Create(caseId, text, false, createdBy: actor, createdAt: clock.GetUtcNow());
                 db.Variants.Add(variant);
             }
+            Guid? bossAssignmentId = null;
             if (!translationCase.ExpertClosed)
             {
                 var policy = await db.Policies.OrderByDescending(x => x.Version).FirstAsync(ct);
@@ -101,6 +108,7 @@ public static class LmsCatalogEndpoints
                 var now = clock.GetUtcNow();
                 var assignment = ReviewAssignment.Issue(actor, translationCase, enrollment?.SchoolId, enrollment?.ClassId,
                     policy.Id, now, TimeSpan.FromMinutes(policy.AssignmentMinutes));
+                if (input.Boss) { assignment.SetTeacherBoss(); bossAssignmentId = assignment.Id; }
                 var shown = await db.Variants.SingleAsync(x => x.Id == translationCase.ShownVariantId, ct);
                 var action = text == shown.Text ? ReviewAction.Confirm : ReviewAction.Correct;
                 var trust = await db.Participants.Where(x => x.Id == actor).Select(x => x.Trust).SingleAsync(ct);
@@ -111,13 +119,16 @@ public static class LmsCatalogEndpoints
                 db.Judgments.AddRange(response.Judgments(assignment.ShownVariantId,
                     action == ReviewAction.Correct ? variant.Id : null));
                 db.Outbox.Add(new() { CaseId = caseId, ResponseId = response.Id, CreatedAt = now });
-                await economy.RewardReviewAsync(actor, false, ct);
+                await economy.RewardReviewAsync(actor, input.Boss, ct);
+                if (input.Boss) db.Audit.Add(new() { ActorId = actor, TargetId = input.TaskId, Action = "lms.boss-answer",
+                    Reason = assignment.Id.ToString(), At = clock.GetUtcNow() });
             }
             db.Audit.Add(new() { ActorId = actor, TargetId = input.TaskId, Action = "lms.student-answer",
                 Reason = answerKey, At = clock.GetUtcNow() });
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
-            return Results.Ok(new { variantId = variant.Id, archived = translationCase.ExpertClosed });
+            return Results.Ok(new { variantId = variant.Id, archived = translationCase.ExpertClosed,
+                assignmentId = bossAssignmentId });
         });
         api.MapPost("/teacher/translations", async (TeacherCandidateInput input, ClaimsPrincipal principal,
             HttpRequest request, IConfiguration configuration, CoreDbContext db, CancellationToken ct) =>
@@ -201,7 +212,7 @@ public static class LmsCatalogEndpoints
     }
     private sealed record PopularTranslation(Guid Id, string Text, int Supports, int Votes);
     private sealed record TeacherCandidateInput(Guid ExternalId, string SourceText, string TranslationText, string LanguagePair);
-    private sealed record StudentAnswerInput(Guid TaskId, string Text);
+    private sealed record StudentAnswerInput(Guid TaskId, string Text, bool Boss = false);
     private sealed record ExpertRequestInput(string Note);
     private static bool LmsAuthorized(HttpRequest request, IConfiguration configuration)
     {

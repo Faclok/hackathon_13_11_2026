@@ -23,6 +23,7 @@ import {
 import CaseOpeningModal from "../components/CaseOpeningModal";
 import { Icon, Modal, PageTitle, useToast } from "../components/ui";
 import "../customization.css";
+import { plural } from "../utils/plural";
 
 export default function Cases() {
   const user = useUserStore((state) => state.user)!;
@@ -47,10 +48,10 @@ export default function Cases() {
   return (
     <>
       <PageTitle subtitle="Ключ к маленькому открытию">
-        Барабан · испытай удачу
+        Кейсы
       </PageTitle>
       <EconomyBalance />
-      <section className="surface keys-card">
+      <section className="surface keys-card" id="keys-card">
         <span className="keys-card-icon">
           <Icon name="key" size={29} />
         </span>
@@ -89,9 +90,9 @@ export default function Cases() {
         >
           {user.coins < quantity * KEY_PRICE
             ? "Недостаточно монет"
-            : `Купить ${keyCount(quantity)} · ${quantity * KEY_PRICE} монет`}
+            : `Купить ${keyCount(quantity)} · ${plural(quantity * KEY_PRICE, "монета", "монеты", "монет")}`}
         </button>
-        <p className="key-price-note">1 ключ — {KEY_PRICE} монет</p>
+        <p className="key-price-note">1 ключ — {plural(KEY_PRICE, "монета", "монеты", "монет")}</p>
       </section>
       <div className="section-caption cases-caption">
         <h2>Выбери свой кейс</h2>
@@ -109,11 +110,8 @@ export default function Cases() {
             </div>
             <h2>{caseItem.title}</h2>
             <p>{caseItem.description}</p>
-            <div
-              className="case-rarity-dots"
-              aria-label="Редкости в этом кейсе"
-            >
-              {Object.keys(rarities)
+            <div className="case-rarity-list" aria-label="Редкости в этом кейсе">
+              {(Object.keys(rarities) as (keyof typeof rarities)[])
                 .filter((rarity) =>
                   getCaseDrops(caseItem).some(
                     (item) => (item.rarity ?? "common") === rarity,
@@ -122,8 +120,8 @@ export default function Cases() {
                 .map((rarity) => (
                   <span
                     key={rarity}
-                    className={`rarity-dot rarity-${rarity}`}
-                  />
+                    className={`case-rarity-item rarity-${rarity}`}
+                  >{rarities[rarity].label}</span>
                 ))}
             </div>
             <button
@@ -132,9 +130,9 @@ export default function Cases() {
             >
               Что внутри <Icon name="arrow" size={12} />
             </button>
-            <button
+            {user.caseKeys < 1 ? <a className="button button-soft full-width" href="#keys-card">Купить ключ</a> : <button
               className="button button-primary full-width"
-              disabled={busy || user.caseKeys < 1 || !!opening}
+              disabled={busy || !!opening}
               onClick={async () => {
                 setBusy(true);
                 try {
@@ -144,13 +142,13 @@ export default function Cases() {
                 } finally { setBusy(false); }
               }}
             >
-              {user.caseKeys < 1 ? "Нужен ключ" : "Открыть кейс"}
-            </button>
+              Открыть кейс
+            </button>}
           </article>
         ))}
       </div>
       <p className="case-duplicate-note">
-        Повторный предмет принесёт {DUPLICATE_COMPENSATION} монет.
+        Повторный предмет принесёт {plural(DUPLICATE_COMPENSATION, "монета", "монеты", "монет")}.
       </p>
       {error && <p role="alert">{error}</p>}
       <Link to="/inventory" className="button button-soft full-width">
@@ -172,7 +170,7 @@ export default function Cases() {
                   <strong>{item.title}</strong>
                   <small>
                     {entry.duplicate
-                      ? `Повтор · +${entry.compensation} монет`
+                      ? `Повтор · +${plural(entry.compensation, "монета", "монеты", "монет")}`
                       : "В твоей коллекции"}
                   </small>
                 </span>

@@ -25,7 +25,7 @@ export function EconomyBalance() {
           <strong data-testid="coin-balance">{user.coins}</strong>
         </span>
       </div>
-      <Link to="/wheel" aria-label={`Ключи к кейсам: ${user.caseKeys}`}>
+      <Link to="/cases" aria-label={`Ключи к кейсам: ${user.caseKeys}`}>
         <Icon name="key" size={23} />
         <span>
           <small>Ключи</small>
