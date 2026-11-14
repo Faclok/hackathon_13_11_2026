@@ -459,3 +459,77 @@ button.equipped-pet {
   color: #7b916b;
   line-height: 16px;
 }
+
+/* Supplied collection artwork keeps its original colors and proportions. */
+.decoration-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: inherit;
+}
+.background-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.artwork-background::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: #f3f8ef38;
+}
+.item-preview-symbol:has(> .decoration-art) {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border-radius: inherit;
+}
+.floating-item:has(> .decoration-art) {
+  border-radius: 9px;
+  overflow: hidden;
+  aspect-ratio: 1;
+  height: auto;
+}
+.equipped-pet > span:has(> .decoration-art) {
+  aspect-ratio: 1;
+  border-radius: 50%;
+  overflow: hidden;
+}
+.history-item-icon:has(> .decoration-art) {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 9px;
+}
+.item-detail-icon:has(> .decoration-art) {
+  width: 160px;
+  height: 160px;
+  margin: 0 auto 18px;
+  border-radius: 18px;
+}
+.floating-item.distributed-item {
+  top: var(--item-top);
+  left: var(--item-left);
+  right: var(--item-right);
+  bottom: auto;
+}
+.profile-header:has(.distributed-item) .xp-caption {
+  margin-inline: 32px;
+}
+.shop-preview .floating-item.distributed-item:nth-child(1) {
+  left: auto;
+  right: 8px;
+  top: 9px;
+}
+.shop-preview .floating-item.distributed-item:nth-child(2) {
+  left: auto;
+  right: 17px;
+  top: auto;
+  bottom: 7px;
+}
+.shop-preview:has(.equipped-pet) .floating-item.distributed-item:nth-child(2) {
+  right: 10px;
+  bottom: 45px;
+}

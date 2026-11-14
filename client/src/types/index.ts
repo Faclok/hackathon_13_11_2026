@@ -57,6 +57,14 @@ export interface BossPhrase {
   bashkir: string;
   options: { id: string; ru: string; votes: number }[];
   totalVotes: number;
+  source?: {
+    fragmentId: string;
+    dataset: string;
+    recordId: string;
+    collection: string;
+    attribution: string;
+    license: string;
+  };
 }
 export interface BossAnswer {
   phraseId: string;
@@ -70,6 +78,7 @@ export interface Decoration {
   title: string;
   description: string;
   previewUrl: string;
+  imageUrl?: string;
   price: number;
   source: "shop" | "wheel";
   rarity?: "common" | "rare" | "epic" | "legendary";
@@ -79,7 +88,7 @@ export interface Decoration {
 }
 export interface RewardCase {
   id: string;
-  type: "hat" | "frame" | "background" | "pet";
+  type: "hat" | "frame" | "background" | "pet" | "item";
   title: string;
   description: string;
   imageUrl: string;

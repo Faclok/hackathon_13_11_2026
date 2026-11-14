@@ -1060,6 +1060,111 @@ input:focus {
   font-size: 13px;
   color: #859379;
 }
+.boss-locked-card {
+  padding: 30px 22px;
+  text-align: center;
+}
+.boss-lock-icon {
+  width: 74px;
+  height: 74px;
+  margin: 0 auto 23px;
+  display: grid;
+  place-items: center;
+  border-radius: 24px;
+  background: #edf3e4;
+  color: #87a46e;
+}
+.boss-locked-card h2 {
+  font-size: 23px;
+  line-height: 31px;
+  font-weight: 700;
+  letter-spacing: -0.6px;
+  margin: 11px 0 14px;
+}
+.boss-locked-card > p {
+  font-size: 12px;
+  line-height: 20px;
+  color: #86927b;
+}
+.boss-current-rank {
+  display: block;
+  font-size: 11px;
+  color: #8b987f;
+  margin-top: 22px;
+}
+.boss-current-rank strong {
+  color: #63834a;
+}
+.boss-unlock-progress {
+  margin-top: 24px;
+  text-align: left;
+}
+.boss-unlock-progress > div:not(.progress-track) {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 17px 0 9px;
+  font-size: 11px;
+  color: #8a977e;
+}
+.boss-unlock-progress strong {
+  font-size: 11px;
+  color: #6e8e55;
+  font-weight: 600;
+}
+.boss-unlock-progress + .button {
+  margin-top: 26px;
+}
+.boss-locked-card .boss-eligible-ranks {
+  font-size: 10px;
+  margin-top: 23px;
+  color: #9da98f;
+}
+.boss-access-badge {
+  display: inline-block;
+  margin: 12px 0 2px;
+  border-radius: 99px;
+  padding: 7px 12px;
+  background: #edf4e3;
+  color: #7b9a5e;
+  font-size: 10px;
+}
+.boss-source {
+  display: block;
+  color: #93a084;
+  font-size: 9px;
+  line-height: 15px;
+  overflow-wrap: anywhere;
+}
+.rank-list small.rank-unlocks-boss {
+  color: #719650;
+  font-weight: 600;
+  margin-top: 7px;
+}
+.profile-boss-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px;
+  border-radius: 22px;
+  margin-bottom: 16px;
+  color: #739557;
+}
+.profile-boss-link > span {
+  flex: 1;
+}
+.profile-boss-link strong {
+  display: block;
+  font-size: 12px;
+  color: #567646;
+}
+.profile-boss-link small {
+  display: block;
+  font-size: 10px;
+  color: #92a17e;
+  line-height: 16px;
+  margin-top: 5px;
+}
 .tabs {
   display: flex;
   background: #e9efdf;

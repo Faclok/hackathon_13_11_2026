@@ -109,7 +109,9 @@ export default function CaseOpeningModal({
                 ? "Применить фон"
                 : winner.type === "pet"
                   ? "Позвать питомца"
-                  : "Надеть"}
+                  : winner.type === "item"
+                    ? "На фон"
+                    : "Надеть"}
           </button>
           <Link
             to="/inventory"

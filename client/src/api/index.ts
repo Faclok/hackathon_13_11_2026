@@ -7,12 +7,18 @@ import {
 import type { DailyAnswer, User } from "../types";
 import { schoolDay, dayNumber } from "../utils/calendar";
 import { decorationCatalog, rewardCases } from "../mocks/customization";
+import { canAccessBoss } from "../utils/ranks";
 // Replace mock implementations with fetch calls when the API is connected.
 export const getLessons = async () => lessons;
 export const getDaily = async () =>
   dailyFragments[dayNumber(schoolDay()) % dailyFragments.length];
 export const submitDaily = async (answer: DailyAnswer) => answer;
-export const getBossPhrases = async () => bossPhrases;
+export const getBossPhrases = async (
+  user: Pick<User, "tasksSolved" | "streak">,
+) => {
+  if (!canAccessBoss(user)) throw new Error("BOSS_RANK_REQUIRED");
+  return bossPhrases;
+};
 export const getDecorations = async () => decorationCatalog;
 export const getCases = async () => rewardCases;
 export const getLeaderboard = async (

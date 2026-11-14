@@ -3,10 +3,17 @@ import { Link, useNavigate } from "react-router-dom";
 import { getLeaderboard } from "../api";
 import { trophies } from "../mocks/data";
 import { useProgressStore, useUserStore } from "../store";
+import {
+  ranks,
+  BOSS_MIN_RANK,
+  getCurrentRank,
+  canAccessBoss,
+} from "../utils/ranks";
 import type { Decoration } from "../types";
 import { Mascot, SchoolLogo } from "../components/Illustrations";
 import {
   Avatar,
+  DecorationArtwork,
   FloatingItems,
   ProfileBackground,
 } from "../components/Personalization";
@@ -178,23 +185,10 @@ export function Leaderboard() {
   );
 }
 
-const ranks = [
-  ["Яңы башлаусы", 0, 0],
-  ["Уҡыусы", 10, 0],
-  ["Тырыш", 50, 3],
-  ["Белгес", 100, 7],
-  ["Оста", 250, 14],
-  ["Батыр", 500, 30],
-  ["Аҡыл эйәһе", 1000, 60],
-] as const;
 export function Profile() {
   const user = useUserStore((s) => s.user)!;
   const navigate = useNavigate();
-  const currentRank = ranks
-    .filter(
-      ([, tasks, streak]) => user.tasksSolved >= tasks && user.streak >= streak,
-    )
-    .at(-1)!;
+  const currentRank = getCurrentRank(user);
   const [itemInfo, setItemInfo] = useState<Decoration | null>(null);
   return (
     <>
@@ -223,7 +217,9 @@ export function Profile() {
       </section>
       {itemInfo && (
         <Modal title={itemInfo.title} onClose={() => setItemInfo(null)}>
-          <div className="item-detail-icon">{itemInfo.previewUrl}</div>
+          <div className="item-detail-icon">
+            <DecorationArtwork item={itemInfo} />
+          </div>
           <p>{itemInfo.description}</p>
           <button
             className="button button-soft full-width"
@@ -280,6 +276,11 @@ export function Profile() {
                 <small>
                   {tasks} задач{streak > 0 && ` · серия ${streak} дней`}
                 </small>
+                {name === BOSS_MIN_RANK[0] && (
+                  <small className="rank-unlocks-boss">
+                    Открывает Босс-испытание
+                  </small>
+                )}
                 {user.tasksSolved < tasks && (
                   <ProgressBar
                     value={Math.min(user.tasksSolved, tasks)}
@@ -291,6 +292,21 @@ export function Profile() {
           ))}
         </div>
       </section>
+      <Link
+        to={canAccessBoss(user) ? "/boss" : "/learn"}
+        className="surface profile-boss-link"
+      >
+        <Icon name={canAccessBoss(user) ? "swords" : "lock"} />
+        <span>
+          <strong>Босс-испытание</strong>
+          <small>
+            {canAccessBoss(user)
+              ? "Твоё звание открывает рейтинговые переводы"
+              : `Доступ со звания «${BOSS_MIN_RANK[0]}»`}
+          </small>
+        </span>
+        <Icon name="arrow" size={17} />
+      </Link>
       <section className="surface profile-section">
         <h2>Витрина трофеев</h2>
         <div className="trophy-grid">

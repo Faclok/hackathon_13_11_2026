@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import BossLocked from "../components/BossLocked";
+import { BOSS_MIN_RANK, canAccessBoss, getCurrentRank } from "../utils/ranks";
 import { getBossPhrases } from "../api";
 import { useProgressStore, useUserStore } from "../store";
-import type { BossAnswer, BossPhrase } from "../types";
+import type { BossAnswer, BossPhrase, User } from "../types";
 import {
   Icon,
   IssueReportButton,
@@ -11,6 +13,16 @@ import {
 } from "../components/ui";
 
 export default function Boss() {
+  const user = useUserStore((state) => state.user);
+  if (!user) return null;
+  return canAccessBoss(user) ? (
+    <BossChallenge user={user} />
+  ) : (
+    <BossLocked user={user} />
+  );
+}
+
+function BossChallenge({ user }: { user: User }) {
   const [phrases, setPhrases] = useState<BossPhrase[]>([]);
   const [stage, setStage] = useState("intro");
   const [answers, setAnswers] = useState<BossAnswer[]>([]);
@@ -19,12 +31,12 @@ export default function Boss() {
   const [accepted, setAccepted] = useState(false);
   const [reward, setReward] = useState({ xp: 0, coins: 0 });
   useEffect(() => {
-    getBossPhrases().then(setPhrases);
+    getBossPhrases(user).then(setPhrases);
   }, []);
   const index = answers.length - (accepted ? 1 : 0);
   const phrase = phrases[index];
   const submit = (chosenOptionId?: string) => {
-    if (accepted) return;
+    if (accepted || !canAccessBoss(useUserStore.getState().user)) return;
     setAnswers([
       ...answers,
       {
@@ -37,6 +49,7 @@ export default function Boss() {
     setAccepted(true);
   };
   const next = () => {
+    if (!canAccessBoss(useUserStore.getState().user)) return;
     if (answers.length === phrases.length) {
       const first = !useUserStore.getState().user?.trophyIds.includes("boss");
       useProgressStore.getState().saveBoss(answers);
@@ -67,13 +80,17 @@ export default function Boss() {
         <section className="surface intro-card">
           <div className="boss-emblem">👑</div>
           <span className="eyebrow-label">БӘЙГЕ · ХАН ПЕРЕВОДА</span>
+          <span className="boss-access-badge">
+            {getCurrentRank(user)[0]} · доступ открыт
+          </span>
           <h2>Почувствуй язык вместе с другими</h2>
           <p>
             {phrases.length || 3} фразы на башкирском. Выбери перевод, который
             кажется самым популярным, или предложи свой.
           </p>
           <p className="soft-note">
-            Здесь нет правильного ответа — есть мнение сообщества.
+            Для званий «{BOSS_MIN_RANK[0]}», «Батыр» и «Аҡыл эйәһе». Здесь нет
+            правильного ответа — есть мнение сообщества.
           </p>
           <div className="reward-row">
             <span>✦ +100 XP</span>
@@ -119,6 +136,12 @@ export default function Boss() {
               <ProgressBar value={index} max={phrases.length} />
             </div>
             <section className="surface task-panel">
+              {phrase.source && (
+                <span className="boss-source">
+                  Источник: {phrase.source.collection} ·{" "}
+                  {phrase.source.recordId}
+                </span>
+              )}
               <h2 className="bashkir-text" lang="ba">
                 {phrase.bashkir}
               </h2>
