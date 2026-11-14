@@ -4,6 +4,34 @@
 
 ## Запуск и секреты
 
+Все прикладные настройки явно перечислены в [appsettings.json](../src/BashkirSchool.Host/appsettings.json). Пустые `ConnectionStrings:Core`, `Jwt:SigningKey`, `Bootstrap:Password` нужно заполнить через окружение. Готовый перечень переменных непосредственно для контейнера — [container.env.example](../container.env.example): скопируйте его в приватный файл вне Git, замените значения `<...>` и передайте через `docker run --env-file`. Значения окружения переопределяют appsettings.
+
+### Непосредственно в контейнер main-api
+
+| Переменная контейнера | Нужно заполнить / значение по умолчанию |
+| --- | --- |
+| `ConnectionStrings__Core` | **Обязательно:** адрес, порт, БД, пользователь и пароль PostgreSQL; адрес должен быть доступен из контейнера |
+| `Jwt__SigningKey` | **Обязательно:** постоянный случайный секрет минимум 32 байта UTF-8 |
+| `Bootstrap__Username` | На пустой БД: логин первого администратора; по умолчанию `admin` |
+| `Bootstrap__Password` | **Обязательно на пустой БД:** минимум 12 символов, большие/малые буквы, цифра и спецсимвол |
+| `ASPNETCORE_ENVIRONMENT` | `Production`; для обычного развёртывания не включать Development |
+| `ASPNETCORE_HTTP_PORTS` | `8080` в Dockerfile; порт внутри контейнера |
+| `Jwt__Issuer` | `BashkirSchool.Core` |
+| `Jwt__Audience` | `BashkirSchool.Clients` |
+| `Database__InitializeOnStartup` | `true`: применять миграции и выполнять первичный bootstrap |
+| `Processing__BackgroundEnabled` | `true`: фоновый пересчёт согласования и доверия |
+| `Registration__PermitLimit` | `10`: число попыток регистрации за окно, минимум 1 |
+| `Registration__WindowSeconds` | `60`: окно ограничения регистрации в секундах, минимум 1 |
+| `Learning__TimeZone` | `Europe/Moscow`: часовой пояс дневного урока |
+| `Learning__LessonSize` | `10`: число заданий, допустимо 1–100 |
+| `DataProtection__KeyDirectory` | Пусто: ключи в PostgreSQL; при заданном пути нужен постоянный доступный для записи том |
+| `AllowedHosts` | `*`; при ограничении перечислите принимаемые имена хостов через `;` |
+| `Logging__LogLevel__Default` | `Information` |
+
+Отдельные уровни `Logging:LogLevel:Microsoft.AspNetCore` и `Logging:LogLevel:Microsoft.EntityFrameworkCore.Database.Command` заданы в appsettings как `Warning`; для запуска их менять не требуется. При использовании `ASPNETCORE_URLS` он переопределяет `ASPNETCORE_HTTP_PORTS`; существующий Compose использует `http://+:8080`.
+
+### Через корневой Compose / Coolify
+
 Ядро поставляется одним Dockerfile. Существующий корневой `compose.yaml` собирает его с контекстом `./src/main-api`. Отдельные Compose или Aspire для ядра не нужны.
 
 В корневой `.env` или секретах Coolify задайте:
