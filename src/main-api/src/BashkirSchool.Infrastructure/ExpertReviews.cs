@@ -45,7 +45,8 @@ public sealed class ExpertReviews(CoreDbContext db, IPermissionChecker permissio
             var view = await evidence.ViewAsync(c, ct);
             var observations = view.Variants.Sum(x => x.Supports);
             var lead = view.Variants.Max(x => x.SupportRatio) ?? 0m;
-            if (!Eligible(c, observations, lead, policy) || await ActiveClaim(c.Id, ct) is not null) continue;
+            var teacherRequested = await db.Audit.AnyAsync(x => x.TargetId == c.Id && x.Action == "lms.expert.requested", ct);
+            if (!Eligible(c, observations, lead, policy, teacherRequested) || await ActiveClaim(c.Id, ct) is not null) continue;
             result.Add(new(c.Id, c.Revision, view.Original, true, observations, lead, c.CreatedAt));
         }
         return result.OrderBy(x => x.LeadingSupport).ThenBy(x => x.CreatedAt).ToArray();
@@ -100,7 +101,8 @@ public sealed class ExpertReviews(CoreDbContext db, IPermissionChecker permissio
         var view = await evidence.ViewAsync(c, ct);
         var count = view.Variants.Sum(x => x.Supports);
         var lead = view.Variants.Max(x => x.SupportRatio) ?? 0m;
-        if (!Eligible(c, count, lead, await CurrentPolicy(ct))) throw new ConflictException("Case does not need expert review.");
+        var teacherRequested = await db.Audit.AnyAsync(x => x.TargetId == caseId && x.Action == "lms.expert.requested", ct);
+        if (!Eligible(c, count, lead, await CurrentPolicy(ct), teacherRequested)) throw new ConflictException("Case does not need expert review.");
         var current = await ActiveClaim(caseId, ct);
         if (current is not null && current.ActorId != actor) throw new ConflictException("Case is already taken by another expert.");
         if (current is null)
@@ -129,7 +131,9 @@ public sealed class ExpertReviews(CoreDbContext db, IPermissionChecker permissio
     {
         await Require(actor, "expert.case.read", caseId, ct);
         var c = await db.Cases.AsNoTracking().SingleOrDefaultAsync(x => x.Id == caseId, ct) ?? throw new MissingResourceException();
-        return await evidence.ViewAsync(c, ct);
+        var note = await db.Audit.AsNoTracking().Where(x => x.TargetId == caseId && x.Action == "lms.expert.requested")
+            .OrderByDescending(x => x.At).Select(x => x.Reason).FirstOrDefaultAsync(ct);
+        return (await evidence.ViewAsync(c, ct)) with { TeacherNote = note };
     }
 
     public async Task<ResolutionResponse> ResolveAsync(Guid actor, Guid caseId, ResolveCaseRequest request, CancellationToken ct)
@@ -191,8 +195,8 @@ public sealed class ExpertReviews(CoreDbContext db, IPermissionChecker permissio
     private Task<DistributionPolicy> CurrentPolicy(CancellationToken ct) =>
         db.Policies.AsNoTracking().OrderByDescending(x => x.Version).FirstAsync(ct);
 
-    private static bool Eligible(TranslationCase c, int observations, decimal lead, DistributionPolicy policy) =>
-        !c.ExpertClosed && observations >= policy.RequiredParticipants && lead < policy.SupportThreshold;
+    private static bool Eligible(TranslationCase c, int observations, decimal lead, DistributionPolicy policy, bool teacherRequested) =>
+        !c.ExpertClosed && (teacherRequested || observations >= policy.RequiredParticipants && lead < policy.SupportThreshold);
 
     private async Task<AuditEntry?> LastClaimEvent(Guid caseId, CancellationToken ct)
     {

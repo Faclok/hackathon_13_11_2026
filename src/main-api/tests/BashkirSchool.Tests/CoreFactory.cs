@@ -22,7 +22,7 @@ public sealed class ManualClock : TimeProvider
     public override DateTimeOffset GetUtcNow() => Now;
 }
 
-public sealed class CoreFactory(int registrationLimit = 10, string? telegramKey = null) : WebApplicationFactory<Program>
+public sealed class CoreFactory(int registrationLimit = 10, string? telegramKey = null, string? lmsKey = null) : WebApplicationFactory<Program>
 {
     public const string Password = "School.Test.Password123!";
     private readonly SqliteConnection connection = new("Data Source=:memory:");
@@ -35,6 +35,7 @@ public sealed class CoreFactory(int registrationLimit = 10, string? telegramKey 
         builder.UseEnvironment("Development");
         builder.ConfigureLogging(logging => logging.ClearProviders());
         if (telegramKey is not null) builder.UseSetting("Telegram:InternalKey", telegramKey);
+        if (lmsKey is not null) builder.UseSetting("Lms:InternalKey", lmsKey);
         builder.UseSetting("Database:InitializeOnStartup", "false");
         builder.UseSetting("Processing:BackgroundEnabled", "false");
         builder.UseSetting("Registration:PermitLimit", registrationLimit.ToString());

@@ -131,6 +131,9 @@ public static class TeacherEndpoints
             if (Clean(input.SourceText, 5000) is not { } source || Clean(input.TranslationText, 5000) is not { } translation ||
                 input.LanguagePair is not ("ba-ru" or "ru-ba")) return Bad("Заполните предложение, перевод и направление перевода.");
             var item = new TeacherTranslation { TeacherId = user.Id, SourceText = source, TranslationText = translation, LanguagePair = input.LanguagePair };
+            var coreCaseId = await CreateCoreCandidate(request, factory, item.Id, source, translation, input.LanguagePair);
+            if (coreCaseId is null) return Results.StatusCode(502);
+            item.CoreCaseId = coreCaseId;
             db.TeacherTranslations.Add(item);
             await db.SaveChangesAsync();
             return Results.Created($"/api/lms/teacher/translations/{item.Id}", item);
@@ -150,7 +153,12 @@ public static class TeacherEndpoints
             if (item is null) return Results.NotFound();
             if (Clean(input.SourceText, 5000) is not { } source || Clean(input.TranslationText, 5000) is not { } translation ||
                 input.LanguagePair is not ("ba-ru" or "ru-ba")) return Bad("Заполните предложение, перевод и направление перевода.");
+            if (await db.ClassTasks.AnyAsync(x => x.TeacherTranslationId == id))
+                return Results.Conflict(new { title = "Перевод уже выдан классу. Создайте новый вариант." });
+            var coreCaseId = await CreateCoreCandidate(request, factory, Guid.NewGuid(), source, translation, input.LanguagePair);
+            if (coreCaseId is null) return Results.StatusCode(502);
             item.SourceText = source; item.TranslationText = translation; item.LanguagePair = input.LanguagePair;
+            item.CoreCaseId = coreCaseId;
             await db.SaveChangesAsync();
             return Results.Ok(item);
         });
@@ -160,6 +168,8 @@ public static class TeacherEndpoints
             if (user is null) return Results.Unauthorized();
             var item = await db.TeacherTranslations.SingleOrDefaultAsync(x => x.Id == id && x.TeacherId == user.Id);
             if (item is null) return Results.NotFound();
+            if (await db.ClassTasks.AnyAsync(x => x.TeacherTranslationId == id))
+                return Results.Conflict(new { title = "Перевод уже используется в задании." });
             db.TeacherTranslations.Remove(item);
             await db.SaveChangesAsync();
             return Results.NoContent();
@@ -171,6 +181,24 @@ public static class TeacherEndpoints
             if (!response.IsSuccessStatusCode) return Results.StatusCode((int)response.StatusCode);
             return Results.Content(await response.Content.ReadAsStringAsync(), "application/json");
         });
+        api.MapPost("/teacher/translations/{id:guid}/expert-request", async (Guid id, ExpertRequestInput input,
+            HttpRequest request, IHttpClientFactory factory, LmsDbContext db) =>
+        {
+            var user = await Identity(request, factory);
+            if (user is null) return Results.Unauthorized();
+            if (Clean(input.Note, 1000) is not { } note) return Bad("Добавьте пометку для эксперта до 1000 символов.");
+            var item = await db.TeacherTranslations.SingleOrDefaultAsync(x => x.Id == id && x.TeacherId == user.Id);
+            if (item is null) return Results.NotFound();
+            if (item.CoreCaseId is null)
+            {
+                item.CoreCaseId = await CreateCoreCandidate(request, factory, item.Id, item.SourceText, item.TranslationText, item.LanguagePair);
+                if (item.CoreCaseId is null) return Results.StatusCode(502);
+                await db.SaveChangesAsync();
+            }
+            using var response = await MainPost(request, factory, $"/api/lms-source/translations/{item.CoreCaseId}/expert-request", new { note });
+            return response.IsSuccessStatusCode ? Results.Accepted() :
+                Results.Content(await response.Content.ReadAsStringAsync(), "application/json", statusCode: (int)response.StatusCode);
+        });
 
         api.MapGet("/teacher/classes/{id:guid}/tasks", async (Guid id, HttpRequest request, IHttpClientFactory factory, LmsDbContext db) =>
         {
@@ -178,6 +206,30 @@ public static class TeacherEndpoints
             if (user is null) return Results.Unauthorized();
             if (await OwnClass(db, id, user.Id) is null) return Results.NotFound();
             return Results.Ok(await db.ClassTasks.AsNoTracking().Where(x => x.ClassId == id).OrderByDescending(x => x.CreatedAt).ToListAsync());
+        });
+        api.MapPost("/teacher/classes/{id:guid}/tasks/sync", async (Guid id, HttpRequest request, IHttpClientFactory factory, LmsDbContext db) =>
+        {
+            var user = await Identity(request, factory);
+            if (user is null) return Results.Unauthorized();
+            if (await OwnClass(db, id, user.Id) is null) return Results.NotFound();
+            var legacy = await db.ClassTasks.Where(x => x.ClassId == id && x.TeacherTranslationId != null && x.CatalogCaseId == null).ToArrayAsync();
+            foreach (var task in legacy)
+            {
+                var own = await db.TeacherTranslations.SingleOrDefaultAsync(x => x.Id == task.TeacherTranslationId && x.TeacherId == user.Id);
+                if (own is null) continue;
+                Guid? caseId = own.SourceText == task.SourceText && own.TranslationText == task.ReferenceTranslation
+                    ? own.CoreCaseId : null;
+                caseId ??= await CreateCoreCandidate(request, factory,
+                    own.SourceText == task.SourceText && own.TranslationText == task.ReferenceTranslation ? own.Id : task.Id,
+                    task.SourceText, task.ReferenceTranslation, own.LanguagePair);
+                if (caseId is null) return Results.StatusCode(502);
+                if (own.CoreCaseId is null && own.SourceText == task.SourceText && own.TranslationText == task.ReferenceTranslation)
+                    own.CoreCaseId = caseId;
+                task.CatalogCaseId = caseId;
+                task.TranslationStatus = "pending";
+            }
+            await db.SaveChangesAsync();
+            return Results.NoContent();
         });
         api.MapPost("/teacher/classes/{id:guid}/tasks", async (Guid id, HttpRequest request, IHttpClientFactory factory, LmsDbContext db, TaskInput input) =>
         {
@@ -263,6 +315,7 @@ public static class TeacherEndpoints
             var submission = await db.TaskSubmissions.SingleOrDefaultAsync(x => x.TaskId == taskId && x.UserId == user.Id);
             if (submission is null) { submission = new TaskSubmission { TaskId = taskId, UserId = user.Id }; db.TaskSubmissions.Add(submission); }
             submission.Answer = answer; submission.SubmittedAt = DateTimeOffset.UtcNow;
+            submission.TeacherCorrect = null; submission.TeacherComment = ""; submission.ReviewedAt = null;
             await db.SaveChangesAsync();
             return Results.Ok(submission);
         });
@@ -276,8 +329,17 @@ public static class TeacherEndpoints
         {
             var translation = await db.TeacherTranslations.AsNoTracking().SingleOrDefaultAsync(x => x.Id == input.TranslationId && x.TeacherId == teacherId);
             if (translation is null) return (null, "Свой перевод не найден.");
-            task.TeacherTranslationId = translation.Id; task.SourceText = translation.SourceText;
-            task.ReferenceTranslation = translation.TranslationText; task.TranslationStatus = "own";
+            var caseId = translation.CoreCaseId ?? await CreateCoreCandidate(request, factory, translation.Id,
+                translation.SourceText, translation.TranslationText, translation.LanguagePair);
+            if (caseId is null) return (null, "Не удалось зарегистрировать перевод в ядре.");
+            if (translation.CoreCaseId is null)
+            {
+                var tracked = await db.TeacherTranslations.SingleAsync(x => x.Id == translation.Id);
+                tracked.CoreCaseId = caseId;
+                await db.SaveChangesAsync();
+            }
+            task.TeacherTranslationId = translation.Id; task.CatalogCaseId = caseId; task.SourceText = translation.SourceText;
+            task.ReferenceTranslation = translation.TranslationText; task.TranslationStatus = "pending";
         }
         else if (input.SourceType == "catalog")
         {
@@ -308,6 +370,21 @@ public static class TeacherEndpoints
         message.Headers.TryAddWithoutValidation("Authorization", request.Headers.Authorization.ToString());
         return factory.CreateClient("main").SendAsync(message);
     }
+    private static Task<HttpResponseMessage> MainPost(HttpRequest request, IHttpClientFactory factory, string path, object body)
+    {
+        var message = new HttpRequestMessage(HttpMethod.Post, path) { Content = JsonContent.Create(body) };
+        message.Headers.TryAddWithoutValidation("Authorization", request.Headers.Authorization.ToString());
+        message.Headers.TryAddWithoutValidation("X-Internal-Key", Environment.GetEnvironmentVariable("MAIN_API_KEY") ?? "");
+        return factory.CreateClient("main").SendAsync(message);
+    }
+    private static async Task<Guid?> CreateCoreCandidate(HttpRequest request, IHttpClientFactory factory, Guid externalId,
+        string sourceText, string translationText, string languagePair)
+    {
+        using var response = await MainPost(request, factory, "/api/lms-source/teacher/translations",
+            new { externalId, sourceText, translationText, languagePair });
+        var result = response.IsSuccessStatusCode ? await response.Content.ReadFromJsonAsync<CoreCandidateResponse>() : null;
+        return result?.CaseId;
+    }
 }
 
 public sealed record LmsUser(Guid Id, string Username);
@@ -317,4 +394,7 @@ public sealed record MemberEditInput(string DisplayName);
 public sealed record TranslationInput(string SourceText, string TranslationText, string LanguagePair);
 public sealed record TaskInput(string Title, string SourceType, Guid TranslationId, DateTimeOffset? DueAt);
 public sealed record SubmissionInput(string Answer);
-public sealed record CatalogTranslation(Guid Id, string SourceText, string TranslationText, string LanguagePair, int Rating, string Status);
+public sealed record CatalogTranslation(Guid Id, string SourceText, string TranslationText, string LanguagePair, int Rating,
+    string Status, string[] AcceptedTranslations, bool ExpertRequested);
+public sealed record CoreCandidateResponse(Guid CaseId);
+public sealed record ExpertRequestInput(string Note);

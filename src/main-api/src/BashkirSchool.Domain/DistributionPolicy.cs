@@ -4,8 +4,8 @@ public sealed class DistributionPolicy
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public int Version { get; set; }
-    public int RequiredParticipants { get; set; } = 100;
-    public decimal SupportThreshold { get; set; } = .8m;
+    public int RequiredParticipants { get; set; } = 300;
+    public decimal SupportThreshold { get; set; } = .51m;
     public int MinimumSchools { get; set; } = 2;
     public int MinimumClasses { get; set; } = 3;
     public decimal MaximumSchoolShare { get; set; } = .6m;
