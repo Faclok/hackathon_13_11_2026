@@ -1,5 +1,7 @@
 # Башперевод
 
+Перенос реальных уроков из тестового кабинета в основной UI: [контекст для коллеги и ИИ](client/test/AI-HANDOFF.md), [форматы и сценарии](client/test/LESSON-INTEGRATION.md), [backlog](client/test/BACKLOG.md).
+
 Репозиторий объединяет школьное ядро перевода, веб-клиент и кабинет преподавателя LMS. Ядро заменено реализацией второго разработчика в коммите `017bbc2`; его фактический API и правила описаны в [src/main-api/START-HERE.md](src/main-api/START-HERE.md), [src/main-api/IMPLEMENTATION.md](src/main-api/IMPLEMENTATION.md) и [src/main-api/docs/VERIFICATION.md](src/main-api/docs/VERIFICATION.md).
 
 ## Состав

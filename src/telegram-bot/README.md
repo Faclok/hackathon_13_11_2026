@@ -1,5 +1,22 @@
 # Telegram-бот ученика
 
+## Диагностика запуска и команд
+
+Консоль показывает путь загруженной конфигурации, включён ли прокси, начало и завершение миграций БД,
+настоящее имя бота из `getMe`, наличие webhook и запуск polling. Для каждого запроса Telegram
+выводятся имя метода, HTTP-код и время выполнения. Токен, адрес запроса целиком и тела сообщений
+в диагностические записи приложения не включаются.
+
+После запуска отправьте `/start` в личный чат с ботом, указанным в строке `actual bot`.
+Последовательность `Update ... received`, `loading conversation state`, `conversation state loaded`,
+`/start handler entered`, `Telegram API sendMessage` показывает прохождение команды.
+Если последняя строка — начало миграций, проверяйте PostgreSQL; если начало запроса Telegram —
+сеть и прокси. HTTP 401 означает неверный токен, HTTP 409 при `getUpdates` — конфликт получения
+обновлений (другой экземпляр бота или webhook). Наличие webhook проверяется без его удаления.
+
+Уровни логирования задаются в `Logging:LogLevel` файла `appsettings.json`.
+Настройки прокси находятся в `TelegramProxy`; после изменения настроек перезапустите процесс.
+
 Бот использует установленные **TelegramBotKit и TelegramBotKit.Hosting 0.4.0-preview.1**. Запуск построен по [Quick Start](https://github.com/NickFeD/TelegramBotKit/blob/master/docs/quickstart.md) и [примеру ConsolePolling](https://github.com/NickFeD/TelegramBotKit/blob/master/samples/TelegramBotKit.Sample.ConsolePolling/Program.cs): `Host.CreateApplicationBuilder`, `AddTelegramBotKit`, `AddTelegramBotKitPolling`, `RunAsync`.
 
 Команды регистрируются штатными `AddMessageCommand`, `AddTextCommand`, `AddCallbackCommand` и реализуют `IMessageCommand`, `ITextCommand`, `ICallbackCommand`; схема взята из [Commands and routing](https://github.com/NickFeD/TelegramBotKit/blob/master/docs/commands-and-routing.md). `IDefaultMessageHandler` обрабатывает свободные текстовые ответы. Неизвестные callback-запросы получают ответ через `IDefaultCallbackHandler`.
