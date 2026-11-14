@@ -210,10 +210,10 @@ public sealed class PlayerEconomy(CoreDbContext db, BossAccess access, IPermissi
             var value = metric == "streak" ? period == "global" ? profile.Streak : Math.Min(profile.Streak, now.Day)
                 : period == "global" ? profile.TasksSolved :
                     await db.Responses.CountAsync(x => x.ParticipantId == id && x.Action != ReviewAction.Skip && x.SubmittedAt >= cutoff, ct)
-                    + await (from attempt in db.Set<ExerciseAttempt>()
-                             join exercise in db.Set<Exercise>() on attempt.ExerciseId equals exercise.Id
-                             join lesson in db.Set<DailyLesson>() on exercise.LessonId equals lesson.Id
-                             where lesson.ParticipantId == id && attempt.SubmittedAt >= cutoff select attempt.Id).CountAsync(ct);
+                    + await (from attempt in db.Set<LevelAnswer>()
+                             join question in db.Set<LevelQuestion>() on attempt.QuestionId equals question.Id
+                             join level in db.Set<LearningLevel>() on question.LevelId equals level.Id
+                             where level.ParticipantId == id && attempt.Recognized && attempt.SubmittedAt >= cutoff select attempt.Id).CountAsync(ct);
             result.Add((profile, value));
         }
         return result.OrderByDescending(x => x.Value).ThenBy(x => x.Profile.Nick, StringComparer.Ordinal)

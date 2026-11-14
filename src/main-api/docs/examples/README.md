@@ -1,29 +1,21 @@
-# Примеры данных для сайта
+# Примеры ответов main-api
 
-Это демонстрационные ответы по текущим контрактам main-api. Идентификаторы вымышлены, адреса example.invalid не предназначены для проигрывания. В настоящем ответе audioUrl — подписанная ссылка MinIO. Пример урока показывает все шесть учебных видов вместе; конкретный состав зависит от доступных материалов и настроек.
+Идентификаторы вымышлены. [current-level.json](current-level.json) — ответ `POST /api/learning/current`: только текущий уровень и один вопрос. [review-choice.json](review-choice.json) и [review-confirm.json](review-confirm.json) — самостоятельные проверочные выдачи; мнения по ним участвуют в согласовании, обычные учебные ответы — нет.
 
-- [daily-lesson.json](daily-lesson.json): ответ GET /api/lessons/today.
-- [review-choice.json](review-choice.json): ответ POST /api/reviews/next?kind=translation-choice.
-- [review-confirm.json](review-confirm.json): ответ POST /api/reviews/next?kind=translation-confirm.
-
-Сейчас два режима проверки переводов приходят отдельно от exercises дневного урока. Для единого экрана сайт может показать их рядом с учебными упражнениями, сохраняя исходный тип и маршрут отправки ответа. Один общий серверный список со всеми семью механиками пока не реализован. Две незавершённые проверки одновременно также не выдаются: сервер возвращает активную проверку независимо от запрошенного режима.
-
-Сайт выбирает компонент по kind и поддерживаемой schemaVersion, а не по индексу задания в массиве. Неизвестный вид или версию следует показать как неподдерживаемые; не отправлять за них автоматический ответ.
+Компонент выбирается по `question.kind` и `schemaVersion`. Для неподдерживаемой версии нельзя автоматически отправлять ответ.
 
 ## Отправка учебного ответа
 
-POST /api/exercises/{id}/answer, Content-Type: application/json:
+`POST /api/learning/levels/{levelId}/questions/{questionId}/answer`:
 
-| kind | Тело запроса |
-| --- | --- |
-| word-match | {"answer":{"pairs":[{"leftId":"l1","rightId":"r1"},{"leftId":"l2","rightId":"r2"},{"leftId":"l3","rightId":"r3"},{"leftId":"l4","rightId":"r4"},{"leftId":"l5","rightId":"r5"}]}} |
-| translation-text | {"answer":{"text":"Здравствуй!"}} |
-| audio-dictation | {"answer":{"text":"Услышанный текст"}} |
-| audio-translation | {"answer":{"text":"Перевод услышанного"}} |
-| missing-word | {"answer":{"optionId":"g2"}} или {"answer":{"text":"мәктәпкә"}} |
-| sentence-order | {"answer":{"tokenIds":["t1","t2","t3"]}} |
+```json
+{
+  "attemptToken": "00000000-0000-4000-8000-000000000102",
+  "answer": { "text": "Здравствуй!" }
+}
+```
 
-Ответ сервера: {"id":"идентификатор попытки","recognized":true}. После сохранения обновите урок или локальное completed. Проверку правильности выполняет сервер.
+Ответ содержит `attemptToken`, `recognized` и `levelCompleted`. Затем клиент запрашивает `/api/learning/current`: ошибка появится в конце очереди, а следующий уровень — только после всех правильных ответов. Для новой попытки используется новый токен. Другие виды объектов `answer` перечислены в [договоре заданий](../EXERCISE-API.md).
 
 ## Отправка мнения о переводе
 

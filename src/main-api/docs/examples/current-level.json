@@ -1,0 +1,17 @@
+{
+  "id": "00000000-0000-4000-8000-000000000100",
+  "number": 1,
+  "questionCount": 3,
+  "correctCount": 0,
+  "question": {
+    "id": "00000000-0000-4000-8000-000000000101",
+    "attemptToken": "00000000-0000-4000-8000-000000000102",
+    "kind": "translation-text",
+    "schemaVersion": 1,
+    "prompt": {
+      "text": "Һаумы",
+      "sourceLanguage": "ba",
+      "targetLanguage": "ru"
+    }
+  }
+}

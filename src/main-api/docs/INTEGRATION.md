@@ -24,8 +24,6 @@
 | `Processing__BackgroundEnabled` | `true`: фоновый пересчёт согласования и доверия |
 | `Registration__PermitLimit` | `10`: число попыток регистрации за окно, минимум 1 |
 | `Registration__WindowSeconds` | `60`: окно ограничения регистрации в секундах, минимум 1 |
-| `Learning__TimeZone` | `Europe/Moscow`: часовой пояс дневного урока |
-| `Learning__LessonSize` | `10`: число заданий, допустимо 1–100 |
 | `DataProtection__KeyDirectory` | Пусто: ключи в PostgreSQL; при заданном пути нужен постоянный доступный для записи том |
 | `AllowedHosts` | `*`; при ограничении перечислите принимаемые имена хостов через `;` |
 | `Logging__LogLevel__Default` | `Information` |
@@ -94,7 +92,7 @@ Nginx передаёт `X-Forwarded-For`, но ядро пока не обраб
 
 Все `/api/*` ядра требуют `Authorization: Bearer <accessToken>`. Неизвестные JSON-поля отклоняются. Для refresh используйте `POST /auth/refresh` с `refreshToken`; сохраняйте новый секрет из каждого успешного ответа, старый повторно не используйте. Текущий клиент хранит токены в localStorage отдельно для каждого origin; это поведение клиента, а не обязательное требование API.
 
-Учебный процесс ядра: `GET /api/lessons/today` и `POST /api/exercises/{id}/attempt`; это отдельный контракт от курсов существующего LMS.
+Учебный процесс ядра: [личные уровни](LEVELS.md), `POST /api/learning/current` и ответы на текущий вопрос; это отдельный контракт от курсов LMS. Дневные маршруты удалены.
 
 ## LMS и Telegram
 

@@ -91,6 +91,7 @@ app.UseExceptionHandler(error => error.Run(async context =>
 app.UseAuthentication();
 app.UseRateLimiter();
 app.UseAuthorization();
+app.MapLevelEndpoints();
 if (app.Environment.IsDevelopment()) app.MapOpenApi();
 app.MapGet("/health/live", () => Results.Ok(new { status = "alive" }));
 app.MapGet("/health/ready", async (CoreDbContext db, CancellationToken ct) =>
@@ -154,26 +155,9 @@ api.MapPost("/expert/cases/{caseId:guid}/variants", async (ClaimsPrincipal user,
 api.MapGet("/accounts/{accountId:guid}/access", (ClaimsPrincipal user, Guid accountId, SchoolDirectory directory, CancellationToken ct) => directory.AccessAsync(Subject(user), accountId, ct));
 api.MapPost("/expert/cases/{caseId:guid}/resolution", (ClaimsPrincipal user, Guid caseId, ResolveCaseRequest request, ExpertReviews expert, CancellationToken ct) => expert.ResolveAsync(Subject(user), caseId, request, ct));
 api.MapGet("/translations/export", (ClaimsPrincipal user, int? offset, int? limit, bool? includeDisputed, TranslationExport export, CancellationToken ct) => export.ReadAsync(Subject(user), offset ?? 0, limit ?? 100, includeDisputed ?? false, ct));
-api.MapGet("/lessons/today", (ClaimsPrincipal user, LearningWorkflow learning, CancellationToken ct) => learning.TodayAsync(Subject(user), ct));
-api.MapPost("/lessons/today/boss", async (ClaimsPrincipal user, LearningWorkflow learning, IReviewWorkflow reviews, CancellationToken ct) =>
-{
-    var boss = await learning.StartBossAsync(Subject(user), reviews, ct);
-    return boss is null ? Results.NoContent() : Results.Ok(boss);
-}).Produces<AssignmentResponse>().Produces(StatusCodes.Status204NoContent);
-api.MapPost("/exercises/{exerciseId:guid}/attempt", (ClaimsPrincipal user, Guid exerciseId, SubmitAttemptRequest request, LearningWorkflow learning, CancellationToken ct) => learning.SubmitAsync(Subject(user), exerciseId, request, ct));
 api.MapGet("/exercises/kinds", (ExerciseRegistry registry) => registry.Kinds)
     .WithName("ListExerciseKinds").WithSummary("Supported learning exercise kinds and answer schema versions.")
     .Produces<IReadOnlyList<ExerciseKindResponse>>();
-api.MapPost("/lessons/today/exercises", async (ClaimsPrincipal user, IssueExerciseRequest request, LearningWorkflow learning, CancellationToken ct) =>
-{
-    var exercise = await learning.IssueAsync(Subject(user), request, ct);
-    return exercise is null ? Results.NoContent() : Results.Ok(exercise);
-}).WithName("IssueExercise").WithSummary("Issue or resume today's exercise of a requested kind; audio is prepared lazily.")
-    .Produces<ExerciseResponse>().Produces(StatusCodes.Status204NoContent).ProducesProblem(400).ProducesProblem(409);
-api.MapPost("/exercises/{exerciseId:guid}/answer", (ClaimsPrincipal user, Guid exerciseId, SubmitExerciseAnswerRequest request, LearningWorkflow learning, CancellationToken ct) =>
-    learning.AnswerAsync(Subject(user), exerciseId, request, ct))
-    .WithName("SubmitExerciseAnswer").WithSummary("Submit a kind-specific answer without exposing the private answer key.")
-    .Produces<AttemptResponse>().ProducesProblem(400).ProducesProblem(404).ProducesProblem(409);
 api.MapPost("/vocabulary", (ClaimsPrincipal user, DeliverVocabularyRequest request, LearningMaterials materials, CancellationToken ct) =>
     materials.DeliverAsync(Subject(user), request, ct))
     .WithName("DeliverVocabulary").WithSummary("Idempotently import prepared word pairs as an authorized content producer.")
@@ -221,10 +205,10 @@ api.MapPost("/reviews/next", async (ClaimsPrincipal user, string? kind, IReviewW
 }).Produces<AssignmentResponse>().Produces(StatusCodes.Status204NoContent);
 api.MapGet("/boss/access", (ClaimsPrincipal user, BossAccess access, CancellationToken ct) =>
     access.ReadAsync(Subject(user), ct));
-api.MapPost("/boss/next", async (ClaimsPrincipal user, BossAccess access, IReviewWorkflow reviews, CancellationToken ct) =>
+api.MapPost("/boss/next", async (ClaimsPrincipal user, BossAccess access, LevelWorkflow levels, CancellationToken ct) =>
 {
     if (!(await access.ReadAsync(Subject(user), ct)).CanAccess) return Results.Forbid();
-    var assignment = await reviews.ReceiveBossAsync(Subject(user), ct);
+    var assignment = (await levels.BossAsync(Subject(user), ct))?.Question;
     return assignment is null ? Results.NoContent() : Results.Ok(assignment);
 }).Produces<AssignmentResponse>().Produces(StatusCodes.Status204NoContent);
 api.MapPost("/reviews/{assignmentId:guid}/response", (ClaimsPrincipal user, Guid assignmentId, SubmitReviewRequest request, IReviewWorkflow reviews, CancellationToken ct) =>

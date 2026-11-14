@@ -21,9 +21,17 @@ public sealed class ClassInvitationTests
         await migrator.MigrateAsync("20261114130314_AudioCacheIdentity");
         var teacher = new Account { Id = Guid.NewGuid(), UserName = "teacher" };
         var student = new Account { Id = Guid.NewGuid(), UserName = "independent", SelfRegistered = true };
+        // Seed only columns present at the historical migration. The current Account
+        // model also contains expert preferences added by a later migration.
+        foreach (var account in new[] { teacher, student })
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "AspNetUsers" ("Id", "Active", "SessionVersion", "UserName", "SelfRegistered",
+                    "EmailConfirmed", "PhoneNumberConfirmed", "TwoFactorEnabled", "LockoutEnabled", "AccessFailedCount")
+                VALUES ({account.Id}, TRUE, 0, {account.UserName}, {account.SelfRegistered}, FALSE, FALSE, FALSE, FALSE, 0)
+                """);
         var school = new School { Name = "School" };
         var studyClass = new StudyClass { SchoolId = school.Id, TeacherId = teacher.Id, Name = "Class" };
-        db.AddRange(teacher, student, school, studyClass, new Participant { Id = student.Id });
+        db.AddRange(school, studyClass, new Participant { Id = student.Id });
         await db.SaveChangesAsync();
         await migrator.MigrateAsync();
         Assert.True((await db.Users.SingleAsync(x => x.Id == student.Id)).SelfRegistered);

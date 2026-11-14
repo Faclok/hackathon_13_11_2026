@@ -106,7 +106,7 @@ public sealed class IndependentAccountTests
         Assert.Equal(2, await db.TrustAssessments.CountAsync());
         var snapshot = await db.Assignments.SingleAsync(x => x.ParticipantId == person.Id); Assert.Null(snapshot.SchoolId); Assert.Null(snapshot.ClassId);
         Assert.Equal(student.ClassId, (await db.Assignments.SingleAsync(x => x.ParticipantId == student.Id)).ClassId);
-        var lesson = await independent.GetFromJsonAsync<LessonResponse>("/api/lessons/today"); Assert.Single(lesson!.Exercises);
+        var level = await CurrentLevel(independent); Assert.Equal(1, level.Number); Assert.Equal("translation-text", level.Question.Kind);
         var profile = await student.Client.GetFromJsonAsync<MyProfileResponse>("/api/me"); Assert.Equal(student.ClassId, profile!.ClassId); Assert.NotNull(profile.SchoolId);
     }
 

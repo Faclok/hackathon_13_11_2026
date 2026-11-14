@@ -49,6 +49,7 @@ public interface IReviewWorkflow
 {
     Task<AssignmentResponse?> ReceiveAsync(Guid participant, CancellationToken cancellationToken);
     Task<AssignmentResponse?> ReceiveAsync(Guid participant, string kind, CancellationToken cancellationToken);
+    Task<AssignmentResponse?> ReceiveAsync(Guid participant, string kind, IReadOnlyCollection<Guid> excludedCaseIds, CancellationToken cancellationToken);
     Task<AssignmentResponse?> ReceiveBossAsync(Guid participant, CancellationToken cancellationToken);
     Task<ReviewReceipt> SubmitAsync(Guid participant, Guid assignment, SubmitReviewRequest request, CancellationToken cancellationToken);
     Task<CaseStatisticsResponse> StatisticsAsync(Guid participant, Guid caseId, CancellationToken cancellationToken);

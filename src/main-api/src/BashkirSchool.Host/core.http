@@ -12,7 +12,9 @@
 @expertToken = paste-expert-access-token
 @exportToken = paste-exporter-access-token
 @primaryVariantId = 00000000-0000-0000-0000-000000000000
-@exerciseId = 00000000-0000-0000-0000-000000000000
+@levelId = 00000000-0000-0000-0000-000000000000
+@questionId = 00000000-0000-0000-0000-000000000000
+@attemptToken = 00000000-0000-0000-0000-000000000000
 
 ### Independent participant: no email, Telegram, school or role selection.
 POST {{base}}/auth/register
@@ -212,13 +214,13 @@ Authorization: Bearer {{expertToken}}
 GET {{base}}/api/translations/export?offset=0&limit=100
 Authorization: Bearer {{exportToken}}
 
-### Stable daily lesson; accepted answers are never in the exercise DTO.
-GET {{base}}/api/lessons/today
+### Current personal level; only its current question is returned.
+POST {{base}}/api/learning/current
 Authorization: Bearer {{studentToken}}
 
-### Ordinary practice never creates a review vote or trust contribution.
-POST {{base}}/api/exercises/{{exerciseId}}/attempt
+### Copy levelId, questionId and attemptToken from the current question.
+POST {{base}}/api/learning/levels/{{levelId}}/questions/{{questionId}}/answer
 Authorization: Bearer {{studentToken}}
 Content-Type: application/json
 
-{"answer":"Здравствуйте!"}
+{"attemptToken":"{{attemptToken}}","answer":{"text":"Здравствуйте!"}}

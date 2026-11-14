@@ -190,29 +190,6 @@ namespace BashkirSchool.Infrastructure.Migrations
                     b.ToTable("Deliveries");
                 });
 
-            modelBuilder.Entity("BashkirSchool.Domain.DailyLesson", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("BossAssignmentId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateOnly>("Date")
-                        .HasColumnType("date");
-
-                    b.Property<Guid>("ParticipantId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ParticipantId", "Date")
-                        .IsUnique();
-
-                    b.ToTable("DailyLesson");
-                });
-
             modelBuilder.Entity("BashkirSchool.Domain.DistributionPolicy", b =>
                 {
                     b.Property<Guid>("Id")
@@ -288,96 +265,6 @@ namespace BashkirSchool.Infrastructure.Migrations
                     b.ToTable("Enrollments");
                 });
 
-            modelBuilder.Entity("BashkirSchool.Domain.Exercise", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("AcceptedTextsJson")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("AnswerKeyJson")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("{}");
-
-                    b.Property<Guid?>("CaseId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Kind")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasDefaultValue("translation-text");
-
-                    b.Property<string>("LanguagePair")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(7)
-                        .HasColumnType("character varying(7)")
-                        .HasDefaultValue("ba-ru");
-
-                    b.Property<Guid>("LessonId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Original")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("PromptJson")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("{}");
-
-                    b.Property<Guid?>("ResolutionId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("SchemaVersion")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(1);
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ResolutionId");
-
-                    b.HasIndex("LessonId", "Kind", "CaseId");
-
-                    b.ToTable("Exercise");
-                });
-
-            modelBuilder.Entity("BashkirSchool.Domain.ExerciseAttempt", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Answer")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("ExerciseId")
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("Recognized")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTimeOffset>("SubmittedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ExerciseId")
-                        .IsUnique();
-
-                    b.ToTable("ExerciseAttempt");
-                });
-
             modelBuilder.Entity("BashkirSchool.Domain.Fragment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -411,6 +298,184 @@ namespace BashkirSchool.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("Fragments");
+                });
+
+            modelBuilder.Entity("BashkirSchool.Domain.LearningLevel", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("Number")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("ParticipantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParticipantId")
+                        .IsUnique()
+                        .HasFilter("\"CompletedAt\" IS NULL");
+
+                    b.HasIndex("ParticipantId", "Number")
+                        .IsUnique();
+
+                    b.ToTable("LearningLevel");
+                });
+
+            modelBuilder.Entity("BashkirSchool.Domain.LevelAnswer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AnswerJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("LevelCompleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("QuestionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Recognized")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset>("SubmittedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("QuestionId");
+
+                    b.ToTable("LevelAnswer");
+                });
+
+            modelBuilder.Entity("BashkirSchool.Domain.LevelBoss", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Checkpoint")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ParticipantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParticipantId")
+                        .IsUnique()
+                        .HasFilter("\"CompletedAt\" IS NULL");
+
+                    b.HasIndex("ParticipantId", "Checkpoint")
+                        .IsUnique();
+
+                    b.ToTable("LevelBoss");
+                });
+
+            modelBuilder.Entity("BashkirSchool.Domain.LevelBossQuestion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AssignmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BossId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("ResponseId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssignmentId")
+                        .IsUnique();
+
+                    b.HasIndex("ResponseId");
+
+                    b.HasIndex("BossId", "Position")
+                        .IsUnique();
+
+                    b.ToTable("LevelBossQuestion");
+                });
+
+            modelBuilder.Entity("BashkirSchool.Domain.LevelQuestion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AnswerKeyJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("AttemptToken")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("LevelId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PromptJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long>("QueueOrder")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid?>("ResolutionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("SchemaVersion")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CaseId");
+
+                    b.HasIndex("ResolutionId");
+
+                    b.HasIndex("LevelId", "Position")
+                        .IsUnique();
+
+                    b.ToTable("LevelQuestion");
                 });
 
             modelBuilder.Entity("BashkirSchool.Domain.Participant", b =>
@@ -1393,15 +1458,6 @@ namespace BashkirSchool.Infrastructure.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("BashkirSchool.Domain.DailyLesson", b =>
-                {
-                    b.HasOne("BashkirSchool.Domain.Participant", null)
-                        .WithMany()
-                        .HasForeignKey("ParticipantId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("BashkirSchool.Domain.Enrollment", b =>
                 {
                     b.HasOne("BashkirSchool.Domain.StudyClass", null)
@@ -1417,11 +1473,63 @@ namespace BashkirSchool.Infrastructure.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("BashkirSchool.Domain.Exercise", b =>
+            modelBuilder.Entity("BashkirSchool.Domain.LearningLevel", b =>
                 {
-                    b.HasOne("BashkirSchool.Domain.DailyLesson", null)
+                    b.HasOne("BashkirSchool.Domain.Participant", null)
                         .WithMany()
-                        .HasForeignKey("LessonId")
+                        .HasForeignKey("ParticipantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BashkirSchool.Domain.LevelAnswer", b =>
+                {
+                    b.HasOne("BashkirSchool.Domain.LevelQuestion", null)
+                        .WithMany()
+                        .HasForeignKey("QuestionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BashkirSchool.Domain.LevelBoss", b =>
+                {
+                    b.HasOne("BashkirSchool.Domain.Participant", null)
+                        .WithMany()
+                        .HasForeignKey("ParticipantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BashkirSchool.Domain.LevelBossQuestion", b =>
+                {
+                    b.HasOne("BashkirSchool.Domain.ReviewAssignment", null)
+                        .WithMany()
+                        .HasForeignKey("AssignmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BashkirSchool.Domain.LevelBoss", null)
+                        .WithMany()
+                        .HasForeignKey("BossId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BashkirSchool.Domain.ReviewResponse", null)
+                        .WithMany()
+                        .HasForeignKey("ResponseId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("BashkirSchool.Domain.LevelQuestion", b =>
+                {
+                    b.HasOne("BashkirSchool.Domain.TranslationCase", null)
+                        .WithMany()
+                        .HasForeignKey("CaseId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BashkirSchool.Domain.LearningLevel", null)
+                        .WithMany()
+                        .HasForeignKey("LevelId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -1429,15 +1537,6 @@ namespace BashkirSchool.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("ResolutionId")
                         .OnDelete(DeleteBehavior.Restrict);
-                });
-
-            modelBuilder.Entity("BashkirSchool.Domain.ExerciseAttempt", b =>
-                {
-                    b.HasOne("BashkirSchool.Domain.Exercise", null)
-                        .WithOne()
-                        .HasForeignKey("BashkirSchool.Domain.ExerciseAttempt", "ExerciseId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("BashkirSchool.Domain.Participant", b =>

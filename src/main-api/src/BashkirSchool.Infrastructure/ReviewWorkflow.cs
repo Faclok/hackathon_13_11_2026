@@ -10,32 +10,41 @@ public sealed class ReviewWorkflow(CoreDbContext db, IPermissionChecker permissi
         => await ReceiveAsync(participant, "translation-confirm", ct);
 
     public Task<AssignmentResponse?> ReceiveAsync(Guid participant, string kind, CancellationToken ct)
-        => ReceiveCoreAsync(participant, kind, false, 4, ct);
+        => ReceiveAsync(participant, kind, [], ct);
+
+    public Task<AssignmentResponse?> ReceiveAsync(Guid participant, string kind, IReadOnlyCollection<Guid> excludedCaseIds, CancellationToken ct)
+        => ReceiveCoreAsync(participant, kind, false, 4, excludedCaseIds, ct);
 
     public Task<AssignmentResponse?> ReceiveBossAsync(Guid participant, CancellationToken ct)
-        => ReceiveCoreAsync(participant, "boss", true, 3, ct);
+        => ReceiveCoreAsync(participant, "boss", true, 3, [], ct);
 
-    private async Task<AssignmentResponse?> ReceiveCoreAsync(Guid participant, string kind, bool randomize, int maxChoices, CancellationToken ct)
+    private async Task<AssignmentResponse?> ReceiveCoreAsync(Guid participant, string kind, bool randomize, int maxChoices,
+        IReadOnlyCollection<Guid> excludedCaseIds, CancellationToken ct)
     {
-        if (kind is not ("translation-confirm" or "translation-choice" or "translation-create" or "boss") ||
+        if (kind is not ("translation-confirm" or "translation-choice" or "translation-create" or "translation-auto" or "boss") ||
             kind == "boss" && !randomize) throw new DomainException("Unknown review kind.");
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
         // One small application's allocator serializes reservations; no external lock service is needed.
         if (db.Database.IsNpgsql()) await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(71830421)", ct);
         await Require(participant, "reviews.receive", ct);
         var now = clock.GetUtcNow();
-        var active = await db.Assignments.Where(x => x.ParticipantId == participant && x.Kind == kind && !x.Completed && x.ExpiresAt > now)
-            .OrderByDescending(x => x.IssuedAt).ThenByDescending(x => x.Id).FirstOrDefaultAsync(ct);
+        var unresolved = db.Cases.Where(c => !c.ExpertClosed && (c.ResolutionId == null ||
+            db.Resolutions.Any(r => r.Id == c.ResolutionId && r.Kind == ResolutionKind.Pending)));
+        var excluded = excludedCaseIds.ToArray();
+        unresolved = unresolved.Where(c => !excluded.Contains(c.Id));
+        var active = await db.Assignments.Where(x => x.ParticipantId == participant && (kind == "boss" ? x.Kind == "boss" : x.Kind != "boss") && !x.Completed && x.ExpiresAt > now &&
+            unresolved.Any(c => c.Id == x.CaseId)).OrderByDescending(x => x.IssuedAt).ThenBy(x => x.Id).FirstOrDefaultAsync(ct);
         if (active is not null) return await View(active, ct);
         var group = await (from e in db.Enrollments where e.ParticipantId == participant
                            join c in db.Classes on e.ClassId equals c.Id
                            select new { ClassId = c.Id, c.SchoolId }).SingleOrDefaultAsync(ct);
         var policy = await db.Policies.OrderByDescending(x => x.Version).FirstOrDefaultAsync(ct)
             ?? throw new ConflictException("An administrator must configure distribution first.");
-        var candidateQuery = db.Cases.Where(x => !x.ExpertClosed);
+        var candidateQuery = unresolved;
         candidateQuery = kind == "translation-create"
             ? candidateQuery.Where(c => db.Variants.Any(v => v.CaseId == c.Id && v.Text == "") &&
                 !db.Variants.Any(v => v.CaseId == c.Id && v.Text != ""))
+            : kind == "translation-auto" ? candidateQuery
             : candidateQuery.Where(c => db.Variants.Any(v => v.CaseId == c.Id && v.Text != ""));
         var candidates = await candidateQuery.OrderBy(x => x.CreatedAt).ThenBy(x => x.Id)
             .Take(policy.WorkingSetSize).ToArrayAsync(ct);
@@ -61,6 +70,9 @@ public sealed class ReviewWorkflow(CoreDbContext db, IPermissionChecker permissi
             .ThenBy(x => randomize ? Random.Shared.Next() : 0)
             .ThenBy(x => x.Case.CreatedAt).ThenBy(x => x.Case.Id).FirstOrDefault();
         if (eligible is null) return null;
+        if (kind == "translation-auto")
+            kind = await db.Variants.AnyAsync(v => v.CaseId == eligible.Case.Id && v.Text != "", ct)
+                ? "translation-confirm" : "translation-create";
         var variants = await db.Variants.Where(x => x.CaseId == eligible.Case.Id && x.CreatedBy != participant &&
             (kind == "translation-create" ? x.Text == "" : x.Text != "")).ToArrayAsync(ct);
         var shownVariant = variants.OrderBy(v => assignments.Count(a => a.CaseId == eligible.Case.Id && a.ShownVariantId == v.Id && (a.Completed || a.ExpiresAt > now)))
@@ -127,7 +139,11 @@ public sealed class ReviewWorkflow(CoreDbContext db, IPermissionChecker permissi
         db.Judgments.AddRange(response.Judgments(assignment.ShownVariantId, correctionId));
         if (!response.Archived && request.Action != ReviewAction.Skip)
             db.Outbox.Add(new() { CaseId = response.CaseId, ResponseId = response.Id, CreatedAt = clock.GetUtcNow() });
-        if (request.Action != ReviewAction.Skip) await economy.RewardReviewAsync(participant, assignment.Kind == "boss", ct);
+        if (request.Action != ReviewAction.Skip)
+        {
+            var bossAnswer = assignment.Kind == "boss" || await db.Set<LevelBossQuestion>().AnyAsync(x => x.AssignmentId == assignment.Id, ct);
+            await economy.RewardReviewAsync(participant, bossAnswer, ct);
+        }
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return new(response.Id, response.Archived);

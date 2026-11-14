@@ -54,11 +54,11 @@ public sealed class ScopeAndLearningTests
         using var producer = await f.Producer(admin); var d = await Deliver(producer);
         using var expert = await ResolutionFlowTests.Staff(f, admin, "expert");
         await Post<ResolutionResponse>(expert, $"/api/expert/cases/{d.CaseId}/resolution", new ResolveCaseRequest(0, d.VariantId, [], []));
-        var lesson = await first.Client.GetFromJsonAsync<LessonResponse>("/api/lessons/today"); var exercise = Assert.Single(lesson!.Exercises);
-        Assert.Equal(HttpStatusCode.NotFound, (await second.Client.PostAsJsonAsync($"/api/exercises/{exercise.Id}/attempt", new SubmitAttemptRequest("Hello"))).StatusCode);
-        var result = await Post<AttemptResponse>(first.Client, $"/api/exercises/{exercise.Id}/attempt", new SubmitAttemptRequest("Unknown synonym"));
+        var level = await CurrentLevel(first.Client);
+        Assert.Equal(HttpStatusCode.NotFound, (await second.Client.PostAsJsonAsync(LevelAnswerUrl(level), new AnswerLevelRequest(level.Question.AttemptToken, ExerciseJson.Element(new TextExerciseAnswer("Hello"))))).StatusCode);
+        var result = await AnswerLevel(first.Client, level, new TextExerciseAnswer("Unknown synonym"));
         Assert.False(result.Recognized);
-        Assert.Equal(HttpStatusCode.Conflict, (await first.Client.PostAsJsonAsync($"/api/exercises/{exercise.Id}/attempt", new SubmitAttemptRequest("Hello"))).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await first.Client.PostAsJsonAsync(LevelAnswerUrl(level), new AnswerLevelRequest(level.Question.AttemptToken, ExerciseJson.Element(new TextExerciseAnswer("Hello"))))).StatusCode);
         using var scope = f.Services.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<CoreDbContext>();
         Assert.False(await db.Responses.AnyAsync()); Assert.False(await db.Judgments.AnyAsync());
         Assert.All(await db.Participants.ToArrayAsync(), p => { Assert.Equal(0, p.Correct); Assert.Equal(0, p.Total); });
