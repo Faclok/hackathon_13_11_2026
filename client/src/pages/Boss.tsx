@@ -1,220 +1,112 @@
-import { useEffect, useState } from "react";
-import BossLocked from "../components/BossLocked";
-import { BOSS_MIN_RANK, canAccessBoss, getCurrentRank } from "../utils/ranks";
-import { getBossPhrases } from "../api";
-import { useProgressStore, useUserStore } from "../store";
-import type { BossAnswer, BossPhrase, User } from "../types";
+import { useEffect, useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
+import { ApiError } from "../api/session";
 import {
-  Icon,
-  IssueReportButton,
-  PageTitle,
-  ProgressBar,
-  RewardResult,
-} from "../components/ui";
+  answerBoss, getBossLevel, getLearningProgress,
+  type BossAnswer, type BossLevel, type BossQuestion, type LearningProgress,
+} from "../api/learning";
+import { PageTitle, ProgressBar } from "../components/ui";
+import { useUserStore } from "../store";
 
-export default function Boss() {
-  const user = useUserStore((state) => state.user);
-  if (!user) return null;
-  return canAccessBoss(user) ? (
-    <BossChallenge user={user} />
-  ) : (
-    <BossLocked user={user} />
-  );
+interface PendingBoss { bossId: string; assignmentId: string; answer: BossAnswer }
+const pendingKey = (userId: string) => `bashkir-boss-pending-v1:${userId}`;
+function readPending(userId: string): PendingBoss | null {
+  try {
+    const value = JSON.parse(sessionStorage.getItem(pendingKey(userId)) ?? "null");
+    return value?.bossId && value?.assignmentId && value?.answer ? value as PendingBoss : null;
+  } catch { return null; }
+}
+function message(error: unknown) {
+  if (error instanceof ApiError) {
+    if (error.status === 401) return "Сессия закончилась. Войдите снова, чтобы продолжить Босса.";
+    if (error.status === 403) return "Нет доступа к проверке переводов для этого аккаунта.";
+    if (error.status === 409) return "Выдача изменилась или истекла. Обновите задание.";
+    return error.message;
+  }
+  return "Не удалось связаться с сервером. Проверьте соединение и повторите попытку.";
 }
 
-function BossChallenge({ user }: { user: User }) {
-  const [phrases, setPhrases] = useState<BossPhrase[]>([]);
-  const [stage, setStage] = useState("intro");
-  const [answers, setAnswers] = useState<BossAnswer[]>([]);
-  const [custom, setCustom] = useState(false);
-  const [text, setText] = useState("");
-  const [accepted, setAccepted] = useState(false);
-  const [reward, setReward] = useState({ xp: 0, coins: 0 });
+export default function Boss() {
+  const userId = useUserStore((state) => state.user!.id);
+  const [progress, setProgress] = useState<LearningProgress | null>(null);
+  const [boss, setBoss] = useState<BossLevel | null>(null);
+  const [pending, setPending] = useState<PendingBoss | null>(() => readPending(userId));
+  const [feedback, setFeedback] = useState("");
+  const [done, setDone] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   useEffect(() => {
-    getBossPhrases(user).then(setPhrases);
+    let active = true;
+    getLearningProgress().then((value) => { if (active) setProgress(value); })
+      .catch((cause) => { if (active) setError(message(cause)); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, []);
-  const index = answers.length - (accepted ? 1 : 0);
-  const phrase = phrases[index];
-  const submit = (chosenOptionId?: string) => {
-    if (accepted || !canAccessBoss(useUserStore.getState().user)) return;
-    setAnswers([
-      ...answers,
-      {
-        phraseId: phrase.id,
-        chosenOptionId,
-        ...(chosenOptionId ? {} : { customText: text.trim() }),
-        isCustom: !chosenOptionId,
-      },
-    ]);
-    setAccepted(true);
+  const refreshProgress = async () => setProgress(await getLearningProgress());
+  const openBoss = async () => {
+    setBusy(true); setError("");
+    try {
+      const next = await getBossLevel();
+      setBoss(next);
+      if (next === null) await refreshProgress();
+    } catch (cause) { setError(message(cause)); }
+    finally { setBusy(false); }
   };
-  const next = () => {
-    if (!canAccessBoss(useUserStore.getState().user)) return;
-    if (answers.length === phrases.length) {
-      const first = !useUserStore.getState().user?.trophyIds.includes("boss");
-      useProgressStore.getState().saveBoss(answers);
-      if (first) {
-        useUserStore.getState().reward(100, 50, phrases.length, "boss");
-        setReward({ xp: 100, coins: 50 });
+  const send = async (attempt: PendingBoss) => {
+    setBusy(true); setError("");
+    try {
+      const result = await answerBoss(attempt.bossId, attempt.assignmentId, attempt.answer);
+      sessionStorage.removeItem(pendingKey(userId)); setPending(null);
+      if (result.bossCompleted) {
+        setBoss(null); setDone(true); setFeedback("");
+        try { await Promise.all([refreshProgress(), useUserStore.getState().refreshProfile()]); } catch (cause) { setError(message(cause)); }
+      } else {
+        setFeedback(attempt.answer.action === "Skip" ? "Задание пропущено. Прогресс Босса не изменился." : result.archived ? "Ответ сохранён в истории. Переходим к следующему фрагменту." : "Ответ принят. Переходим к следующему фрагменту.");
+        try { setBoss(await getBossLevel()); await useUserStore.getState().refreshProfile(); }
+        catch (cause) { setBoss(null); setError(message(cause)); }
       }
-      setStage("done");
-    }
-    setAccepted(false);
-    setCustom(false);
-    setText("");
+    } catch (cause) {
+      if (cause instanceof ApiError && (cause.status === 409 || cause.status === 400 || cause.status === 404)) {
+        sessionStorage.removeItem(pendingKey(userId)); setPending(null);
+        try { setBoss(await getBossLevel()); } catch { /* The refresh button remains available. */ }
+      }
+      setError(message(cause));
+    } finally { setBusy(false); }
   };
-  const popularMatches = answers.filter(
-    (a) =>
-      !a.isCustom &&
-      a.chosenOptionId ===
-        phrases
-          .find((p) => p.id === a.phraseId)
-          ?.options.reduce((best, option) =>
-            option.votes > best.votes ? option : best,
-          ).id,
-  ).length;
-  return (
-    <>
-      <PageTitle subtitle="Рейтинговый перевод">Испытание Босса</PageTitle>
-      {stage === "intro" ? (
-        <section className="surface intro-card">
-          <div className="boss-emblem">👑</div>
-          <span className="eyebrow-label">БӘЙГЕ · ХАН ПЕРЕВОДА</span>
-          <span className="boss-access-badge">
-            {getCurrentRank(user)[0]} · доступ открыт
-          </span>
-          <h2>Почувствуй язык вместе с другими</h2>
-          <p>
-            {phrases.length || 3} фразы на башкирском. Выбери перевод, который
-            кажется самым популярным, или предложи свой.
-          </p>
-          <p className="soft-note">
-            Для званий «{BOSS_MIN_RANK[0]}», «Батыр» и «Аҡыл эйәһе». Здесь нет
-            правильного ответа — есть мнение сообщества.
-          </p>
-          <div className="reward-row">
-            <span>✦ +100 XP</span>
-            <span>🪙 +50</span>
-          </div>
-          <button
-            className="button button-primary full-width"
-            disabled={!phrases.length}
-            onClick={() => setStage("round")}
-          >
-            Начать <Icon name="arrow" size={18} />
-          </button>
-        </section>
-      ) : stage === "done" ? (
-        <RewardResult
-          title="Испытание пройдено!"
-          xp={reward.xp}
-          coins={reward.coins}
-        >
-          <div className="boss-emblem small">👑</div>
-          <h3>Хан перевода</h3>
-          <p>
-            С популярным вариантом совпало: {popularMatches} из {phrases.length}
-          </p>
-          <button
-            className="button button-soft full-width"
-            onClick={() => {
-              setAnswers([]);
-              setReward({ xp: 0, coins: 0 });
-              setStage("intro");
-            }}
-          >
-            Ещё раз
-          </button>
-        </RewardResult>
-      ) : (
-        phrase && (
-          <>
-            <div className="round-progress">
-              <span>
-                Фраза {index + 1} из {phrases.length}
-              </span>
-              <ProgressBar value={index} max={phrases.length} />
-            </div>
-            <section className="surface task-panel">
-              {phrase.source && (
-                <span className="boss-source">
-                  Источник: {phrase.source.collection} ·{" "}
-                  {phrase.source.recordId}
-                </span>
-              )}
-              <h2 className="bashkir-text" lang="ba">
-                {phrase.bashkir}
-              </h2>
-              <div className="options-list">
-                {phrase.options.map((option) => (
-                  <button
-                    className={`option ${accepted && answers.at(-1)?.chosenOptionId === option.id ? "selected" : ""}`}
-                    key={option.id}
-                    disabled={accepted}
-                    onClick={() => submit(option.id)}
-                  >
-                    <span>{option.ru}</span>
-                    {accepted && (
-                      <span className="vote-count">{option.votes}%</span>
-                    )}
-                  </button>
-                ))}
-              </div>
-              {!accepted &&
-                (custom ? (
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      submit();
-                    }}
-                  >
-                    <label htmlFor="custom-answer" className="field-label">
-                      Свой перевод
-                    </label>
-                    <textarea
-                      id="custom-answer"
-                      value={text}
-                      onChange={(e) => setText(e.target.value)}
-                      rows={3}
-                      required
-                      maxLength={1000}
-                      autoFocus
-                    />
-                    <button
-                      className="button button-primary full-width"
-                      disabled={!text.trim()}
-                    >
-                      Отправить
-                    </button>
-                  </form>
-                ) : (
-                  <button
-                    className="button button-soft full-width"
-                    onClick={() => setCustom(true)}
-                  >
-                    Предложить свой перевод
-                  </button>
-                ))}
-              {accepted && (
-                <>
-                  <p className="neutral-feedback" role="status">
-                    {answers.at(-1)?.isCustom
-                      ? "Ваш перевод добавлен в голосование ✓"
-                      : "Ответ принят ✓"}
-                  </p>
-                  <button
-                    className="button button-primary full-width"
-                    onClick={next}
-                  >
-                    Дальше <Icon name="arrow" size={18} />
-                  </button>
-                </>
-              )}
-              <IssueReportButton exerciseId={phrase.id} />
-            </section>
-          </>
-        )
-      )}
-    </>
-  );
+  const submit = (answer: BossAnswer) => {
+    if (!boss?.question || busy || pending) return;
+    const attempt = { bossId: boss.id, assignmentId: boss.question.id, answer };
+    sessionStorage.setItem(pendingKey(userId), JSON.stringify(attempt));
+    setPending(attempt);
+    void send(attempt);
+  };
+  return <>
+    <PageTitle subtitle="Три проверки перевода">Испытание Босса</PageTitle>
+    {error && <div className="surface learning-alert" role="alert"><p>{error}</p><button className="button button-soft" disabled={busy} onClick={() => void openBoss()}>Обновить задание</button></div>}
+    {loading && <p className="loading-text" role="status">Проверяем доступ…</p>}
+    {!loading && done && <section className="surface result-card" role="status"><div className="boss-emblem small">👑</div><h2>Босс пройден!</h2><p>Три перевода отправлены на проверку сообщества.</p><Link className="button button-primary full-width" to="/learn">К обучению</Link>{(progress?.availableBosses ?? 0) > 0 && <button className="button button-soft full-width" onClick={() => { setDone(false); void openBoss(); }} disabled={busy}>Следующий Босс</button>}</section>}
+    {!loading && !done && !boss && <section className="surface intro-card"><div className="boss-emblem">👑</div><span className="eyebrow-label">БӘЙГЕ · БОСС</span><h2>{(progress?.availableBosses ?? 0) > 0 ? "Босс доступен" : "Откроется после пяти уровней"}</h2><p>За каждые пять пройденных уровней открывается один Босс. Здесь ты проверяешь три перевода; ответы сохраняются на сервере.</p>{progress && <><p className="learning-hint">Пройдено уровней: {progress.completedLevels} · доступно Боссов: {progress.availableBosses}</p><ProgressBar value={progress.completedLevels % 5} max={5} /></>}{pending ? <button className="button button-primary full-width" disabled={busy} onClick={() => void send(pending)}>Восстановить ответ</button> : (progress?.availableBosses ?? 0) > 0 ? <button className="button button-primary full-width" disabled={busy} onClick={() => void openBoss()}>Начать или продолжить Босса</button> : <Link className="button button-primary full-width" to="/learn">Продолжить обучение</Link>}</section>}
+    {!loading && !done && boss && <><div className="round-progress"><span>Босс за уровень {boss.checkpoint} · {boss.completedCount} из {boss.questionCount}</span><ProgressBar value={boss.completedCount} max={boss.questionCount} /></div>{feedback && <p className="neutral-feedback" role="status">{feedback}<button className="button button-primary full-width" onClick={() => setFeedback("")}>Продолжить</button></p>}{!feedback && <section className="surface task-panel">{pending ? <div role="status"><p>Ответ сохранён для безопасного повтора.</p><button className="button button-primary full-width" disabled={busy} onClick={() => void send(pending)}>{busy ? "Отправляем…" : "Повторить отправку"}</button></div> : boss.question ? <BossTask key={boss.question.id} question={boss.question} busy={busy} onSubmit={submit} /> : <><h2>Ждём новый фрагмент</h2><p>Подходящий материал пока не найден. Прогресс этого Босса сохранён.</p><button className="button button-primary full-width" disabled={busy} onClick={() => void openBoss()}>Проверить снова</button></>}</section>}</>}
+  </>;
+}
+
+function BossTask({ question, busy, onSubmit }: { question: BossQuestion; busy: boolean; onSubmit: (answer: BossAnswer) => void }) {
+  const [custom, setCustom] = useState(question.kind === "translation-create");
+  const [text, setText] = useState("");
+  const submitCustom = (event: FormEvent) => { event.preventDefault(); if (text.trim()) onSubmit({ action: "Correct", correction: text.trim() }); };
+  const expired = new Date(question.expiresAt).getTime() <= Date.now();
+  const choice = question.kind === "translation-choice";
+  return <>
+    <span className="eyebrow-label">{question.kind === "translation-create" ? "СВОЙ ПЕРЕВОД" : choice ? "ВЫБОР ПЕРЕВОДА" : "ПРОВЕРКА ПЕРЕВОДА"}</span>
+    <h2 className="bashkir-text" lang="ba">{question.original}</h2>
+    {question.kind === "translation-create" ? <p className="learning-hint">Предложи перевод этого фрагмента на русский.</p> : choice ? <p className="learning-hint">Выбери подходящий вариант или предложи свой перевод.</p> : <><p className="learning-hint">Подходит ли этот перевод?</p><div className="translation-panel"><span>ПРЕДЛОЖЕННЫЙ ПЕРЕВОД</span><p>{question.translation}</p></div></>}
+    {expired && <p className="error-text" role="alert">Срок выдачи истёк. Обнови задание или пропусти его.</p>}
+    {!custom && !expired && <div className="options-list">
+      {choice ? question.options.map((option) => <button type="button" className="option" key={option.id} disabled={busy} onClick={() => onSubmit({ action: "Confirm", selectedVariantId: option.id })}><span>{option.text}</span></button>)
+        : <button type="button" className="button button-primary full-width" disabled={busy} onClick={() => onSubmit({ action: "Confirm" })}>Подтвердить перевод</button>}
+    </div>}
+    {!expired && question.allowCustom && (custom ? <form onSubmit={submitCustom}><label htmlFor="boss-correction" className="field-label">{question.kind === "translation-create" ? "Твой перевод" : "Свой вариант перевода"}</label><textarea id="boss-correction" rows={4} maxLength={1000} value={text} onChange={(event) => setText(event.target.value)} required disabled={busy} /><button className="button button-primary full-width" disabled={busy || !text.trim() || (question.kind === "translation-confirm" && text.trim() === question.translation)}>Отправить перевод</button>{question.kind !== "translation-create" && <button type="button" className="button button-soft full-width" disabled={busy} onClick={() => setCustom(false)}>К вариантам</button>}</form> : <button type="button" className="button button-soft full-width" disabled={busy} onClick={() => setCustom(true)}>Предложить свой перевод</button>)}
+    <button type="button" className="report-button" disabled={busy} onClick={() => onSubmit({ action: "Skip" })}>Пропустить фрагмент</button>
+  </>;
 }

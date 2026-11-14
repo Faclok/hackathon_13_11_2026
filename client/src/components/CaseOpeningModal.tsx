@@ -14,10 +14,8 @@ import { Modal, useToast } from "./ui";
 
 export default function CaseOpeningModal({
   opening,
-  animate,
 }: {
   opening: CaseOpening;
-  animate: boolean;
 }) {
   const user = useUserStore((state) => state.user)!;
   const dismiss = useUserStore((state) => state.dismissCaseOpening);
@@ -30,7 +28,7 @@ export default function CaseOpeningModal({
   const caseId = opening.caseId === "case_item" ? "case_pet" : opening.caseId;
   const caseItem = rewardCases.find((item) => item.id === caseId)!;
   const [spinning, setSpinning] = useState(
-    animate && !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    () => !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
   );
   const [started, setStarted] = useState(false);
   const [tape] = useState(() => {

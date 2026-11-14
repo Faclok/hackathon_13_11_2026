@@ -29,6 +29,7 @@ async function decode<T>(response: Response): Promise<T> {
     const body = await response.json().catch(() => null);
     throw new ApiError(response.status, body?.title ?? "Сервер не ответил на запрос.");
   }
+  if (response.status === 204) return null as T;
   return response.json() as Promise<T>;
 }
 

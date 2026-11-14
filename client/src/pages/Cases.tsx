@@ -33,7 +33,6 @@ export default function Cases() {
   const [cases, setCases] = useState<RewardCase[]>([]);
   const [quantity, setQuantity] = useState(1);
   const [contents, setContents] = useState<RewardCase | null>(null);
-  const [animatedId, setAnimatedId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const toast = useToast();
@@ -139,8 +138,7 @@ export default function Cases() {
               onClick={async () => {
                 setBusy(true);
                 try {
-                  const result = await openCase(caseItem.id);
-                  if (result) setAnimatedId(result.id);
+                  await openCase(caseItem.id);
                 } catch (cause) {
                   toast(cause instanceof Error ? cause.message : "Не удалось открыть кейс.");
                 } finally { setBusy(false); }
@@ -209,11 +207,7 @@ export default function Cases() {
         </Modal>
       )}
       {opening && (
-        <CaseOpeningModal
-          key={opening.id}
-          opening={opening}
-          animate={animatedId === opening.id}
-        />
+        <CaseOpeningModal key={opening.id} opening={opening} />
       )}
     </>
   );
