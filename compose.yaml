@@ -49,8 +49,8 @@ services:
       Telegram__InternalKey: ${INTERNAL_API_KEY:-}
       Lms__InternalKey: ${INTERNAL_API_KEY:-}
       Demo__UsernameLoginEnabled: "true"
-      Telegram__BotUsername: ${TELEGRAM_BOT_USERNAME:-}
       Telegram__BotToken: ${TELEGRAM_BOT_TOKEN:-}
+      Telegram__BotUsername: Test20222222222222_bot
       AudioStorage__Endpoint: https://s3.bashperevod.ru
       AudioStorage__Bucket: school-audio
       AudioStorage__Region: garage
