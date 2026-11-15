@@ -53,10 +53,12 @@ public sealed class LevelAudioTests
         Assert.Single(await scope.ServiceProvider.GetRequiredService<CoreDbContext>().Set<SentenceAudio>().ToArrayAsync());
     }
 
-    [Fact]
-    public async Task LevelPreparesOnlySelectedAudioInsteadOfTheWholeCorpus()
+    [Theory]
+    [InlineData("audio-dictation")]
+    [InlineData("audio-translation")]
+    public async Task LevelPreparesOnlySelectedAudioInsteadOfTheWholeCorpus(string kind)
     {
-        using var factory = new CoreFactory(learningKind: "audio-dictation");
+        using var factory = new CoreFactory(learningKind: kind);
         var audio = new FakeAudio();
         using var app = Customize(factory, audio);
         var clients = await Initialize(app);
@@ -67,13 +69,15 @@ public sealed class LevelAudioTests
                 new ExpertDatasetRow("audio-material-" + i, "Һөйләм " + i, "ba-ru", "Sentence " + i, true, new SourceReference("test")));
 
         var level = await CurrentLevel(student);
-        Assert.Equal("audio-dictation", level.Question.Kind);
-        Assert.InRange(audio.Syntheses, 1, level.QuestionCount);
+        Assert.Equal(kind, level.Question.Kind);
+        Assert.Equal(level.QuestionCount, audio.Syntheses);
         Assert.Equal(audio.Syntheses, audio.Uploads);
         using var scope = app.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<CoreDbContext>();
         Assert.Equal(12, await db.Cases.CountAsync());
         Assert.Equal(audio.Syntheses, await db.Set<SentenceAudio>().CountAsync());
+        var questions = await db.Set<LevelQuestion>().Where(x => x.LevelId == level.Id).ToArrayAsync();
+        Assert.Equal(level.QuestionCount, questions.Select(x => x.CaseId).Distinct().Count());
     }
 
     [Theory]
@@ -106,8 +110,17 @@ public sealed class LevelAudioTests
         audio.FailSynthesis = audio.FailUpload = false;
         var next = await CurrentLevel(student);
         Assert.Equal(2, next.Number);
-        Assert.Equal("audio-dictation", next.Question.Kind);
-        Assert.NotEqual(Guid.Empty, ExerciseJson.Read<ChoiceAudioPrompt>(next.Question.Prompt).AudioId);
+        using (var scope = app.Services.CreateScope())
+        {
+            var questions = await scope.ServiceProvider.GetRequiredService<CoreDbContext>().Set<LevelQuestion>()
+                .Where(x => x.LevelId == next.Id && x.Kind == "audio-dictation").ToArrayAsync();
+            Assert.NotEmpty(questions);
+            Assert.All(questions, q =>
+            {
+                using var prompt = System.Text.Json.JsonDocument.Parse(q.PromptJson);
+                Assert.NotEqual(Guid.Empty, ExerciseJson.Read<ChoiceAudioPrompt>(prompt.RootElement).AudioId);
+            });
+        }
         Assert.Equal(2, audio.Syntheses);
         Assert.Equal(1, audio.Uploads);
     }

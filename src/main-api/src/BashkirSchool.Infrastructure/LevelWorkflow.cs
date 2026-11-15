@@ -23,7 +23,7 @@ public sealed class LevelWorkflow(CoreDbContext db, IPermissionChecker permissio
         if (!await db.Set<LearningLevel>().AnyAsync(x => x.ParticipantId == actor && x.CompletedAt == null, ct))
         {
             preparedNumber = (await db.Set<LearningLevel>().Where(x => x.ParticipantId == actor).MaxAsync(x => (long?)x.Number, ct) ?? 0) + 1;
-            prepared = await CreateQuestions(actor, preparedNumber, ct);
+            prepared = await CreateQuestions(actor, ct);
         }
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         await Lock(actor, ct);
@@ -279,18 +279,24 @@ public sealed class LevelWorkflow(CoreDbContext db, IPermissionChecker permissio
         await db.SaveChangesAsync(ct);
     }
 
-    private async Task<List<LevelQuestion>> CreateQuestions(Guid actor, long number, CancellationToken ct)
+    private async Task<List<LevelQuestion>> CreateQuestions(Guid actor, CancellationToken ct)
     {
         var kinds = configuration.GetSection("Learning:Kinds").Get<string[]>() ??
             ["translation-text", "missing-word", "sentence-order", "audio-dictation", "audio-translation", "word-match"];
         if (kinds.Length == 0) throw new InvalidOperationException("Learning:Kinds cannot be empty.");
-        var handlers = kinds.Select(registry.Latest).ToArray();
+        var handlers = kinds.Distinct(StringComparer.Ordinal).Select(registry.Latest).ToArray();
+        // Sample from the entire verified corpus, so newer materials can also be issued.
+        var verifiedIds = await (from c in db.Cases
+                                 join r in db.Resolutions on c.ResolutionId equals r.Id
+                                 where r.Kind == ResolutionKind.Community || r.Kind == ResolutionKind.Expert
+                                 select c.Id).ToArrayAsync(ct);
+        var selectedIds = ExerciseJson.Shuffle(verifiedIds).Take(500).ToArray();
         var rows = await (from c in db.Cases join f in db.Fragments on c.FragmentId equals f.Id
                           join r in db.Resolutions on c.ResolutionId equals r.Id
-                          where r.Kind == ResolutionKind.Community || r.Kind == ResolutionKind.Expert
-                          orderby c.CreatedAt, c.Id
+                          where selectedIds.Contains(c.Id) &&
+                              (r.Kind == ResolutionKind.Community || r.Kind == ResolutionKind.Expert)
                           select new { CaseId = c.Id, ResolutionId = r.Id, r.AcceptedJson, f.Id, f.Text, f.LanguagePair })
-            .Take(500).ToArrayAsync(ct);
+            .ToArrayAsync(ct);
         if (rows.Length == 0) return [];
         var acceptedIds = rows.SelectMany(x => JsonSerializer.Deserialize<Guid[]>(x.AcceptedJson)!).Distinct().ToArray();
         var variants = await db.Variants.Where(x => acceptedIds.Contains(x.Id)).ToDictionaryAsync(x => x.Id, x => x.Text, ct);
@@ -305,8 +311,7 @@ public sealed class LevelWorkflow(CoreDbContext db, IPermissionChecker permissio
         var words = await db.Set<VocabularyEntry>().OrderBy(x => x.Id).Take(500).ToArrayAsync(ct);
         var drafts = new List<LevelQuestion>();
         var size = Random.Shared.Next(6, 11);
-        // Cycle all available kinds/materials before reusing one; a small corpus can still
-        // supply a full level, and each issued answer key remains an immutable snapshot.
+        // Randomize each new level independently; issued questions remain immutable.
         var candidates = new List<(IExerciseHandler Handler, ExerciseMaterial Material)>();
         foreach (var row in rows)
         {
@@ -323,8 +328,13 @@ public sealed class LevelWorkflow(CoreDbContext db, IPermissionChecker permissio
                     sourceAlternatives[row.LanguagePair], translationAlternatives[row.LanguagePair])));
             }
         }
-        var offset = (int)((number - 1) % candidates.Count);
-        var available = candidates.Skip(offset).Concat(candidates.Take(offset)).Where(x => x.Handler.Create(x.Material) is not null).ToArray();
+        // Use different sentences before returning to another exercise on the same one.
+        // Word matching has its own group per language pair and needs no sentence.
+        var available = ExerciseJson.Shuffle(candidates)
+            .Where(x => x.Handler.Create(x.Material) is not null)
+            .GroupBy(x => (x.Material.Sentence?.CaseId, x.Material.LanguagePair))
+            .SelectMany(group => group.Select((candidate, round) => (Candidate: candidate, Round: round)))
+            .OrderBy(x => x.Round).Select(x => x.Candidate).ToArray();
         if (available.Length == 0) return [];
         var preparedAudio = new Dictionary<Guid, Guid>();
         var preparationFailed = false;

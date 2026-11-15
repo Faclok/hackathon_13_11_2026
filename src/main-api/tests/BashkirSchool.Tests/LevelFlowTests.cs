@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
 using static BashkirSchool.Tests.CoreFactory;
 
 namespace BashkirSchool.Tests;
@@ -22,6 +23,48 @@ public sealed class LevelFlowTests
     private static Task<LevelResponse> Current(HttpClient client) => Post<LevelResponse>(client, Root + "/current", new { });
     private static Task<ExpertDatasetReceipt> Training(HttpClient admin) => Post<ExpertDatasetReceipt>(admin, "/api/expert/imports",
         new ExpertDatasetRow("learning", "Һаумы", "ba-ru", "Hello", true, new SourceReference("level-tests")));
+
+    [Fact]
+    public async Task NewLevelsUseIndependentRandomVerifiedSentencesWithoutRepeats()
+    {
+        using var f = new CoreFactory(learningKind: "translation-text");
+        using var admin = await f.Bootstrap();
+        var configuration = f.Services.GetRequiredService<IConfiguration>();
+        string[] kinds = ["translation-text", "missing-word", "sentence-order"];
+        for (var i = 0; i < 6; i++) configuration[$"Learning:Kinds:{i}"] = kinds[i % kinds.Length];
+        var verified = new HashSet<Guid>();
+        for (var i = 0; i < 32; i++)
+        {
+            var content = await Post<ExpertDatasetReceipt>(admin, "/api/expert/imports",
+                new ExpertDatasetRow("random-learning-" + i, "Был һөйләм " + i, "ba-ru", "Sentence " + i,
+                    true, new SourceReference("level-tests")));
+            verified.Add(content.CaseId!.Value);
+        }
+        await Post<ExpertDatasetReceipt>(admin, "/api/expert/imports",
+            new ExpertDatasetRow("pending-learning", "Тикшерелмәгән һөйләм", "ba-ru", null,
+                false, new SourceReference("level-tests")));
+
+        var selections = new List<string>();
+        for (var i = 0; i < 3; i++)
+        {
+            var student = await f.Student(admin, "random-" + i);
+            using var client = student.Client;
+            var level = await Current(client);
+            var resumed = await Current(client);
+            Assert.Equal(level.Id, resumed.Id);
+            Assert.Equal(level.Question.Id, resumed.Question.Id);
+            using var scope = f.Services.CreateScope();
+            var questions = await scope.ServiceProvider.GetRequiredService<CoreDbContext>().Set<LevelQuestion>()
+                .Where(x => x.LevelId == level.Id).OrderBy(x => x.Position).ToArrayAsync();
+            Assert.InRange(questions.Length, 6, 10);
+            Assert.Equal(level.QuestionCount, questions.Length);
+            Assert.All(questions, q => Assert.Contains(q.CaseId!.Value, verified));
+            Assert.Equal(questions.Length, questions.Select(q => q.CaseId).Distinct().Count());
+            selections.Add(string.Join(",", questions.Select(q => q.CaseId)));
+        }
+        // Three independent draws of at least six of 32 sentences must not follow one fixed list.
+        Assert.True(selections.Distinct().Count() > 1);
+    }
 
     [Fact]
     public async Task MistakesMoveToTailUntilEveryQuestionIsCorrectAndRetriesAreIdempotent()
