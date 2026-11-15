@@ -89,19 +89,11 @@ try
     logger.LogInformation("Telegram webhook configured: {Configured}; pending updates: {Pending}", !string.IsNullOrEmpty(webhook.Url), webhook.PendingUpdateCount);
     if (!string.IsNullOrEmpty(webhook.Url))
         logger.LogWarning("An active webhook conflicts with polling. Remove the webhook before using this polling bot");
-    stage = "Telegram command registration";
-    logger.LogInformation("Registering Telegram commands");
-    await telegram.SetMyCommands([
-        new() { Command = "start", Description = "Привязка и главное меню" },
-        new() { Command = "profile", Description = "Мой профиль" },
-        new() { Command = "level", Description = "Текущий уровень" },
-        new() { Command = "boss", Description = "Босс за каждые пять уровней" },
-        new() { Command = "rating", Description = "Рейтинг в Mini App" },
-        new() { Command = "site", Description = "Весь сайт в Mini App" },
-        new() { Command = "tasks", Description = "Проверки переводов" },
-        new() { Command = "cancel", Description = "Вернуться в меню" }
-    ], cancellationToken: startupTimeout.Token);
-    logger.LogInformation("Commands registered; starting host and Telegram polling");
+    stage = "Telegram profile, avatar and command setup";
+    logger.LogInformation("Applying bot name, descriptions, avatar and commands to @{Username}", identity.Username);
+    using var presentationTimeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+    await BotPresentation.ApplyAsync(telegram, builder.Configuration, presentationTimeout.Token);
+    logger.LogInformation("Bot presentation configured; starting host and Telegram polling");
     host.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStarted.Register(() =>
         logger.LogInformation("Host started; send /start in a private chat with @{Username}", identity.Username));
     stage = "host / Telegram polling";

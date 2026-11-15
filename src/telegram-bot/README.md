@@ -33,6 +33,16 @@
 
 ## Настройка
 
+### Автоматическое оформление
+
+Перед запуском polling бот настраивает профиль **того бота, которому принадлежит текущий токен**: имя «Башкирская языковая школа», полное и краткое описание, аватарку и меню команд. При смене `TELEGRAM_BOT_TOKEN` достаточно перезапустить сервис. `@username` задаётся через BotFather; имя в профиле меняется автоматически. Для ссылок привязки обновите также `TELEGRAM_BOT_USERNAME` и настройки ядра.
+
+Аватарка `Assets/bot-avatar.jpg` — орнамент из `SchoolLogo` сайта (`client/src/components/Illustrations.tsx`), цвет `#2e8035` на светлом фоне. JPG встроен в сборку, доступ к сайту для загрузки не требуется.
+
+Сначала удаляются прежние команды в областях default, all_private_chats, all_group_chats и all_chat_administrators, затем устанавливается актуальное меню. Очищаются общие команды и локализации `ru`, `ba`, `en`; для них же задаются русские тексты профиля и команд. Дополнительные ранее использовавшиеся языки добавьте в `BotPresentation:LanguageCodes`. Telegram не предоставляет перечня всех локализаций и индивидуальных областей команд: старые настройки для конкретного чата/участника нужно удалить отдельно, если они задавались у переносимого бота.
+
+Необязательные настройки: `BotPresentation:Name` (до 64 символов), `BotPresentation:Description` (до 512), `BotPresentation:ShortDescription` (до 120), `BotPresentation:LanguageCodes` (массив кодов). По умолчанию оформление работает без конфигурации. В Docker используйте переменные окружения `BotPresentation__Name`, `BotPresentation__Description`, `BotPresentation__ShortDescription`, `BotPresentation__LanguageCodes__0` и т. д.; `appsettings.json` в publish не включается. На оформление выделено три минуты; при ошибке startup пишет этап `Telegram profile, avatar and command setup` и не запускает polling с частично применёнными настройками. Следующий запуск повторяет настройку.
+
 В `.env` Compose:
 
 ```dotenv
