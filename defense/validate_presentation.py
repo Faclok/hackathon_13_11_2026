@@ -15,10 +15,12 @@ text = "\n".join(page.extract_text() for page in reader.pages)
 
 assert len(reader.pages) == len(deck.slides) == len(scenes) == 6
 assert "Башперевод" not in text
-for term in ("Дуэли", "Культурные квесты", "Школьные лиги", "Документированный API", "LMS", "250 заданий"):
+for term in ("Дуэли", "Культурные квесты", "Школьные лиги", "Кабинет ученика", "Кабинет преподавателя", "Кабинет эксперта", "Telegram-бот", "250 заданий"):
     assert term in text, term
-assert all(len(slide.notes_slide.notes_text_frame.text) > 100 for slide in deck.slides)
-assert "сквозное объединение" in deck.slides[4].notes_slide.notes_text_frame.text
+assert all(slide.notes_slide.notes_text_frame.text == scene["notes"] for slide, scene in zip(deck.slides, scenes))
+speech_five = deck.slides[4].notes_slide.notes_text_frame.text
+assert all(term in speech_five for term in ("ученика", "преподавателя", "эксперта", "Telegram-бот"))
+assert all(term not in speech_five for term in ("PostgreSQL", "JSON", "CSV"))
 
 for number, scene in enumerate(scenes, 1):
     for element in scene["elements"]:
